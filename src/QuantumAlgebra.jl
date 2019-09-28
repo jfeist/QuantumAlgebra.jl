@@ -1,7 +1,7 @@
 module QuantumAlgebra
 
-export scal,param,a,adag,σ,σp,σm,OpSumAnalytic,ExpVal,Corr
-export x,y,z,comm,latex
+export scal,param,a,adag,OpSumAnalytic,ExpVal,Corr
+export σ,σx,σy,σz,σp,σm,comm,latex
 export Avac,vacA,vacExpVal
 export CorrOrExp,ascorr
 #export preftuple,exptuple,optuple,prodtuples,sumtuples
@@ -36,6 +36,13 @@ struct σ{T}    <: Operator
     n::T
     σ(a,n::T) where T = new{T}(SpatialIndex(a),n)
 end
+# define separate σ operators for all possible types (the "+" and "-" are not even constructible "normally")
+σx(n) = σ(1,n)
+σy(n) = σ(2,n)
+σz(n) = σ(3,n)
+σp(n) = scal(1//2)*σx(n) + scal(1im//2)*σy(n)
+σm(n) = scal(1//2)*σx(n) - scal(1im//2)*σy(n)
+
 struct OpProd <: Operator; A::Operator; B::Operator; end
 struct OpSum  <: Operator; A::Operator; B::Operator; end
 
@@ -117,10 +124,6 @@ function isless(A::OpProd,B::OpProd)
     Bprefs,Bexps,Bops = prodtuples(B)
     (length(A),Aops,Aexps,reverse(Aprefs)) < (length(B),Bops,Bexps,reverse(Bprefs))
 end
-
-# define σ+ and σ- for some checks below
-σp(n) = scal(1/2)*σ(x,n) + scal(1im/2)*σ(y,n)
-σm(n) = scal(1/2)*σ(x,n) - scal(1im/2)*σ(y,n);
 
 # prefactors do not count for length calculation
 for op in [scal,param]
