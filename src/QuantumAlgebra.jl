@@ -440,4 +440,6 @@ _vacExpVal(A::OpSumAnalytic) = OpSumAnalytic(A.ind,_vacExpVal(A.A))
 # we know that the operators here commute (all a and a† have disappeared, and at most a single σ remaining for each particle)
 _vacExpVal(A::OpProd) = _vacExpVal(A.A) * _vacExpVal(A.B)
 
+include("precompile.jl")
+
 end # module
