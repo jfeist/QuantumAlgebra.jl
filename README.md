@@ -5,15 +5,16 @@
 [![Build Status](https://travis-ci.com/jfeist/QuantumAlgebra.jl.svg?branch=master)](https://travis-ci.com/jfeist/QuantumAlgebra.jl)
 [![Codecov](https://codecov.io/gh/jfeist/QuantumAlgebra.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/QuantumAlgebra.jl)
 
-This package implements a package to do quantum operator algebra (i.e., algebra
-with non-commuting operators) in Julia. It defines an opinionated canonical form
-(normal ordering plus some additional rules) that all expressions are
-automatically transformed to. The resulting expressions are displayed as LaTeX
-formulas in interfaces that support them (e.g., Jupyter notebooks).
+This package does quantum operator algebra (i.e., algebra with non-commuting
+operators) in Julia. It defines an opinionated canonical form (normal ordering
+plus some additional rules) that all expressions are automatically transformed
+to, which fulfills some invariants that then allows easy use of the resulting
+expressions. It is recommended to use an interface that can display LaTeX
+formulas (e.g., Jupyter notebooks) for convenient output formatting.
 
 We define an abstract type that represents an operator, and some concrete subtypes to describe various operators. We have:
 - `scal(x)` representing a scalar _x_
-- `param(g)` and `paramconj(g)` representing a named scalar parameter _g_ and its conjugate _g<sup>*</sup>_
+- `param(g,(i,j),state='n')` representing a named scalar parameter _g<sub>i,j</sub>_. `state` can be `'r'` for purely real parameters (invariant under complex conjugation), `'n'` for not-conjugated values, and `'c'` for a conjugated parameter _g<sub>i,j</sub><sup>*</sup>_.
 - `a(i)` and `adag(i)` representing _a<sub>i</sub>_ and _a<sub>i</sub><sup>†</sup>_, the annihilation and creation operators for bosonic mode _i_
 - `σ(a,i)` representing the Pauli matrix _σ<sub>a,i</sub>_ for two-level system (TLS) _i_, where _a ∈ {x=1,y=2,z=3}_ is the type of Pauli matrix.
 - `OpProd(A,B)` representing _A B_, i.e., the product of two operators
@@ -36,3 +37,5 @@ All operations are defined in such a way that the finally created object is auto
 Some other useful functions that are implemented:
 - `comm(A,B)`: calculates the commutator of arbitrary operators [_A,B_] = _AB - BA_. This allows, e.g., to calculate Heisenberg equations of motion for the operators.
 - `ascorr(x)` takes an expression `x=A B C + D E...` and writes its expectation value in terms of single-body expectation values ⟨_A_⟩, ⟨_B_⟩, ..., and many-body correlations ⟨_AB_⟩<sub>c</sub>, ⟨_ABC_⟩<sub>c</sub>, etc. Currently, up to fourth-order correlations (i.e., products of four operators) are supported.
+- `Avac(A)` and `vacA(A)` simplify operators by assuming they are applied to the vacuum from the left or right, respectively. To be precise, `Avac(A)` returns _A'_ such that _A_|0⟩ = _A'_|0⟩, while `vacA(A)` does the same for ⟨0|_A_.
+- `vacExpVal(A,S=1)` calculates the vacuum expectation value ⟨0|_S<sup>†</sup>AS_|0⟩, i.e., the expectation value ⟨ψ|_A_|ψ⟩ for the state defined by |ψ⟩=_S_|0⟩. This returns a number.

@@ -427,12 +427,13 @@ vacA(A::OpProd) = begin
 end
 vacA(A::Scalar) = A
 
-# corresponds to |state> = stateop|0>, <state|A|state> = <0|state† A state|0>
-function vacExpVal(stateop::Operator,A::Operator=scal(1))
+"""calculates the vacuum expectation value <0|stateop^† A stateop|0>, i.e., ⟨ψ|A|ψ⟩ for the state defined by |ψ⟩=stateop|0⟩. Returns a number."""
+function vacExpVal(A::Operator,stateop::Operator=scal(1))
     # simplify down as much as possible by applying vacuum from left and right
     vsAsv = vacA(Avac(stateop' * A * stateop))
     # only operators that should survive here as operators are σs
-    _vacExpVal(vsAsv)
+    # make sure the result is a scalar value
+    res::scal = _vacExpVal(vsAsv)
 end
 _vacExpVal(A::Scalar) = A
 # the terms that survive until here have at most a single σ of any particle

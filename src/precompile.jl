@@ -99,6 +99,6 @@ vacA(Avac(σm(1)*σp(1)))
 for i2 = (:n,:m)
     stateop = scal(1/√2)*adag(:n)*adag(:n)*adag(:n) + scal(1/√2)*adag(i2)
     for A in [scal(1),adag(:n)*a(:n),adag(:n)*adag(:n)*a(:n)*a(:n)]
-        latex(A),latex(vacExpVal(stateop,A))
+        latex(A),latex(vacExpVal(A,stateop))
     end
 end
