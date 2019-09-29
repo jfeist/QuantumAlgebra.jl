@@ -97,7 +97,7 @@ end
 ==(A::OpSumAnalytic, B::OpSumAnalytic) = A.A == B.A && A.ind == B.ind
 ==(A::ExpVal, B::ExpVal) = A.A == B.A
 ==(A::Corr, B::Corr) = A.A == B.A
-==(A::param, B::param) = (A.name,A.inds) == (B.name,B.inds) && (A.state==B.state=='c' || A.state !='c' && B.state != 'c')
+==(A::param, B::param) = (A.name,A.inds,A.state) == (B.name,B.inds,B.state)
 
 prodtuple(A::Operator) = (A,)
 prodtuple(A::OpProd) = (prodtuple(A.A)...,prodtuple(A.B)...)
