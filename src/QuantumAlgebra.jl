@@ -435,6 +435,7 @@ CorrOrExp(A::Operator) = length(A)==1 ? ExpVal(A) : Corr(A)
 
 Avac(A::a) = scal(0)
 Avac(A::adag) = A
+# vacuum is an eigenstate of σz
 Avac(A::σ) = (A.a == z) ? scal(-1) : A
 Avac(A::OpSum) = Avac(A.A) + Avac(A.B)
 Avac(A::OpSumAnalytic) = OpSumAnalytic(A.ind,Avac(A.A))
@@ -453,6 +454,7 @@ Avac(A::Scalar) = A
 
 vacA(A::a) = A
 vacA(A::adag) = scal(0)
+# vacuum is an eigenstate of σz
 vacA(A::σ) = (A.a == z) ? scal(-1) : A
 vacA(A::OpSum) = vacA(A.A) + vacA(A.B)
 vacA(A::OpSumAnalytic) = OpSumAnalytic(A.ind,vacA(A.A))
@@ -460,6 +462,8 @@ vacA(A::OpProd) = begin
     if A.A isa Scalar
         A.A*vacA(A.B)
     else
+        # for applying ⟨0|AB, see if ⟨0|A changes A, and if so,
+        # keep going with the new operator
         vA = vacA(A.A)
         vA==A.A ?  A : vacA(vA * A.B)
     end
