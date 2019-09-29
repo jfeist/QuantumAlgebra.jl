@@ -18,7 +18,9 @@ SpatialIndex(a::SpatialIndex) = a
 
 abstract type Operator end
 abstract type Scalar <: Operator; end
+"Represent a scalar value (i.e., a number)"
 struct scal{T<:Number} <: Scalar; v::T; end
+"`param(g,(:i,:j),'n')`: represent a scalar named parameter ``g_{i,j}``. state can be purely real (`'r'`), not conjugated (`'n'`), or conjugated (`'c'`)"
 struct param{T<:Tuple} <: Scalar
     name::Symbol
     inds::T
@@ -29,24 +31,31 @@ struct param{T<:Tuple} <: Scalar
     end
     param(name,n,state='n') = param(name,(n,),state)
 end
+"`a(n)`: represent bosonic annihilation operator ``a_n`` for mode n"
 struct a{T}    <: Operator; n::T; end
+"`adag(n)`: represent bosonic creation operator ``a^†_n`` for mode n"
 struct adag{T} <: Operator; n::T; end
+"`σ(a,n)`: represent Pauli matrix ``σ_{a,n}`` for two-level system (TLS) ``n``, where ``a ∈ \\{x,y,z\\}`` or ``\\{1,2,3\\}`` is the type of Pauli matrix."
 struct σ{T}    <: Operator
     a::SpatialIndex
     n::T
     σ(a,n::T) where T = new{T}(SpatialIndex(a),n)
 end
-# define separate σ operators for all possible types (the "+" and "-" are not even constructible "normally")
+"`σx(n)`: construct ``σ_{x,n}``"
 σx(n) = σ(1,n)
+"`σy(n)`: construct ``σ_{y,n}``"
 σy(n) = σ(2,n)
+"`σz(n)`: construct ``σ_{z,n}``"
 σz(n) = σ(3,n)
+"`σp(n)`: construct ``σ^+_n = \\frac12 σ_{x,n} + \\frac{i}{2} σ_{y,n}``"
 σp(n) = scal(1//2)*σx(n) + scal(1im//2)*σy(n)
+"`σm(n)`: construct ``σ^-_n = \\frac12 σ_{x,n} - \\frac{i}{2} σ_{y,n}``"
 σm(n) = scal(1//2)*σx(n) - scal(1im//2)*σy(n)
 
 struct OpProd <: Operator; A::Operator; B::Operator; end
 struct OpSum  <: Operator; A::Operator; B::Operator; end
 
-# represents a sum over the symbol "ind", with all values assumed to be included
+"`OpSumAnalytic(i::Symbol,A::Operator)`: represent ``\\sum_{i} A``, with all possible values of ``i`` assumed to be included"
 struct OpSumAnalytic <: Operator
     ind::Symbol
     A::Operator
@@ -55,6 +64,7 @@ struct OpSumAnalytic <: Operator
     OpSumAnalytic(ind::Symbol,A::OpSum) = OpSumAnalytic(ind,A.A) + OpSumAnalytic(ind,A.B)
 end
 
+"`ExpVal(A::Operator)`: represent expectation value ``⟨A⟩``"
 struct ExpVal <: Scalar
     A::Operator
     ExpVal(A::Scalar) = A
@@ -64,6 +74,15 @@ struct ExpVal <: Scalar
     ExpVal(A::Operator) = new(A)
 end
 
+"""
+    Corr(A::Operator)
+
+Represents correlations of operator ``A``. ``A`` should be a product for this to
+make sense, in which case ``⟨AB⟩_c = ⟨AB⟩ - ⟨A⟩⟨B⟩``, with corresponding
+extensions for products of more operators.
+
+See also: [`ascorr`](@ref)
+"""
 struct Corr <: Scalar
     A::Operator
     Corr(A::Scalar) = A
@@ -348,6 +367,26 @@ sumindextuple(A::Union{ExpVal,Corr}) = sumindextuple(A.A)
 sumindextuple(A::OpSumAnalytic) = (A.ind,sumindextuple(A.A)...)
 sumindexset(A) = Set(sumindextuple(A))
 
+"""
+    ascorr(expr::Operator)
+
+Take an expression `expr=A B C + D E...` and write its expectation value in
+terms of single-body expectation values ``⟨A⟩, ⟨B⟩, \\ldots``, and many-body
+correlations ``⟨AB⟩_c, ⟨ABC⟩_c``, etc. Currently, up to fourth-order
+correlations (i.e., products of four operators) are supported.
+
+E.g., `ascorr(adag(:n)*a(:n))` returns ``⟨a^\\dagger_n a_n⟩_c + ⟨a^\\dagger_n⟩
+⟨a_n⟩`` (which is equal to ``⟨a^\\dagger_n a_n⟩``), while
+`ascorr(adag(:n)*a(:m)*a(:n))` returns ``\\langle a_{n}^\\dagger a_{m} a_{n}
+\\rangle_{c} + \\langle a_{n}^\\dagger \\rangle \\langle a_{m} \\rangle \\langle
+a_{n} \\rangle + \\langle a_{n}^\\dagger \\rangle \\langle a_{m} a_{n}
+\\rangle_{c} + \\langle a_{m} \\rangle \\langle a_{n}^\\dagger a_{n}
+\\rangle_{c} + \\langle a_{n} \\rangle \\langle a_{n}^\\dagger a_{m}
+\\rangle_{c}``.
+
+See also: [`ExpVal`](@ref), [`Corr`](@ref)"""
+function ascorr end
+
 ascorr(A::Scalar) = A
 for op in (adag,a,σ)
     @eval ascorr(A::$op) = ExpVal(A)
@@ -427,7 +466,20 @@ vacA(A::OpProd) = begin
 end
 vacA(A::Scalar) = A
 
-"""calculates the vacuum expectation value <0|stateop^† A stateop|0>, i.e., ⟨ψ|A|ψ⟩ for the state defined by |ψ⟩=stateop|0⟩. Returns a number."""
+"""
+    Avac(A::Operator), vacA(A::Operator)
+
+Simplify operator by assuming it is applied to the vacuum from the left or
+right, respectively. To be precise, `Avac(A)` returns ``A'`` such that ``A'|0⟩ =
+A|0⟩``, while `vacA(A)` does the same for ``⟨0|A``."""
+Avac, vacA
+
+"""
+    vacExpVal(A::Operator,S::Operator=scal(1))
+
+Calculate the vacuum expectation value ``⟨0|S^\\dagger A S|0⟩``, i.e., the
+expectation value ``⟨ψ|A|ψ⟩`` for the state defined by ``|ψ⟩= S|0⟩```.
+"""
 function vacExpVal(A::Operator,stateop::Operator=scal(1))
     # simplify down as much as possible by applying vacuum from left and right
     vsAsv = vacA(Avac(stateop' * A * stateop))

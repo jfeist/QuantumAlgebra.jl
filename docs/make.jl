@@ -2,14 +2,13 @@ using Documenter, QuantumAlgebra
 
 makedocs(;
     modules=[QuantumAlgebra],
-    format=Documenter.HTML(),
+    format=Documenter.HTML(assets=String[]),
     pages=[
         "Home" => "index.md",
     ],
     repo="https://github.com/jfeist/QuantumAlgebra.jl/blob/{commit}{path}#L{line}",
     sitename="QuantumAlgebra.jl",
-    authors="Johannes Feist",
-    assets=String[],
+    authors="Johannes Feist"
 )
 
 deploydocs(;
