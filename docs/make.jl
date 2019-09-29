@@ -5,6 +5,7 @@ makedocs(;
     format=Documenter.HTML(assets=String[]),
     pages=[
         "Home" => "index.md",
+        "Interface" => "interface.md",
     ],
     repo="https://github.com/jfeist/QuantumAlgebra.jl/blob/{commit}{path}#L{line}",
     sitename="QuantumAlgebra.jl",
