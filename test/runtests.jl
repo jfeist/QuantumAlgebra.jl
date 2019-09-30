@@ -2,6 +2,8 @@ using QuantumAlgebra
 using Test
 
 @testset "QuantumAlgebra.jl" begin
+    @test QuantumAlgebra.SpatialIndex(QuantumAlgebra.x) == QuantumAlgebra.x
+
     # all equal numbers should be equal scalars (ignore type)
     @test scal(0) == scal(0.0)
     @test scal(0) == scal(0im)
@@ -42,12 +44,38 @@ using Test
 
     @test scal(1+1im) < scal(2-1im)
     @test scal(1+1im) > scal(1-1im)
+    @test a(1) < σx(1)
+    @test adag(1) < σx(1)
+    @test !(a(1) < adag(1))
+    @test adag(1) < a(1)
+    @test a(5) < a(:i)
+    @test !(adag(:m) < adag(2))
 
     @test a(1) * (σ(2,1) * a(1))' == a(1) * (adag(1) * σy(1)) == adag(1)*a(1)*σy(1) + σy(1)
 
     tmp = OpSumAnalytic(:i,adag(:i)*a(:i))
+    @test tmp' == tmp
+    @test_throws ErrorException a(:i)*OpSumAnalytic(:i,a(:i))
     @test adag(:n)*tmp == OpSumAnalytic(:i,adag(:n)*adag(:i)*a(:i))
     @test a(:n)   *tmp == OpSumAnalytic(:i,adag(:i)*a(:n)*a(:i)) + a(:n)
+    @test_throws ErrorException param(:g,:i)*OpSumAnalytic(:i,a(:i))
+    @test param(:g,:n)*OpSumAnalytic(:i,a(:i)) == OpSumAnalytic(:i,param(:g,:n)*a(:i))
+
+    @test QuantumAlgebra.prodtuple(a(5)) == (a(5),)
+    # tuples come out ordered!
+    @test QuantumAlgebra.prodtuple(a(5)*a(4)) == (a(4),a(5))
+    @test QuantumAlgebra.prodtuple(a(5)*a(4)) != (a(5),a(4))
+
+    @test QuantumAlgebra.sumtuple(a(5)) == (a(5),)
+    # tuples come out ordered!
+    @test QuantumAlgebra.sumtuple(a(5)+a(4)) == (a(4),a(5))
+    @test QuantumAlgebra.sumtuple(a(5)+a(4)) != (a(5),a(4))
+
+    @test_throws ErrorException QuantumAlgebra.prodtuples(a(5)+a(4))
+    # tuples come out ordered!
+    tmp1 = scal(3)*param(:ω)*param(:g)*ExpVal(σz(:k))*σz(:k)*adag(5)*a(5)
+    tmp2 = ( (scal(3),param(:g),param(:ω)), (ExpVal(σz(:k)),), (adag(5),a(5),σz(:k)) )
+    @test QuantumAlgebra.prodtuples(tmp1) == tmp2
 
     @test comm(σ(1,5),σ(2,3)) == scal(0)
     @test comm(σ(1,5),σ(1,5)) == scal(0)
@@ -55,6 +83,14 @@ using Test
     @test comm(σx(:mu),σy(:muuu)) == scal(0)
     @test scal(1//2im)*comm(σx(:m),σy(:m)) == σz(:m)
     @test σx(:a)*σy(:a)*σz(:a) == scal(1im)
+
+    @test comm(param(:g),a(5)+a(3)) == scal(0)
+    @test comm(param(:g),a(5)*a(3)) == scal(0)
+    @test comm(a(5)+a(3),param(:g)) == scal(0)
+    @test comm(a(5)*a(3),param(:g)) == scal(0)
+
+    @test comm(a(5)+a(3),adag(5)) == comm(a(5),adag(5))+ comm(a(3),adag(5))
+    @test comm(a(5)+a(3),adag(5)*a(3)) == comm(a(5),adag(5)*a(3))+ comm(a(3),adag(5)*a(3))
 
     @test adag(2)*σy(:i) - scal(14)*param(:ω) == scal(-14)*param(:ω) + σy(:i)*adag(2)
     @test adag(2)*σy(:i) == σy(:i)*adag(2)
@@ -85,11 +121,17 @@ using Test
     @test ascorr(*(tmpas...)) == Corr(*(tmpas...)) + *(tmpEVs...) + tmpEVs[1]*Corr(tmpas[2]*tmpas[3]) + tmpEVs[2]*Corr(tmpas[1]*tmpas[3]) + tmpEVs[3]*Corr(tmpas[1]*tmpas[2])
 
     @test a(1) < ascorr(a(1)*a(2)*a(3)*a(4))
+    @test_throws ErrorException ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
 
     @test ascorr(scal(-1)*param(:g,1,'r')*σ(3,1)) == -param(:g,1,'r')*ExpVal(σz(1))
     @test ascorr(OpSumAnalytic(:i,σy(:i)*σy(:n))) == OpSumAnalytic(:i,Corr(σy(:i)*σy(:n))) + OpSumAnalytic(:i,ExpVal(σy(:i))*ExpVal(σy(:n))) - ExpVal(σy(:n))*ExpVal(σy(:n))
 
+    @test CorrOrExp(a(5)) == ExpVal(a(5))
+    @test CorrOrExp(a(5)*a(:i)) == Corr(a(5)*a(:i))
+
     H = OpSumAnalytic(:i,param(:ω,:i,'r')*adag(:i)*a(:i))
+    # cannot commute with an operator with the same index as in the sum
+    @test_throws ErrorException comm(a(:i),H)
     @test comm(a(:n),H) == param(:ω,:n,'r')*a(:n)
     @test comm(adag(:n),H) == -param(:ω,:n,'r')*adag(:n)
     @test comm(adag(:n)*a(:m),H) == (param(:ω,:m,'r')-param(:ω,:n,'r'))*adag(:n)*a(:m)

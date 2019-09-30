@@ -20,7 +20,7 @@ let
     a(:n)*tmp
     σz(:n)*tmp
     tmp*scal(2)
-    tmp*param(:g,:i)
+    tmp*param(:g,:n)
     tmp*a(:n)
     tmp*adag(:n)
     tmp*(adag(:n)*adag(:n))

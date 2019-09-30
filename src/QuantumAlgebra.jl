@@ -108,6 +108,7 @@ for (name,types) in [(:pref,(scal,param)),(:exp,(ExpVal,Corr)),(:op,(adag,a,σ))
     types = Union{types...}
     @eval $name(A::$types) = (A,)
     @eval $name(A::Operator) = ()
+    @eval $name(A::OpSum) = error("cannot get $($name) for OpSum!")
     @eval $name(A::OpSumAnalytic) = ($name(A.A)...,)
     @eval $name(A::OpProd) = ($name(A.A)...,$name(A.B)...)
 end
@@ -317,15 +318,17 @@ distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_
 
 distribute_indices!([:a,:b,:c,:d,:e,:f,:g,:h],param(:ω,:y)*a(1)*adag(1)*a(3)*adag(:a))
 
+checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Cannot multiply sum with index $(B.ind) with expression $(A) containing the same index")
 # when multiplying (or commuting) with an operator with an index, take into account that the term in the sum with equal index has to be treated specially
-*(A::Union{a,adag,σ},B::OpSumAnalytic) = (tmp = A*B.A; OpSumAnalytic(B.ind,tmp) - replace_index(tmp,B.ind,A.n) + A*replace_index(B.A,B.ind,A.n))
-*(A::Union{param,ExpVal,Corr},B::OpSumAnalytic) = OpSumAnalytic(B.ind,A*B.A)
-*(A::OpSumAnalytic,B::Union{a,adag,σ}) = (tmp = A.A*B; OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,B.n) + replace_index(A.A,A.ind,B.n)*B)
+*(A::Union{param,ExpVal,Corr},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
+*(A::Union{a,adag,σ},B::OpSumAnalytic) = (checkinds(A,B); tmp = A*B.A; OpSumAnalytic(B.ind,tmp) - replace_index(tmp,B.ind,A.n) + A*replace_index(B.A,B.ind,A.n))
+*(A::OpSumAnalytic,B::Union{a,adag,σ}) = (checkinds(B,A); tmp = A.A*B; OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,B.n) + replace_index(A.A,A.ind,B.n)*B)
+# no need to check indices here since we just dispatch to another routine
 *(A::OpSumAnalytic,B::OpProd) = (A*B.A)*B.B
-*(A::OpSumAnalytic,B::Operator) = OpSumAnalytic(A.ind,A.A*B)
+*(A::OpSumAnalytic,B::Operator) = (checkinds(B,A); OpSumAnalytic(A.ind,A.A*B))
 
-comm(A::Union{a,adag,σ},B::OpSumAnalytic) = (tmp = comm(A,B.A); OpSumAnalytic(B.ind,tmp) - replace_index(tmp,B.ind,A.n) + comm(A,replace_index(B.A,B.ind,A.n)))
-comm(A::OpSumAnalytic,B::Union{a,adag,σ}) = (tmp = comm(A.A,B); OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,B.n) + comm(replace_index(A.A,A.ind,B.n),B))
+comm(A::Union{a,adag,σ},B::OpSumAnalytic) = (checkinds(A,B); tmp = comm(A,B.A); OpSumAnalytic(B.ind,tmp) - replace_index(tmp,B.ind,A.n) + comm(A,replace_index(B.A,B.ind,A.n)))
+comm(A::OpSumAnalytic,B::Union{a,adag,σ}) = (checkinds(B,A); tmp = comm(A.A,B); OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,B.n) + comm(replace_index(A.A,A.ind,B.n),B))
 
 repr(A::a) = "a($(A.n))"
 repr(A::adag) = "adag($(A.n))"
