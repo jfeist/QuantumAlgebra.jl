@@ -133,6 +133,7 @@ using Test
     # cannot commute with an operator with the same index as in the sum
     @test_throws ErrorException comm(a(:i),H)
     @test comm(a(:n),H) == param(:ω,:n,'r')*a(:n)
+    @test comm(H,a(:n)) == -param(:ω,:n,'r')*a(:n)
     @test comm(adag(:n),H) == -param(:ω,:n,'r')*adag(:n)
     @test comm(adag(:n)*a(:m),H) == (param(:ω,:m,'r')-param(:ω,:n,'r'))*adag(:n)*a(:m)
 
@@ -157,4 +158,24 @@ using Test
                     (adag(:n)*adag(:n)*a(:n)*a(:n),3)]
         @test vacExpVal(A,S).v ≈ val
     end
+
+    tmp = scal(1+2im)*OpSumAnalytic(:i,a(:i)*adag(:i)*ascorr(adag(:n)*a(:m)))
+    @test latex(scal(1+2im)) == "(1+2i)"
+    @test latex(scal(1+2im//5)) == "\\left(1+\\frac{2}{5}i\\right)"
+
+    tmp = OpSumAnalytic(:i,ascorr(adag(:n)*a(:i)))
+    tmplatex = "\\sum_{i}\\langle a_{n}^\\dagger a_{i} \\rangle_{c} + \\sum_{i}\\langle a_{n}^\\dagger \\rangle \\langle a_{i} \\rangle"
+    @test latex(tmp) == tmplatex
+    @test ascorr(tmp) == tmp
+    @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
+
+    inds = [:a,:b,:c,:d,:e,:f,:g,:h,:i,:j,:k,:l,:m,:n]
+    tmp1 = param(:ω,:y)*a(1)*adag(1)*a(3)*adag(:a)*ExpVal(a(:n))*Corr(adag(:n)*a(:n))
+    tmp2 = param(:ω,:a)*ExpVal(a(:b))*Corr(adag(:c)*a(:d))*adag(:e)*a(:f) + param(:ω,:g)*ExpVal(a(:h))*Corr(adag(:i)*a(:j))*adag(:k)*adag(:l)*a(:m)*a(:n)
+    @test tmp2 == QuantumAlgebra.distribute_indices!(copy(inds),tmp1)
+    @test_throws MethodError QuantumAlgebra.distribute_indices!(copy(inds),OpSumAnalytic(:i,a(:i)))
+    @test_throws ArgumentError QuantumAlgebra.distribute_indices!([:a,:b],tmp1)
+
+    @test string(OpSumAnalytic(:i,a(:i)) * adag(:n)) == "1 + Σ_i a†(n) a(i)"
+    @test string(a(5)*adag(5)*σz(3)*ascorr(adag(5)*a(5))) == "⟨a†(5)⟩ ⟨a(5)⟩ σz(3) + ⟨a†(5) a(5)⟩c σz(3) + ⟨a†(5)⟩ ⟨a(5)⟩ a†(5) a(5) σz(3) + ⟨a†(5) a(5)⟩c a†(5) a(5) σz(3)"
 end

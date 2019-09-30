@@ -10,7 +10,7 @@ using Combinatorics
 using Printf
 
 # we will want to overload these operators and functions for our custom types
-import Base: ==, *, +, -, isless, length, adjoint, repr
+import Base: ==, *, +, -, isless, length, adjoint, print
 
 # define for σx, σy, σz
 @enum SpatialIndex x=1 y=2 z=3
@@ -316,8 +316,6 @@ distribute_indices!(inds,A::OpProd) = distribute_indices!(inds,A.A)*distribute_i
 distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_indices!(inds,A.B)
 # on purpose do not define this for OpSumAnalytic
 
-distribute_indices!([:a,:b,:c,:d,:e,:f,:g,:h],param(:ω,:y)*a(1)*adag(1)*a(3)*adag(:a))
-
 checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Cannot multiply sum with index $(B.ind) with expression $(A) containing the same index")
 # when multiplying (or commuting) with an operator with an index, take into account that the term in the sum with equal index has to be treated specially
 *(A::Union{param,ExpVal,Corr},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
@@ -330,22 +328,23 @@ checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Canno
 comm(A::Union{a,adag,σ},B::OpSumAnalytic) = (checkinds(A,B); tmp = comm(A,B.A); OpSumAnalytic(B.ind,tmp) - replace_index(tmp,B.ind,A.n) + comm(A,replace_index(B.A,B.ind,A.n)))
 comm(A::OpSumAnalytic,B::Union{a,adag,σ}) = (checkinds(B,A); tmp = comm(A.A,B); OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,B.n) + comm(replace_index(A.A,A.ind,B.n),B))
 
-repr(A::a) = "a($(A.n))"
-repr(A::adag) = "adag($(A.n))"
-repr(A::σ) = "σ($(A.a),$(A.n))"
-repr(A::scal) = "scal($(A.v))"
-repr(A::param) = "param($(A.name),$(A.inds),$(A.state))"
-repr(A::OpProd) = "OpProd($(A.A),$(A.B))"
-repr(A::OpSum) = "OpSum($(A.A),$(A.B))"
-repr(A::ExpVal) = "ExpVal($(A.A))"
-repr(A::Corr) = "Corr($(A.A))"
+print(io::IO,A::a) = print(io,"a($(A.n))")
+print(io::IO,A::adag) = print(io,"a†($(A.n))")
+print(io::IO,A::σ) = print(io,"σ$(A.a)($(A.n))")
+print(io::IO,A::scal) = print(io,"$(A.v)")
+print(io::IO,A::param) = print(io,string(A.name, A.state=='c' ? "'" : "",length(A.inds)==0 ? "" : "($(A.inds...))"))
+print(io::IO,A::OpProd) = print(io,"$(A.A) $(A.B)")
+print(io::IO,A::OpSum) = print(io,"$(A.A) + $(A.B)")
+print(io::IO,A::ExpVal) = print(io,"⟨$(A.A)⟩")
+print(io::IO,A::Corr) = print(io,"⟨$(A.A)⟩c")
+print(io::IO,A::OpSumAnalytic) = print(io,"Σ_$(A.ind) $(A.A)")
 
 mystring(x::Number) = @sprintf "%g" x
 mystring(x::Rational) = denominator(x)==1 ? "$(numerator(x))" : "\\frac{$(numerator(x))}{$(denominator(x))}"
 mystring(x::Complex) = @sprintf "(%g%+gi)" real(x) imag(x)
 mystring(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" mystring(real(x)) (imag(x)>=0 ? "+" : "-") mystring(abs(imag(x)))
 
-Base.show(io::IO, ::MIME"text/latex", A::Operator) where {T} = print(io,"\$",latex(A),"\$")
+Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$")
 latex(A::a) = "a_{$(A.n)}"
 latex(A::adag) = "a_{$(A.n)}^\\dagger"
 latex(A::σ) = "\\sigma_{$(A.a),$(A.n)}"
