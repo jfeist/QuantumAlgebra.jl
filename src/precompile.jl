@@ -44,11 +44,11 @@ comm(scal(2//5)*param(:h)*σ(1,5),scal(3)*param(:g)*σ(2,5))
 σ(1,5)*σ(2,5)*σ(3,5)
 σ(1,5)*σ(2,5)*σ(1,5)
 
-param(:g,2)*param(:g,1)*param(:g,3,'c')*param(:b)*param(:a)*param(:d,3,'c')*param(:f,1,'r')
+param(:g,2)*param(:g,1)*param(:g,'c',3)*param(:b)*param(:a)*param(:d,'c',3)*param(:f,'r',1)
 
 a(2)*adag(2)*adag(3)*σ(2,1)*adag(2)*adag(4)*σ(3,1)*a(2)*adag(3)
 
-adag(2)*a(2)*adag(2)*σ(2,1) + scal(2)*param(:g,1,'c')
+adag(2)*a(2)*adag(2)*σ(2,1) + scal(2)*param(:g,'c',1)
 
 scal(-1//2) + σp(1) * σm(1)
 
@@ -73,13 +73,13 @@ comm(a(1),a(2)*adag(1)*a(1)*adag(2))
 # ascorr(a(1)*a(2)*a(3)*a(4))
 # ascorr(adag(2)*a(1)*σ(3,1))
 
-# ascorr(param(:g,(),'r')*adag(3)*a(2)*a(2))
-# ascorr(scal(-1)*param(:g,1,'r')*σ(3,1))
+# ascorr(param(:g,'r')*adag(3)*a(2)*a(2))
+# ascorr(scal(-1)*param(:g,'r',1)*σ(3,1))
 # ascorr(adag(:n)*σy(:k)*a(:m)*adag(:m))
 
 let
-    H = OpSumAnalytic(:i,param(:ω,:i,'r')*adag(:i)*a(:i)) + OpSumAnalytic(:j,scal(1//2)*param(:ωe,:j,'r')*σ(3,:j)) +
-        OpSumAnalytic(:i,OpSumAnalytic(:j,param(:g,(:i,:j),'r')*(adag(:i)+a(:i))*σ(1,:j)))
+    H = OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i)) + OpSumAnalytic(:j,scal(1//2)*param(:ωe,'r',:j)*σ(3,:j)) +
+        OpSumAnalytic(:i,OpSumAnalytic(:j,param(:g,'r',(:i,:j))*(adag(:i)+a(:i))*σ(1,:j)))
     comm(adag(:n)*a(:m),H)
     comm(adag(:n)*a(:n),H)
     for op in [a(:n),adag(:n),σ(1,:k),σ(2,:k),σ(3,:k)]

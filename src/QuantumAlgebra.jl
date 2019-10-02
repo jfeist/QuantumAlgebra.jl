@@ -23,43 +23,54 @@ struct scal{T<:Number} <: Scalar; v::T; end
 "`param(g,(:i,:j),'n')`: represent a scalar named parameter ``g_{i,j}``. state can be purely real (`'r'`), not conjugated (`'n'`), or conjugated (`'c'`)"
 struct param{T<:Tuple} <: Scalar
     name::Symbol
-    inds::T
     state::Char
-    function param(name,inds::T=(),state='n') where T<:Tuple
+    inds::T
+    function param(name,state::Char,inds::Union{Symbol,Integer}...)
         state in ('n','r','c') || error("state has to be one of n,r,c")
-        new{T}(name,inds,state)
+        new{typeof(inds)}(name,state,inds)
     end
-    param(name,n,state='n') = param(name,(n,),state)
+    param(name,inds::Union{Symbol,Integer}...) = param(name,'n',inds...)
+    param(name,state::Char,inds::Tuple) = param(name,state,inds...)
+    param(name,inds::Tuple) = param(name,'n',inds...)
 end
-"`a(n)`: represent bosonic annihilation operator ``a_n`` for mode n"
-struct a{T}    <: Operator; n::T; end
-"`adag(n)`: represent bosonic creation operator ``a^†_n`` for mode n"
-struct adag{T} <: Operator; n::T; end
+for (op,desc,sym) in (
+    (:a,   "bosonic annihilation","a"),
+    (:adag,"bosonic creation","a^†"),
+    (:σminus,"TLS annihilation","σ^-"),
+    (:σplus,"TLS creation","σ^+"))
+    @eval begin
+        "`$($op)(inds)`: represent $($desc) operator ``$($sym)_{inds}``"
+        struct $op{T<:Tuple} <: Operator
+            inds::T
+            $op(inds::Union{Symbol,Integer}...) = new{typeof(inds)}(inds)
+            $op(inds::Tuple) = $op(inds...)
+        end
+    end
+end
+
 "`σ(a,n)`: represent Pauli matrix ``σ_{a,n}`` for two-level system (TLS) ``n``, where ``a ∈ \\{x,y,z\\}`` or ``\\{1,2,3\\}`` is the type of Pauli matrix."
-struct σ{T}    <: Operator
+struct σ{T<:Tuple} <: Operator
     a::SpatialIndex
-    n::T
-    σ(a,n::T) where T = new{T}(SpatialIndex(a),n)
+    inds::T
+    σ(a,inds::Union{Symbol,Integer}...) = new{typeof(inds)}(SpatialIndex(a),inds)
+    σ(a,inds::Tuple) = σ(a,inds...)
 end
-"`σminus(n)`: represent TLS annihilation operator ``σ^-_n`` for mode n"
-struct σminus{T} <: Operator; n::T; end
-"`σplus(n)`: represent TLS creation operator ``σ^+_n`` for mode n"
-struct σplus{T} <: Operator; n::T; end
+
 
 using_σpm = false
 use_σpm(t::Bool=true) = eval(:( using_σpm = $t; nothing ))
-use_σxyz() = eval(:( using_σpm = false; nothing ))
+use_σxyz() = use_σpm(false)
 
 "`σp(n)`: construct ``σ^+_n = \\frac12 σ_{x,n} + \\frac{i}{2} σ_{y,n}``"
-σp(n) = using_σpm ? σplus(n) : scal(1//2)*σ(x,n) + scal(1im//2)*σ(y,n)
+σp(n...) = using_σpm ? σplus(n...) : scal(1//2)*σ(x,n...) + scal(1im//2)*σ(y,n...)
 "`σm(n)`: construct ``σ^-_n = \\frac12 σ_{x,n} - \\frac{i}{2} σ_{y,n}``"
-σm(n) = using_σpm ? σminus(n) : scal(1//2)*σ(x,n) - scal(1im//2)*σ(y,n)
+σm(n...) = using_σpm ? σminus(n...) : scal(1//2)*σ(x,n...) - scal(1im//2)*σ(y,n...)
 "`σx(n)`: construct ``σ_{x,n}``"
-σx(n) = using_σpm ? σminus(n) + σplus(n) : σ(x,n)
+σx(n...) = using_σpm ? σminus(n...) + σplus(n...) : σ(x,n...)
 "`σy(n)`: construct ``σ_{y,n}``"
-σy(n) = using_σpm ? scal(1im) * (σminus(n) - σplus(n)) : σ(y,n)
+σy(n...) = using_σpm ? scal(1im) * (σminus(n...) - σplus(n...)) : σ(y,n...)
 "`σz(n)`: construct ``σ_{z,n}``"
-σz(n) = using_σpm ? scal(2)*σplus(n)*σminus(n) - scal(1) : σ(z,n)
+σz(n...) = using_σpm ? scal(2)*σplus(n...)*σminus(n...) - scal(1) : σ(z,n...)
 
 struct OpProd <: Operator; A::Operator; B::Operator; end
 struct OpSum  <: Operator; A::Operator; B::Operator; end
@@ -134,15 +145,14 @@ for (ii,op1) in enumerate(OpOrder)
     end
 end
 isless(A::scal,B::scal) = (real(A.v),imag(A.v)) < (real(B.v),imag(B.v))
+
+sortsentinel(x::Integer) = (1,x)
+sortsentinel(x::Symbol) = (2,x)
 # do not order parameters by whether they are purely real, or conjugated or not
-isless(A::param,B::param) = (A.name,A.inds) < (B.name,B.inds)
-isless(A::σ{T},B::σ{T}) where T = (A.n,A.a) < (B.n,B.a)
+isless(A::param,B::param) = (A.name,sortsentinel.(A.inds)) < (B.name,sortsentinel.(B.inds))
+isless(A::σ,B::σ) = (sortsentinel.(A.inds),A.a) < (sortsentinel.(B.inds),B.a)
 for op in (a,adag,σminus,σplus)
-    @eval isless(A::$op{T},B::$op{T}) where T = A.n < B.n
-end
-for op in (a,adag,σ,σminus,σplus)
-    @eval isless(A::$op{Symbol},B::$op{Int}) = false
-    @eval isless(A::$op{Int},B::$op{Symbol}) = true
+    @eval isless(A::$op,B::$op) = sortsentinel.(A.inds) < sortsentinel.(B.inds)
 end
 for op in (ExpVal,Corr,OpSumAnalytic)
     @eval isless(A::$op,B::$op) = A.A < B.A
@@ -185,12 +195,12 @@ function *(A::Operator,B::Operator)::Operator
         scal(A.v*B.A.v)*B.B
     elseif B isa OpProd && (A*B.A) != OpProd(A,B.A)
         (A*B.A)*B.B
-    elseif A isa σ && B isa σ && A.n == B.n
+    elseif A isa σ && B isa σ && A.inds == B.inds
         # σa σb = δab + i ϵabc σc = δab + 1/2 [σa,σb]
         A.a==B.a ? scal(1) : scal(1//2)*comm(A,B)
-    elseif A isa σplus && B isa σplus && A.n == B.n
+    elseif A isa σplus && B isa σplus && A.inds == B.inds
         scal(0)
-    elseif A isa σminus && B isa σminus && A.n == B.n
+    elseif A isa σminus && B isa σminus && A.inds == B.inds
         scal(0)
     elseif A>B
         B*A + comm(A,B)
@@ -242,11 +252,11 @@ function +(A::Operator,B::Operator)::Operator
 end
 
 adjoint(A::scal) = scal(conj(A.v))
-adjoint(A::param) = A.state=='r' ? A : param(A.name,A.inds,A.state=='n' ? 'c' : 'n')
-adjoint(A::a) = adag(A.n)
-adjoint(A::adag) = a(A.n)
-adjoint(A::σminus) = σplus(A.n)
-adjoint(A::σplus) = σminus(A.n)
+adjoint(A::param) = A.state=='r' ? A : param(A.name,A.state=='n' ? 'c' : 'n',A.inds)
+adjoint(A::a) = adag(A.inds)
+adjoint(A::adag) = a(A.inds)
+adjoint(A::σminus) = σplus(A.inds)
+adjoint(A::σplus) = σminus(A.inds)
 adjoint(A::σ) = A
 adjoint(A::OpSum) = A.A' + A.B'
 adjoint(A::OpProd) = A.B' * A.A'
@@ -282,13 +292,13 @@ end
 for op in (a,adag,σplus,σminus)
     @eval comm(A::$op,B::$op) = scal(0)
 end
-comm(A::a,B::adag) = scal(A.n==B.n ? 1 : 0)
-comm(A::adag,B::a) = scal(A.n==B.n ? -1 : 0)
-comm(A::σplus,B::σminus) = A.n==B.n ? σz(A.n) : scal(0)
+comm(A::a,B::adag) = scal(A.inds==B.inds ? 1 : 0)
+comm(A::adag,B::a) = scal(A.inds==B.inds ? -1 : 0)
+comm(A::σplus,B::σminus) = A.inds==B.inds ? σz(A.inds) : scal(0)
 comm(A::σminus,B::σplus) = -comm(B,A)
 
 function comm(A::σ,B::σ)
-    if A.n != B.n
+    if A.inds != B.inds
         scal(0)
     elseif A.a == B.a
         scal(0)
@@ -298,18 +308,18 @@ function comm(A::σ,B::σ)
         # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
         c = 6 - a - b
         s = levicivita([a,b,c])
-        scal(2im*s)*σ(c,A.n)
+        scal(2im*s)*σ(c,A.inds)
     end
 end
 
 replace_index(A::scal,iold,inew) = A
-replace_index(A::param,iold,inew) = param(A.name,(n-> n==iold ? inew : n).(A.inds),A.state)
+replace_index(A::param,iold,inew) = param(A.name,A.state,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::ExpVal,iold,inew) = ExpVal(replace_index(A.A,iold,inew))
 replace_index(A::Corr,iold,inew) = Corr(replace_index(A.A,iold,inew))
 for op in (a,adag,σminus,σplus)
-    @eval replace_index(A::$op,iold,inew) = A.n==iold ? $op(inew) : A
+    @eval replace_index(A::$op,iold,inew) = $op((n-> n==iold ? inew : n).(A.inds))
 end
-replace_index(A::σ,iold,inew) = A.n==iold ? σ(A.a,inew) : A
+replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::OpProd,iold,inew) = replace_index(A.A,iold,inew)*replace_index(A.B,iold,inew)
 replace_index(A::OpSum,iold,inew) = replace_index(A.A,iold,inew) + replace_index(A.B,iold,inew)
 replace_index(A::OpSumAnalytic,iold,inew) = begin
@@ -329,7 +339,7 @@ replace_index(A::Operator,reps) = begin
 end
 
 distribute_indices!(inds,A::scal) = A
-distribute_indices!(inds,A::param) = param(A.name,((popfirst!(inds) for _ in A.inds)...,),A.state)
+distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
 distribute_indices!(inds,A::Corr) = Corr(distribute_indices!(inds,A.A))
 for op in (a,adag,σminus,σplus)
@@ -343,20 +353,20 @@ distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_
 checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Cannot multiply sum with index $(B.ind) with expression $(A) containing the same index")
 # when multiplying (or commuting) with an operator with an index, take into account that the term in the sum with equal index has to be treated specially
 *(A::Union{param,ExpVal,Corr},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
-*(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); tmp = A*B.A; OpSumAnalytic(B.ind,tmp) - replace_index(tmp,B.ind,A.n) + A*replace_index(B.A,B.ind,A.n))
-*(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = (checkinds(B,A); tmp = A.A*B; OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,B.n) + replace_index(A.A,A.ind,B.n)*B)
+*(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); tmp = A*B.A; OpSumAnalytic(B.ind,tmp) + sum(A*replace_index(B.A,B.ind,ind) - replace_index(tmp,B.ind,ind) for ind=indexset(A)))
+*(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = (checkinds(B,A); tmp = A.A*B; OpSumAnalytic(A.ind,tmp) + sum(replace_index(A.A,A.ind,ind)*B - replace_index(tmp,A.ind,ind) for ind=indexset(B)))
 # no need to check indices here since we just dispatch to another routine
 *(A::OpSumAnalytic,B::OpProd) = (A*B.A)*B.B
 *(A::OpSumAnalytic,B::Operator) = (checkinds(B,A); OpSumAnalytic(A.ind,A.A*B))
 
-comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); tmp = comm(A,B.A); OpSumAnalytic(B.ind,tmp) - replace_index(tmp,B.ind,A.n) + comm(A,replace_index(B.A,B.ind,A.n)))
-comm(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = (checkinds(B,A); tmp = comm(A.A,B); OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,B.n) + comm(replace_index(A.A,A.ind,B.n),B))
+comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); tmp = comm(A,B.A); OpSumAnalytic(B.ind,tmp) + sum(comm(A,replace_index(B.A,B.ind,ind)) - replace_index(tmp,B.ind,ind) for ind=indexset(A)))
+comm(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = (checkinds(B,A); tmp = comm(A.A,B); OpSumAnalytic(A.ind,tmp) + sum(comm(replace_index(A.A,A.ind,ind),B) - replace_index(tmp,A.ind,ind) for ind=indexset(B)))
 
-print(io::IO,A::a) = print(io,"a($(A.n))")
-print(io::IO,A::adag) = print(io,"a†($(A.n))")
-print(io::IO,A::σ) = print(io,"σ$(A.a)($(A.n))")
-print(io::IO,A::σminus) = print(io,"σ-($(A.n))")
-print(io::IO,A::σplus) = print(io,"σ+($(A.n))")
+print(io::IO,A::a) = print(io,"a($(A.inds...))")
+print(io::IO,A::adag) = print(io,"a†($(A.inds...))")
+print(io::IO,A::σ) = print(io,"σ$(A.a)($(A.inds...))")
+print(io::IO,A::σminus) = print(io,"σ-($(A.inds...))")
+print(io::IO,A::σplus) = print(io,"σ+($(A.inds...))")
 print(io::IO,A::scal) = print(io,"$(A.v)")
 print(io::IO,A::param) = print(io,string(A.name, A.state=='c' ? "'" : "",length(A.inds)==0 ? "" : "($(A.inds...))"))
 print(io::IO,A::OpProd) = print(io,"$(A.A) $(A.B)")
@@ -371,11 +381,11 @@ mystring(x::Complex) = @sprintf "(%g%+gi)" real(x) imag(x)
 mystring(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" mystring(real(x)) (imag(x)>=0 ? "+" : "-") mystring(abs(imag(x)))
 
 Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$")
-latex(A::a) = "a_{$(A.n)}"
-latex(A::adag) = "a_{$(A.n)}^\\dagger"
-latex(A::σ) = "\\sigma_{$(A.a),$(A.n)}"
-latex(A::σminus) = "\\sigma^-_{$(A.n)}"
-latex(A::σplus) = "\\sigma^+_{$(A.n)}"
+latex(A::a) = "a_{$(A.inds...)}"
+latex(A::adag) = "a_{$(A.inds...)}^\\dagger"
+latex(A::σ) = "\\sigma_{$(A.a),$(A.inds...)}"
+latex(A::σminus) = "\\sigma^-_{$(A.inds...)}"
+latex(A::σplus) = "\\sigma^+_{$(A.inds...)}"
 latex(A::scal) = imag(A.v)==0 ? mystring(real(A.v)) : (real(A.v)==0 ? mystring(imag(A.v))*"i" : mystring(A.v))
 latex(A::param)  = string(A.name, length(A.inds)==0 ? "" : "_{$(A.inds...)}", A.state=='c' ? "^*" : "")
 latex(A::OpProd) = string(latex(A.A)," ",latex(A.B))
@@ -386,7 +396,7 @@ latex(A::OpSumAnalytic) = string("\\sum_{$(A.ind)}",latex(A.A))
 
 indextuple(A::scal) = ()
 indextuple(A::param) = A.inds
-indextuple(A::Union{a,adag,σ,σminus,σplus}) = (A.n,)
+indextuple(A::Union{a,adag,σ,σminus,σplus}) = A.inds
 indextuple(A::Union{OpProd,OpSum}) = (indextuple(A.A)...,indextuple(A.B)...)
 indextuple(A::Union{ExpVal,Corr}) = indextuple(A.A)
 indextuple(A::OpSumAnalytic) = (A.ind,indextuple(A.A)...)

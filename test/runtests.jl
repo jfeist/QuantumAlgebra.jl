@@ -15,21 +15,31 @@ using Test
         @test scal(1.5) == scal(3//2)
 
         # test params and their complex conjugation
-        @test param(:ω) == param(:ω,())
-        @test param(:ω,(:i),'n') == param(:ω,:i)
+        @test param(:ω) == param(:ω,()) == param(:ω,'n') == param(:ω,'n',())
+        @test param(:ω,'n',(:i)) == param(:ω,:i)
+        @test param(:ω,'n',(:i,:j,2)) == param(:ω,:i,:j,2)
+        @test_throws ErrorException param(:ω,'g')
+        @test_throws MethodError param(:ω,2,:i,"a")
 
-        @test adjoint(param(:g,(),'r')) == param(:g,(),'r')
-        @test adjoint(param(:g,(),'n')) == param(:g,(),'c')
-        @test adjoint(param(:g,:i,'n')) == param(:g,:i,'c')
-        @test adjoint(param(:g,(:i,1,:m),'c')) == param(:g,(:i,1,:m),'n')
+        @test adjoint(param(:g,'r')) == param(:g,'r')
+        @test adjoint(param(:g,'n')) == param(:g,'c')
+        @test adjoint(param(:g,:i)) == param(:g,'c',:i)
+        @test adjoint(param(:g,'c',(:i,1,:m))) == param(:g,:i,1,:m)
 
-        tmp1 = param(:g,2)*param(:g,1)*param(:g,3,'c')*param(:b)*param(:a)*param(:d,3,'c')*param(:f,(1,:i),'r')
-        tmpc = param(:g,2,'c')*param(:g,1,'c')*param(:g,3)*param(:b,(),'c')*param(:a,(),'c')*param(:d,3,'n')*param(:f,(1,:i),'r')
-        tmp2 = param(:a)*param(:b)*param(:g,1)*param(:g,2)*param(:g,3,'c')*param(:d,3,'c')*param(:f,(1,:i),'r')
+        tmp1 = param(:g,2)*param(:g,1)*param(:g,'c',3)*param(:b)*param(:a)*param(:d,'c',3)*param(:f,'r',1,:i)
+        tmpc = param(:g,'c',2)*param(:g,'c',1)*param(:g,'n',3)*param(:b,'c')*param(:a,'c')*param(:d,'n',3)*param(:f,'r',(1,:i))
+        tmp2 = param(:a)*param(:b)*param(:g,1)*param(:g,2)*param(:g,'c',3)*param(:d,'c',3)*param(:f,'r',(1,:i))
         @test tmp1 == tmp2
         @test tmp1' == tmpc
 
+        @test_throws MethodError σx(:i,"a")
+        @test σx(:i,:b) == σx((:i,:b))
+        @test σx(:i,:j) != σx(:i,:b)
+
+        @test σx() == σp() + σm()
         @test σx(:i) == σp(:i) + σm(:i)
+        @test σx(:i,:j) == σp((:i,:j)) + σm((:i,:j))
+
         @test σy(:i) == scal(-1im)*(σp(:i) - σm(:i))
         @test σz(:i) == scal(2)*σp(:i)*σm(:i) - scal(1)
 
@@ -39,12 +49,14 @@ using Test
         end
         @test σx(:i)*σy(:i) == scal(1im)*σz(:i)
         @test σy(:i)*σx(:i) == scal(-1im)*σz(:i)
-        @test σy(:i)*σz(:i) == scal(1im)*σx(:i)
-        @test σx(:i)*σz(:i) == scal(-1im)*σy(:i)
+        @test σy()*σz() == scal(1im)*σx()
+        @test σx(:i,:j)*σz(:i,:j) == scal(-1im)*σy(:i,:j)
+        @test σx(:i,:j)*σz(:i,:j) != scal(-1im)*σy(:i,:k)
 
+        @test a()' == adag()
         @test a(:m)*adag(:m) == adag(:m)*a(:m) + scal(1)
         @test (a(:m)*a(1))' == adag(:m)*adag(1)
-        @test (a(1)*a(:m))' == adag(1)*adag(:m)
+        @test (a(1,2,:k)*a(:m))' == adag(1,2,:k)*adag(:m)
 
         @test scal(1+1im) < scal(2-1im)
         @test scal(1+1im) > scal(1-1im)
@@ -137,23 +149,27 @@ using Test
         @test_throws ErrorException ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
 
         if QuantumAlgebra.using_σpm
-            @test ascorr(scal(-1)*param(:g,1,'r')*σp(1)) == -param(:g,1,'r')*ExpVal(σp(1))
+            @test ascorr(scal(-1)*param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*ExpVal(σp(1))
             @test ascorr(OpSumAnalytic(:i,σp(:i)*σm(:n))) == OpSumAnalytic(:i,Corr(σp(:i)*σm(:n))) + OpSumAnalytic(:i,ExpVal(σp(:i))*ExpVal(σm(:n)))
         else
-            @test ascorr(scal(-1)*param(:g,1,'r')*σz(1)) == -param(:g,1,'r')*ExpVal(σz(1))
+            @test ascorr(scal(-1)*param(:g,'r',1)*σz(1)) == -param(:g,'r',1)*ExpVal(σz(1))
             @test ascorr(OpSumAnalytic(:i,σy(:i)*σy(:n))) == OpSumAnalytic(:i,Corr(σy(:i)*σy(:n))) + OpSumAnalytic(:i,ExpVal(σy(:i))*ExpVal(σy(:n))) - ExpVal(σy(:n))*ExpVal(σy(:n))
         end
 
         @test CorrOrExp(a(5)) == ExpVal(a(5))
         @test CorrOrExp(a(5)*a(:i)) == Corr(a(5)*a(:i))
 
-        H = OpSumAnalytic(:i,param(:ω,:i,'r')*adag(:i)*a(:i))
+        H = OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
         # cannot commute with an operator with the same index as in the sum
         @test_throws ErrorException comm(a(:i),H)
-        @test comm(a(:n),H) == param(:ω,:n,'r')*a(:n)
-        @test comm(H,a(:n)) == -param(:ω,:n,'r')*a(:n)
-        @test comm(adag(:n),H) == -param(:ω,:n,'r')*adag(:n)
-        @test comm(adag(:n)*a(:m),H) == (param(:ω,:m,'r')-param(:ω,:n,'r'))*adag(:n)*a(:m)
+        @test comm(a(:n),H) == param(:ω,'r',:n)*a(:n)
+        @test comm(H,a(:n)) == -param(:ω,'r',:n)*a(:n)
+        @test comm(adag(:n),H) == -param(:ω,'r',:n)*adag(:n)
+        @test comm(adag(:n)*a(:m),H) == (param(:ω,'r',:m)-param(:ω,'r',:n))*adag(:n)*a(:m)
+
+        @test a(:k)*H == param(:ω,'r',:k)*a(:k) + OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a(:k))
+        HH = OpSumAnalytic(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i))
+        @test a(:k,:k)*HH == param(:ω,'r',:k,:k)*a(:k,:k) + OpSumAnalytic(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i)*a(:k,:k))
 
         @test Avac(H) == scal(0)
         @test vacA(H) == scal(0)
