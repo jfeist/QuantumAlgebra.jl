@@ -167,6 +167,7 @@ using Test
         @test comm(adag(:n),H) == -param(:ω,'r',:n)*adag(:n)
         @test comm(adag(:n)*a(:m),H) == (param(:ω,'r',:m)-param(:ω,'r',:n))*adag(:n)*a(:m)
 
+        @test a()*H == OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a())
         @test a(:k)*H == param(:ω,'r',:k)*a(:k) + OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a(:k))
         HH = OpSumAnalytic(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i))
         @test a(:k,:k)*HH == param(:ω,'r',:k,:k)*a(:k,:k) + OpSumAnalytic(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i)*a(:k,:k))
@@ -209,19 +210,34 @@ using Test
         @test latex(tmp) == tmplatex
         @test ascorr(tmp) == tmp
         @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
+        if QuantumAlgebra.using_σpm
+            @test latex(σp()) == "\\sigma^+"
+        else
+            @test latex(σz()) == "\\sigma_{z}"
+        end
+
 
         inds = [:a,:b,:c,:d,:e,:f,:g,:h,:i,:j,:k,:l,:m,:n]
         tmp1 = param(:ω,:y)*a(1)*adag(1)*a(3)*adag(:a)*ExpVal(a(:n))*Corr(adag(:n)*a(:n))
         tmp2 = param(:ω,:a)*ExpVal(a(:b))*Corr(adag(:c)*a(:d))*adag(:e)*a(:f) + param(:ω,:g)*ExpVal(a(:h))*Corr(adag(:i)*a(:j))*adag(:k)*adag(:l)*a(:m)*a(:n)
-        @test tmp2 == QuantumAlgebra.distribute_indices!(copy(inds),tmp1)
+        @test QuantumAlgebra.distribute_indices!(copy(inds),tmp1) == tmp2
+        if QuantumAlgebra.using_σpm
+            tmp1 = a(1,:n)*adag()*σm(1,:n)*σp()
+            @test QuantumAlgebra.distribute_indices!(copy(inds),tmp1) == adag()*a(:a,:b)*σp()*σm(:c,:d)
+        else
+            tmp1 = a(1,:n)*adag()*σz(1,:n)*σy()
+            @test QuantumAlgebra.distribute_indices!(copy(inds),tmp1) == adag()*a(:a,:b)*σy()*σz(:c,:d)
+        end
+
+
         @test_throws MethodError QuantumAlgebra.distribute_indices!(copy(inds),OpSumAnalytic(:i,a(:i)))
         @test_throws ArgumentError QuantumAlgebra.distribute_indices!([:a,:b],tmp1)
 
         @test string(OpSumAnalytic(:i,a(:i)) * adag(:n)) == "1 + Σ_i a†(n) a(i)"
         if QuantumAlgebra.using_σpm
-            @test string(a(5)*adag(5)*σp(3)*ascorr(adag(5)*a(5))) == "⟨a†(5)⟩ ⟨a(5)⟩ σ+(3) + ⟨a†(5) a(5)⟩c σ+(3) + ⟨a†(5)⟩ ⟨a(5)⟩ a†(5) a(5) σ+(3) + ⟨a†(5) a(5)⟩c a†(5) a(5) σ+(3)"
+            @test string(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5))) == "⟨a†(5i)⟩ ⟨a(5)⟩ σ+(3) + ⟨a†(5i) a(5)⟩c σ+(3) + ⟨a†(5i)⟩ ⟨a(5)⟩ a†(5) a(5) σ+(3) + ⟨a†(5i) a(5)⟩c a†(5) a(5) σ+(3)"
         else
-            @test string(a(5)*adag(5)*σz(3)*ascorr(adag(5)*a(5))) == "⟨a†(5)⟩ ⟨a(5)⟩ σz(3) + ⟨a†(5) a(5)⟩c σz(3) + ⟨a†(5)⟩ ⟨a(5)⟩ a†(5) a(5) σz(3) + ⟨a†(5) a(5)⟩c a†(5) a(5) σz(3)"
+            @test string(a(5)*adag(5)*σz(3)*ascorr(adag(5,:i)*a(5))) == "⟨a†(5i)⟩ ⟨a(5)⟩ σz(3) + ⟨a†(5i) a(5)⟩c σz(3) + ⟨a†(5i)⟩ ⟨a(5)⟩ a†(5) a(5) σz(3) + ⟨a†(5i) a(5)⟩c a†(5) a(5) σz(3)"
         end
     end
 end

@@ -343,9 +343,9 @@ distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
 distribute_indices!(inds,A::Corr) = Corr(distribute_indices!(inds,A.A))
 for op in (a,adag,σminus,σplus)
-    @eval distribute_indices!(inds,A::$op) = $op(popfirst!(inds))
+    @eval distribute_indices!(inds,A::$op) = $op((popfirst!(inds) for _ in A.inds)...)
 end
-distribute_indices!(inds,A::σ) = σ(A.a,popfirst!(inds))
+distribute_indices!(inds,A::σ) = σ(A.a,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::OpProd) = distribute_indices!(inds,A.A)*distribute_indices!(inds,A.B)
 distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_indices!(inds,A.B)
 # on purpose do not define this for OpSumAnalytic
@@ -353,14 +353,38 @@ distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_
 checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Cannot multiply sum with index $(B.ind) with expression $(A) containing the same index")
 # when multiplying (or commuting) with an operator with an index, take into account that the term in the sum with equal index has to be treated specially
 *(A::Union{param,ExpVal,Corr},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
-*(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); tmp = A*B.A; OpSumAnalytic(B.ind,tmp) + sum(A*replace_index(B.A,B.ind,ind) - replace_index(tmp,B.ind,ind) for ind=indexset(A)))
-*(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = (checkinds(B,A); tmp = A.A*B; OpSumAnalytic(A.ind,tmp) + sum(replace_index(A.A,A.ind,ind)*B - replace_index(tmp,A.ind,ind) for ind=indexset(B)))
+*(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = begin
+    checkinds(A,B)
+    tmp = A*B.A
+    res = OpSumAnalytic(B.ind,tmp)
+    for ind in indexset(A)
+        res += A*replace_index(B.A,B.ind,ind) - replace_index(tmp,B.ind,ind)
+    end
+    res
+end
+*(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = begin
+    checkinds(B,A)
+    tmp = A.A*B
+    res = OpSumAnalytic(A.ind,tmp)
+    for ind in indexset(B)
+        res += replace_index(A.A,A.ind,ind)*B - replace_index(tmp,A.ind,ind)
+    end
+    res
+end
 # no need to check indices here since we just dispatch to another routine
 *(A::OpSumAnalytic,B::OpProd) = (A*B.A)*B.B
 *(A::OpSumAnalytic,B::Operator) = (checkinds(B,A); OpSumAnalytic(A.ind,A.A*B))
 
-comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); tmp = comm(A,B.A); OpSumAnalytic(B.ind,tmp) + sum(comm(A,replace_index(B.A,B.ind,ind)) - replace_index(tmp,B.ind,ind) for ind=indexset(A)))
-comm(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = (checkinds(B,A); tmp = comm(A.A,B); OpSumAnalytic(A.ind,tmp) + sum(comm(replace_index(A.A,A.ind,ind),B) - replace_index(tmp,A.ind,ind) for ind=indexset(B)))
+comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = begin
+    checkinds(A,B)
+    tmp = comm(A,B.A)
+    res = OpSumAnalytic(B.ind,tmp)
+    for ind=indexset(A)
+        res += comm(A,replace_index(B.A,B.ind,ind)) - replace_index(tmp,B.ind,ind)
+    end
+    res
+end
+comm(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = -comm(B,A)
 
 print(io::IO,A::a) = print(io,"a($(A.inds...))")
 print(io::IO,A::adag) = print(io,"a†($(A.inds...))")
@@ -381,13 +405,14 @@ mystring(x::Complex) = @sprintf "(%g%+gi)" real(x) imag(x)
 mystring(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" mystring(real(x)) (imag(x)>=0 ? "+" : "-") mystring(abs(imag(x)))
 
 Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$")
-latex(A::a) = "a_{$(A.inds...)}"
-latex(A::adag) = "a_{$(A.inds...)}^\\dagger"
-latex(A::σ) = "\\sigma_{$(A.a),$(A.inds...)}"
-latex(A::σminus) = "\\sigma^-_{$(A.inds...)}"
-latex(A::σplus) = "\\sigma^+_{$(A.inds...)}"
+latex(A::σ) = string("\\sigma_{$(A.a)",length(A.inds)>0 ? ",$(A.inds...)}" : "}")
+latexindstr(inds::Tuple) = length(inds)==0 ? "" : "_{$(inds...)}"
+latex(A::a) = "a" * latexindstr(A.inds)
+latex(A::adag) = "a$(latexindstr(A.inds))^\\dagger"
+latex(A::σminus) = "\\sigma^-" * latexindstr(A.inds)
+latex(A::σplus) = "\\sigma^+" * latexindstr(A.inds)
 latex(A::scal) = imag(A.v)==0 ? mystring(real(A.v)) : (real(A.v)==0 ? mystring(imag(A.v))*"i" : mystring(A.v))
-latex(A::param)  = string(A.name, length(A.inds)==0 ? "" : "_{$(A.inds...)}", A.state=='c' ? "^*" : "")
+latex(A::param)  = string(A.name, latexindstr(A.inds), A.state=='c' ? "^*" : "")
 latex(A::OpProd) = string(latex(A.A)," ",latex(A.B))
 latex(A::OpSum) = string(latex(A.A)," + ",latex(A.B))
 latex(A::ExpVal) = "\\langle $(latex(A.A)) \\rangle"
