@@ -10,7 +10,7 @@ using Combinatorics
 using Printf
 
 # we will want to overload these operators and functions for our custom types
-import Base: ==, *, +, -, isless, length, adjoint, print
+import Base: ==, *, +, -, isless, length, adjoint, print, zero, one
 
 # define for σx, σy, σz
 @enum SpatialIndex x=1 y=2 z=3
@@ -56,6 +56,10 @@ struct σ{T<:Tuple} <: Operator
     σ(a,inds::Tuple) = σ(a,inds...)
 end
 
+zero(::Type{<:Operator}) = scal(0)
+zero(::Operator) = scal(0)
+one(::Type{<:Operator}) = scal(1)
+one(::Operator) = scal(1)
 
 using_σpm = false
 use_σpm(t::Bool=true) = eval(:( using_σpm = $t; nothing ))
