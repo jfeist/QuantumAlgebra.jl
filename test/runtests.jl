@@ -20,6 +20,7 @@ using Test
         @test param(:ω,'n',(:i,:j,2)) == param(:ω,:i,:j,2)
         @test_throws ErrorException param(:ω,'g')
         @test_throws MethodError param(:ω,2,:i,"a")
+        @test_throws MethodError a("a")
 
         @test adjoint(param(:g,'r')) == param(:g,'r')
         @test adjoint(param(:g,'n')) == param(:g,'c')
@@ -216,7 +217,6 @@ using Test
             @test latex(σz()) == "\\sigma_{z}"
         end
 
-
         inds = [:a,:b,:c,:d,:e,:f,:g,:h,:i,:j,:k,:l,:m,:n]
         tmp1 = param(:ω,:y)*a(1)*adag(1)*a(3)*adag(:a)*ExpVal(a(:n))*Corr(adag(:n)*a(:n))
         tmp2 = param(:ω,:a)*ExpVal(a(:b))*Corr(adag(:c)*a(:d))*adag(:e)*a(:f) + param(:ω,:g)*ExpVal(a(:h))*Corr(adag(:i)*a(:j))*adag(:k)*adag(:l)*a(:m)*a(:n)
@@ -228,7 +228,6 @@ using Test
             tmp1 = a(1,:n)*adag()*σz(1,:n)*σy()
             @test QuantumAlgebra.distribute_indices!(copy(inds),tmp1) == adag()*a(:a,:b)*σy()*σz(:c,:d)
         end
-
 
         @test_throws MethodError QuantumAlgebra.distribute_indices!(copy(inds),OpSumAnalytic(:i,a(:i)))
         @test_throws ArgumentError QuantumAlgebra.distribute_indices!([:a,:b],tmp1)

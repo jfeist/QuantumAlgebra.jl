@@ -16,20 +16,23 @@ import Base: ==, *, +, -, isless, length, adjoint, print, zero, one
 @enum SpatialIndex x=1 y=2 z=3
 SpatialIndex(a::SpatialIndex) = a
 
+const OpIndex = Union{Int,Symbol}
+const OpIndices = NTuple{N,OpIndex} where N
+
 abstract type Operator end
 abstract type Scalar <: Operator; end
 "Represent a scalar value (i.e., a number)"
 struct scal{T<:Number} <: Scalar; v::T; end
 "`param(g,(:i,:j),'n')`: represent a scalar named parameter ``g_{i,j}``. state can be purely real (`'r'`), not conjugated (`'n'`), or conjugated (`'c'`)"
-struct param{T<:Tuple} <: Scalar
+struct param{T<:OpIndices} <: Scalar
     name::Symbol
     state::Char
     inds::T
-    function param(name,state::Char,inds::Union{Symbol,Integer}...)
+    function param(name,state::Char,inds::OpIndex...)
         state in ('n','r','c') || error("state has to be one of n,r,c")
         new{typeof(inds)}(name,state,inds)
     end
-    param(name,inds::Union{Symbol,Integer}...) = param(name,'n',inds...)
+    param(name,inds::OpIndex...) = param(name,'n',inds...)
     param(name,state::Char,inds::Tuple) = param(name,state,inds...)
     param(name,inds::Tuple) = param(name,'n',inds...)
 end
@@ -40,19 +43,19 @@ for (op,desc,sym) in (
     (:σplus,"TLS creation","σ^+"))
     @eval begin
         "`$($op)(inds)`: represent $($desc) operator ``$($sym)_{inds}``"
-        struct $op{T<:Tuple} <: Operator
+        struct $op{T<:OpIndices} <: Operator
             inds::T
-            $op(inds::Union{Symbol,Integer}...) = new{typeof(inds)}(inds)
+            $op(inds::OpIndex...) = new{typeof(inds)}(inds)
             $op(inds::Tuple) = $op(inds...)
         end
     end
 end
 
 "`σ(a,n)`: represent Pauli matrix ``σ_{a,n}`` for two-level system (TLS) ``n``, where ``a ∈ \\{x,y,z\\}`` or ``\\{1,2,3\\}`` is the type of Pauli matrix."
-struct σ{T<:Tuple} <: Operator
+struct σ{T<:OpIndices} <: Operator
     a::SpatialIndex
     inds::T
-    σ(a,inds::Union{Symbol,Integer}...) = new{typeof(inds)}(SpatialIndex(a),inds)
+    σ(a,inds::OpIndex...) = new{typeof(inds)}(SpatialIndex(a),inds)
     σ(a,inds::Tuple) = σ(a,inds...)
 end
 
@@ -410,7 +413,7 @@ mystring(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" my
 
 Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$")
 latex(A::σ) = string("\\sigma_{$(A.a)",length(A.inds)>0 ? ",$(A.inds...)}" : "}")
-latexindstr(inds::Tuple) = length(inds)==0 ? "" : "_{$(inds...)}"
+latexindstr(inds::OpIndices) = length(inds)==0 ? "" : "_{$(inds...)}"
 latex(A::a) = "a" * latexindstr(A.inds)
 latex(A::adag) = "a$(latexindstr(A.inds))^\\dagger"
 latex(A::σminus) = "\\sigma^-" * latexindstr(A.inds)
@@ -423,18 +426,18 @@ latex(A::ExpVal) = "\\langle $(latex(A.A)) \\rangle"
 latex(A::Corr) = "\\langle $(latex(A.A)) \\rangle_{c}"
 latex(A::OpSumAnalytic) = string("\\sum_{$(A.ind)}",latex(A.A))
 
-indextuple(A::scal) = ()
-indextuple(A::param) = A.inds
-indextuple(A::Union{a,adag,σ,σminus,σplus}) = A.inds
-indextuple(A::Union{OpProd,OpSum}) = (indextuple(A.A)...,indextuple(A.B)...)
-indextuple(A::Union{ExpVal,Corr}) = indextuple(A.A)
-indextuple(A::OpSumAnalytic) = (A.ind,indextuple(A.A)...)
-indexset(A) = Set(indextuple(A))
-sumindextuple(A::Operator) = ()
-sumindextuple(A::Union{OpProd,OpSum}) = (sumindextuple(A.A)...,sumindextuple(A.B)...)
-sumindextuple(A::Union{ExpVal,Corr}) = sumindextuple(A.A)
-sumindextuple(A::OpSumAnalytic) = (A.ind,sumindextuple(A.A)...)
-sumindexset(A) = Set(sumindextuple(A))
+indextuple(A::scal)::OpIndices = ()
+indextuple(A::param)::OpIndices = A.inds
+indextuple(A::Union{a,adag,σ,σminus,σplus})::OpIndices = A.inds
+indextuple(A::Union{OpProd,OpSum})::OpIndices = (indextuple(A.A)...,indextuple(A.B)...)
+indextuple(A::Union{ExpVal,Corr})::OpIndices = indextuple(A.A)
+indextuple(A::OpSumAnalytic)::OpIndices = (A.ind,indextuple(A.A)...)
+indexset(A) = Set{OpIndex}(indextuple(A))
+sumindextuple(A::Operator)::OpIndices = ()
+sumindextuple(A::Union{OpProd,OpSum})::OpIndices = (sumindextuple(A.A)...,sumindextuple(A.B)...)
+sumindextuple(A::Union{ExpVal,Corr})::OpIndices = sumindextuple(A.A)
+sumindextuple(A::OpSumAnalytic)::OpIndices = (A.ind,sumindextuple(A.A)...)
+sumindexset(A) = Set{OpIndex}(sumindextuple(A))
 
 """
     ascorr(expr::Operator)
