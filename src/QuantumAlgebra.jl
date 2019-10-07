@@ -186,10 +186,16 @@ length(A::OpProd) = length(A.A) + length(A.B)
 
 *(A::Operator) = A # needed to make prod((A,)) work
 *(A::OpProd,B::Operator) = A.A*(A.B*B)
-*(A::OpSum,B::Operator) = A.A*B + A.B*B
-*(A::OpSum,B::OpSum)    = A.A*B + A.B*B # resolve ambiguity
-*(A::Operator,B::OpSum) = A*B.A + A*B.B
-*(A::OpProd,  B::OpSum) = A*B.A + A*B.B
+*(A::OpSum,B::Operator)      = A.A*B + A.B*B
+*(A::OpSum,B::OpSum)         = A.A*B + A.B*B # resolve ambiguity
+*(A::OpSum,B::OpSumAnalytic) = A.A*B + A.B*B # resolve ambiguity
+*(A::Operator,     B::OpSum) = A*B.A + A*B.B
+*(A::OpProd,       B::OpSum) = A*B.A + A*B.B # resolve ambiguity
+*(A::OpSumAnalytic,B::OpSum) = A*B.A + A*B.B # resolve ambiguity
+
+# allow multiplication by a number x by promoting it to scal(x) operator
+*(x::Number,A::Operator) = scal(x)*A
+*(A::Operator,x::Number) = scal(x)*A
 
 function *(A::Operator,B::Operator)::Operator
     if A isa scal && A.v==0

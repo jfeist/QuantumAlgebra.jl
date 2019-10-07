@@ -33,6 +33,9 @@ using Test
         @test tmp1 == tmp2
         @test tmp1' == tmpc
 
+        @test 5*a() == scal(5)*a()
+        @test a()*5 == a()*scal(5) == 5*a()
+
         @test_throws MethodError σx(:i,"a")
         @test σx(:i,:b) == σx((:i,:b))
         @test σx(:i,:j) != σx(:i,:b)
