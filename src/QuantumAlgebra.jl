@@ -570,8 +570,7 @@ function vacExpVal(A::Operator,stateop::Operator=scal(1))
     # simplify down as much as possible by applying vacuum from left and right
     vsAsv = vacA(Avac(stateop' * A * stateop))
     # only operators that should survive here as operators are σs
-    # make sure the result is a scalar value
-    res::scal = _vacExpVal(vsAsv)
+    _vacExpVal(vsAsv)
 end
 _vacExpVal(A::Scalar) = A
 # the terms that survive until here have at most a single σ of any particle
