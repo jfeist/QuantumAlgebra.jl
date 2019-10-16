@@ -351,6 +351,14 @@ replace_index(A::Operator,reps) = begin
     Anew
 end
 
+function exchange_inds(A::Operator,i1,i2)
+    ss = gensym()
+    A = replace_index(A,i1,ss)
+    A = replace_index(A,i2,i1)
+    A = replace_index(A,ss,i2)
+    A
+end
+
 distribute_indices!(inds,A::scal) = A
 distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
@@ -444,6 +452,23 @@ sumindextuple(A::Union{OpProd,OpSum})::OpIndices = (sumindextuple(A.A)...,sumind
 sumindextuple(A::Union{ExpVal,Corr})::OpIndices = sumindextuple(A.A)
 sumindextuple(A::OpSumAnalytic)::OpIndices = (A.ind,sumindextuple(A.A)...)
 sumindexset(A) = Set{OpIndex}(sumindextuple(A))
+
+"`extindices(A::Operator)` return externally visible indices of an expression"
+extindices(A::Operator) = [ind for ind in indextuple(A) if !in(ind,sumindextuple(A))]
+
+"`symmetric_index_nums(A::Operator)` return sequence of numbers of exchange-symmetric indices"
+function symmetric_index_nums(A::Operator)
+    inds = extindices(A)
+    Nsyms = [1]
+    for ii=2:length(inds)
+        if A == exchange_inds(A,inds[ii-1],inds[ii])
+            Nsyms[end] += 1
+        else
+            push!(Nsyms,1)
+        end
+    end
+    Nsyms
+end
 
 """
     ascorr(expr::Operator)
