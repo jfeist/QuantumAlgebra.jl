@@ -6,7 +6,6 @@ export Avac,vacA,vacExpVal
 export CorrOrExp,ascorr
 #export σ,preftuple,exptuple,optuple,prodtuples,sumtuples
 
-using Combinatorics
 using Printf
 
 # we will want to overload these operators and functions for our custom types
@@ -310,6 +309,10 @@ comm(A::adag,B::a) = scal(A.inds==B.inds ? -1 : 0)
 comm(A::σplus,B::σminus) = A.inds==B.inds ? σz(A.inds) : scal(0)
 comm(A::σminus,B::σplus) = -comm(B,A)
 
+# levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
+# for c=6-a-b, i.e, when a,b,c is a permutation of 1,2,3
+const levicivita_lut = [0 1 -1; -1 0 1; 1 -1 0]
+
 function comm(A::σ,B::σ)
     if A.inds != B.inds
         scal(0)
@@ -320,7 +323,7 @@ function comm(A::σ,B::σ)
         b = Int(B.a)
         # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
         c = 6 - a - b
-        s = levicivita([a,b,c])
+        s = levicivita_lut[a,b]
         scal(2im*s)*σ(c,A.inds)
     end
 end
