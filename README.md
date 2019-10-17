@@ -12,6 +12,10 @@ to, which fulfills some invariants that then allows easy use of the resulting
 expressions. It is recommended to use an interface that can display LaTeX
 formulas (e.g., Jupyter notebooks) for convenient output formatting.
 
+Example notebooks (currently only one) are in the `examples` folder. You can view them on [nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/master/examples/). 
+
+## Overview
+
 We define an abstract type that represents an operator, and some concrete subtypes to describe various operators. We have:
 - `scal(x)` representing a scalar _x_
 - `param(g,(i,j),state='n')` representing a named scalar parameter _g<sub>i,j</sub>_. `state` can be `'r'` for purely real parameters (invariant under complex conjugation), `'n'` for not-conjugated values, and `'c'` for a conjugated parameter _g<sub>i,j</sub><sup>*</sup>_.
