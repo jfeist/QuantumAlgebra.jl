@@ -1,7 +1,7 @@
 name = "QuantumAlgebra"
 uuid = "1b9008d5-2a9d-4901-8cfb-44bb87795b64"
 authors = ["Johannes Feist"]
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
