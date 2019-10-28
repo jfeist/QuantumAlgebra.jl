@@ -79,7 +79,11 @@ using Test
         @test adag(:n)*tmp == OpSumAnalytic(:i,adag(:n)*adag(:i)*a(:i))
         @test a(:n)   *tmp == OpSumAnalytic(:i,adag(:i)*a(:n)*a(:i)) + a(:n)
         @test_throws ErrorException param(:g,:i)*OpSumAnalytic(:i,a(:i))
-        @test param(:g,:n)*OpSumAnalytic(:i,a(:i)) == OpSumAnalytic(:i,param(:g,:n)*a(:i))
+        @test param(:g,:n)*OpSumAnalytic(:i,a(:i)) == ∑(:i,param(:g,:n)*a(:i))
+
+        @test Pr"gz_i,mu" == param(:gz,'r',(:i,:mu))
+        @test Pc"gz_i,mu" == param(:gz,'n',(:i,:mu))
+        @test Pc"gz_i,mu"' == param(:gz,'c',(:i,:mu))
 
         @test QuantumAlgebra.prodtuple(a(5)) == (a(5),)
         # tuples come out ordered!
@@ -163,7 +167,7 @@ using Test
         @test CorrOrExp(a(5)) == ExpVal(a(5))
         @test CorrOrExp(a(5)*a(:i)) == Corr(a(5)*a(:i))
 
-        H = OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
+        H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
         # cannot commute with an operator with the same index as in the sum
         @test_throws ErrorException comm(a(:i),H)
         @test comm(a(:n),H) == param(:ω,'r',:n)*a(:n)
@@ -171,10 +175,10 @@ using Test
         @test comm(adag(:n),H) == -param(:ω,'r',:n)*adag(:n)
         @test comm(adag(:n)*a(:m),H) == (param(:ω,'r',:m)-param(:ω,'r',:n))*adag(:n)*a(:m)
 
-        @test a()*H == OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a())
-        @test a(:k)*H == param(:ω,'r',:k)*a(:k) + OpSumAnalytic(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a(:k))
-        HH = OpSumAnalytic(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i))
-        @test a(:k,:k)*HH == param(:ω,'r',:k,:k)*a(:k,:k) + OpSumAnalytic(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i)*a(:k,:k))
+        @test a()*H == ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a())
+        @test a(:k)*H == param(:ω,'r',:k)*a(:k) + ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a(:k))
+        HH = ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i))
+        @test a(:k,:k)*HH == param(:ω,'r',:k,:k)*a(:k,:k) + ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i)*a(:k,:k))
 
         @test Avac(H) == scal(0)
         @test vacA(H) == scal(0)

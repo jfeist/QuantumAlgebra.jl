@@ -4,6 +4,7 @@ export scal,param,a,adag,OpSumAnalytic,ExpVal,Corr
 export σx,σy,σz,σp,σm,comm,latex
 export Avac,vacA,vacExpVal
 export CorrOrExp,ascorr
+export @Pr_str, @Pc_str, ∑
 #export σ,preftuple,exptuple,optuple,prodtuples,sumtuples
 
 using Printf
@@ -81,7 +82,7 @@ use_σxyz() = use_σpm(false)
 struct OpProd <: Operator; A::Operator; B::Operator; end
 struct OpSum  <: Operator; A::Operator; B::Operator; end
 
-"`OpSumAnalytic(i::Symbol,A::Operator)`: represent ``\\sum_{i} A``, with all possible values of ``i`` assumed to be included"
+"`OpSumAnalytic(i::Symbol,A::Operator)` or `∑(i,A)`: represent ``\\sum_{i} A``, with all possible values of ``i`` assumed to be included"
 struct OpSumAnalytic <: Operator
     ind::Symbol
     A::Operator
@@ -89,6 +90,8 @@ struct OpSumAnalytic <: Operator
     OpSumAnalytic(ind::Symbol,A::OpProd) = A.A isa scal ? A.A*OpSumAnalytic(ind,A.B) : new(ind,A)
     OpSumAnalytic(ind::Symbol,A::OpSum) = OpSumAnalytic(ind,A.A) + OpSumAnalytic(ind,A.B)
 end
+
+const ∑ = OpSumAnalytic
 
 "`ExpVal(A::Operator)`: represent expectation value ``⟨A⟩``"
 struct ExpVal <: Scalar
@@ -608,6 +611,23 @@ _vacExpVal(A::OpSum) = _vacExpVal(A.A) + _vacExpVal(A.B)
 _vacExpVal(A::OpSumAnalytic) = OpSumAnalytic(A.ind,_vacExpVal(A.A))
 # we know that the operators here commute (all a and a† have disappeared, and at most a single σ remaining for each particle)
 _vacExpVal(A::OpProd) = _vacExpVal(A.A) * _vacExpVal(A.B)
+
+function parse_paramstr(s)
+    s = split(s,"_")
+    par = Symbol(s[1])
+    @assert length(s) <= 2
+    inds = length(s)==1 ? () : Meta.parse.(split(s[2],","))
+    par,inds
+end
+
+macro Pc_str(s)
+    par, inds = parse_paramstr(s)
+    param(par,'n',inds...)
+end
+macro Pr_str(s)
+    par, inds = parse_paramstr(s)
+    param(par,'r',inds...)
+end
 
 include("precompile.jl")
 
