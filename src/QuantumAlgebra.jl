@@ -41,15 +41,20 @@ struct param{T<:OpIndices} <: Scalar
     param(name,inds::Tuple) = param(name,'n',inds...)
 end
 struct δ <: Scalar
-    inds::Tuple{Symbol,Symbol}
-    δ(iA,iB) = δ((iA,iB))
-    function δ(inds::Tuple{Symbol,Symbol})
-        iA, iB = inds
+    inds::Tuple{OpIndex,OpIndex}
+    δ(inds) = δ(inds...)
+    function δ(iA::OpIndex,iB::OpIndex)
         # sort indices
-        if sortsentinel(iB) < sortsentinel(iA)
-            iA, iB = iB, iA
+        if iA == iB
+            scal(1)
+        elseif iA isa Integer && iB isa Integer
+            # e.g., δ_1,3 = 0 (integers are not symbolic!)
+            scal(0)
+        elseif sortsentinel(iB) < sortsentinel(iA)
+            new((iB,iA))
+        else
+            new((iA,iB))
         end
-        iA == iB ? scal(1) : new((iA,iB))
     end
 end
 
@@ -351,18 +356,7 @@ for op in (a,adag,σplus,σminus)
 end
 function indδ(Ainds::OpIndices,Binds::OpIndices)::Operator
     length(Ainds) != length(Binds) && return scal(0)
-    out = δ[]
-    for (iA, iB) in zip(Ainds,Binds)
-        # if the two are equal, this gives an (implicit) factor of 1
-        iA == iB && continue
-        # now, iA != iB
-        if iA isa Int || iB isa Int
-            return scal(0)
-        else
-            push!(out,δ(iA,iB))
-        end
-    end
-    return prod(out)
+    prod(Operator[δ(iA,iB) for (iA,iB) in zip(Ainds,Binds)])
 end
 comm(A::a,B::adag) = indδ(A.inds,B.inds)
 comm(A::adag,B::a) = -indδ(A.inds,B.inds)
@@ -424,48 +418,22 @@ distribute_indices!(inds,A::scal) = A
 distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
 distribute_indices!(inds,A::Corr) = Corr(distribute_indices!(inds,A.A))
-for op in (δ,a,adag,σminus,σplus)
+for op in (a,adag,σminus,σplus)
     @eval distribute_indices!(inds,A::$op) = $op((popfirst!(inds) for _ in A.inds)...)
 end
 distribute_indices!(inds,A::σ) = σ(A.a,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::OpProd) = distribute_indices!(inds,A.A)*distribute_indices!(inds,A.B)
 distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_indices!(inds,A.B)
-# on purpose do not define this for OpSumAnalytic
+# on purpose do not define this for OpSumAnalytic or δ
 
 checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Cannot multiply sum with index $(B.ind) with expression $(A) containing the same index")
 # when multiplying (or commuting) with an operator with an index, take into account that the term in the sum with equal index has to be treated specially
-*(A::Union{param,ExpVal,Corr},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
-*(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = begin
-    checkinds(A,B)
-    tmp = A*B.A
-    res = OpSumAnalytic(B.ind,tmp)
-    #for ind in indexset(A)
-    #    res += A*replace_index(B.A,B.ind,ind) - replace_index(tmp,B.ind,ind)
-    #end
-    res
-end
-*(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = begin
-    checkinds(B,A)
-    tmp = A.A*B
-    res = OpSumAnalytic(A.ind,tmp)
-    #for ind in indexset(B)
-    #    res += replace_index(A.A,A.ind,ind)*B - replace_index(tmp,A.ind,ind)
-    #end
-    res
-end
+*(A::Union{param,ExpVal,Corr,a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
 # no need to check indices here since we just dispatch to another routine
 *(A::OpSumAnalytic,B::OpProd) = (A*B.A)*B.B
 *(A::OpSumAnalytic,B::Operator) = (checkinds(B,A); OpSumAnalytic(A.ind,A.A*B))
 
-comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = begin
-    checkinds(A,B)
-    tmp = comm(A,B.A)
-    res = OpSumAnalytic(B.ind,tmp)
-    #for ind=indexset(A)
-    #    res += comm(A,replace_index(B.A,B.ind,ind)) - replace_index(tmp,B.ind,ind)
-    #end
-    res
-end
+comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,comm(A,B.A)))
 comm(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = -comm(B,A)
 
 print(io::IO,A::a) = print(io,"a($(A.inds...))")
@@ -479,7 +447,7 @@ print(io::IO,A::OpProd) = print(io,"$(A.A) $(A.B)")
 print(io::IO,A::OpSum) = print(io,"$(A.A) + $(A.B)")
 print(io::IO,A::ExpVal) = print(io,"⟨$(A.A)⟩")
 print(io::IO,A::Corr) = print(io,"⟨$(A.A)⟩c")
-print(io::IO,A::OpSumAnalytic) = print(io,"Σ_$(A.ind) $(A.A)")
+print(io::IO,A::OpSumAnalytic) = print(io,"∑_$(A.ind) $(A.A)")
 
 mystring(x::Number) = @sprintf "%g" x
 mystring(x::Rational) = denominator(x)==1 ? "$(numerator(x))" : "\\frac{$(numerator(x))}{$(denominator(x))}"

@@ -107,6 +107,13 @@ using Test
             @test QuantumAlgebra.prodtuples(tmp1) == tmp2
         end
 
+        @test QuantumAlgebra.δ(:i,:k)*a(:k) == a(:i)*QuantumAlgebra.δ(:k,:i)
+        @test QuantumAlgebra.δ(:i,:k)*a(:k,:i) == a(:i,:i)*QuantumAlgebra.δ(:k,:i)
+        @test QuantumAlgebra.δ(:i,:k)*QuantumAlgebra.δ(:i,:j) == QuantumAlgebra.δ(:k,:i)*QuantumAlgebra.δ(:j,:k)
+        # k cannot be equal to 1 and 3 at the same time
+        @test QuantumAlgebra.δ(1,:k)*QuantumAlgebra.δ(:k,3)*σx(:k) == scal(0)
+        @test QuantumAlgebra.δ(1,:k)*QuantumAlgebra.δ(:k,1)*σx(:k) == QuantumAlgebra.δ(1,:k)*σx(1)
+
         @test comm(σx(5),σy(3)) == scal(0)
         @test comm(σx(5),σx(5)) == scal(0)
         @test comm(σx(1),σz(1)) == scal(-2im)*σy(1)
@@ -225,7 +232,7 @@ using Test
         end
 
         inds = [:a,:b,:c,:d,:e,:f,:g,:h,:i,:j,:k,:l,:m,:n]
-        tmp1 = param(:ω,:y)*a(1)*adag(1)*a(3)*adag(:a)*ExpVal(a(:n))*Corr(adag(:n)*a(:n))
+        tmp1 = param(:ω,:y)*a(1)*adag(1)*a(3)*adag(4)*ExpVal(a(5))*Corr(adag(5)*a(9))
         tmp2 = param(:ω,:a)*ExpVal(a(:b))*Corr(adag(:c)*a(:d))*adag(:e)*a(:f) + param(:ω,:g)*ExpVal(a(:h))*Corr(adag(:i)*a(:j))*adag(:k)*adag(:l)*a(:m)*a(:n)
         @test QuantumAlgebra.distribute_indices!(copy(inds),tmp1) == tmp2
         if QuantumAlgebra.using_σpm
@@ -239,7 +246,7 @@ using Test
         @test_throws MethodError QuantumAlgebra.distribute_indices!(copy(inds),OpSumAnalytic(:i,a(:i)))
         @test_throws ArgumentError QuantumAlgebra.distribute_indices!([:a,:b],tmp1)
 
-        @test string(OpSumAnalytic(:i,a(:i)) * adag(:n)) == "1 + Σ_i a†(n) a(i)"
+        @test string(OpSumAnalytic(:i,a(:i)) * adag(:n)) == "1 + ∑_i a†(n) a(i)"
         if QuantumAlgebra.using_σpm
             @test string(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5))) == "⟨a†(5i)⟩ ⟨a(5)⟩ σ+(3) + ⟨a†(5i) a(5)⟩c σ+(3) + ⟨a†(5i)⟩ ⟨a(5)⟩ a†(5) a(5) σ+(3) + ⟨a†(5i) a(5)⟩c a†(5) a(5) σ+(3)"
         else
