@@ -10,11 +10,15 @@ export @Pr_str, @Pc_str, ∑
 using Printf
 
 # we will want to overload these operators and functions for our custom types
-import Base: ==, *, +, -, isless, length, adjoint, print, zero, one
+import Base: ==, ≈, *, +, -, isless, length, adjoint, print, zero, one
 
 # define for σx, σy, σz
 @enum SpatialIndex x=1 y=2 z=3
 SpatialIndex(a::SpatialIndex) = a
+
+# we sometimes want to sort integers and symbols together, with integers coming first
+sortsentinel(x::Integer) = (1,x)
+sortsentinel(x::Symbol) = (2,x)
 
 const OpIndex = Union{Int,Symbol}
 const OpIndices = NTuple{N,OpIndex} where N
@@ -36,6 +40,20 @@ struct param{T<:OpIndices} <: Scalar
     param(name,state::Char,inds::Tuple) = param(name,state,inds...)
     param(name,inds::Tuple) = param(name,'n',inds...)
 end
+struct δ <: Scalar
+    inds::Tuple{Symbol,Symbol}
+    δ(iA,iB) = δ((iA,iB))
+    function δ(inds::Tuple{Symbol,Symbol})
+        iA, iB = inds
+        # sort indices
+        if sortsentinel(iB) < sortsentinel(iA)
+            iA, iB = iB, iA
+        end
+        iA == iB ? scal(1) : new((iA,iB))
+    end
+end
+
+abstract type BaseOperator <: Operator; end
 for (op,desc,sym) in (
     (:a,   "bosonic annihilation","a"),
     (:adag,"bosonic creation","a^†"),
@@ -43,7 +61,7 @@ for (op,desc,sym) in (
     (:σplus,"TLS creation","σ^+"))
     @eval begin
         "`$($op)(inds)`: represent $($desc) operator ``$($sym)_{inds}``"
-        struct $op{T<:OpIndices} <: Operator
+        struct $op{T<:OpIndices} <: BaseOperator
             inds::T
             $op(inds::OpIndex...) = new{typeof(inds)}(inds)
             $op(inds::Tuple) = $op(inds...)
@@ -52,7 +70,7 @@ for (op,desc,sym) in (
 end
 
 "`σ(a,n)`: represent Pauli matrix ``σ_{a,n}`` for two-level system (TLS) ``n``, where ``a ∈ \\{x,y,z\\}`` or ``\\{1,2,3\\}`` is the type of Pauli matrix."
-struct σ{T<:OpIndices} <: Operator
+struct σ{T<:OpIndices} <: BaseOperator
     a::SpatialIndex
     inds::T
     σ(a,inds::OpIndex...) = new{typeof(inds)}(SpatialIndex(a),inds)
@@ -86,8 +104,21 @@ struct OpSum  <: Operator; A::Operator; B::Operator; end
 struct OpSumAnalytic <: Operator
     ind::Symbol
     A::Operator
-    OpSumAnalytic(ind::Symbol,A::Operator) = A == scal(0) ? A : new(ind,A)
-    OpSumAnalytic(ind::Symbol,A::OpProd) = A.A isa scal ? A.A*OpSumAnalytic(ind,A.B) : new(ind,A)
+    OpSumAnalytic(ind::Symbol,A::scal) = A.v == 0 ? A : new(ind,A)
+    OpSumAnalytic(ind::Symbol,A::Operator) = begin
+        if A isa OpProd && A.A isa scal
+            A.A*OpSumAnalytic(ind,A.B)
+        else
+            for t in preftuple(A)
+                # if there is a δ in the expression and it has the sum index, the sum disappears
+                if t isa δ && ind in t.inds
+                    irepl = ind==t.inds[1] ? t.inds[2] : t.inds[1]
+                    return replace_index(A,ind,irepl)
+                end
+            end
+            return new(ind,A)
+        end
+    end
     OpSumAnalytic(ind::Symbol,A::OpSum) = OpSumAnalytic(ind,A.A) + OpSumAnalytic(ind,A.B)
 end
 
@@ -128,11 +159,19 @@ end
 ==(A::Corr, B::Corr) = A.A == B.A
 ==(A::param, B::param) = (A.name,A.inds,A.state) == (B.name,B.inds,B.state)
 
+≈(A::Operator,B::Operator) = A == B
+≈(A::scal,B::scal) = A.v ≈ B.v
+≈(A::OpProd,B::OpProd) = A.A ≈ B.A && A.B ≈ B.B
+≈(A::OpSum, B::OpSum)  = A.A ≈ B.A && A.B ≈ B.B
+≈(A::OpSumAnalytic, B::OpSumAnalytic) = A.A ≈ B.A && A.ind == B.ind
+≈(A::ExpVal, B::ExpVal) = A.A ≈ B.A
+≈(A::Corr, B::Corr) = A.A ≈ B.A
+
 prodtuple(A::Operator) = (A,)
 prodtuple(A::OpProd) = (prodtuple(A.A)...,prodtuple(A.B)...)
 
 # make a tuple from a product, containing only either prefactor types, expectation value types, or operators
-for (name,types) in [(:pref,(scal,param)),(:exp,(ExpVal,Corr)),(:op,(adag,a,σ,σplus,σminus))]
+for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,σ,σplus,σminus))]
     name = Symbol(name,:tuple)
     types = Union{types...}
     @eval $name(A::$types) = (A,)
@@ -146,7 +185,7 @@ prodtuples(A::Operator) = (preftuple(A), exptuple(A), optuple(A))
 sumtuple(A::Operator) = (A,)
 sumtuple(A::OpSum) = (sumtuple(A.A)...,sumtuple(A.B)...)
 
-OpOrder = (scal,param,ExpVal,Corr,adag,a,σplus,σminus,σ,OpProd,OpSumAnalytic,OpSum)
+OpOrder = (scal,δ,param,ExpVal,Corr,adag,a,σplus,σminus,σ,OpProd,OpSumAnalytic,OpSum)
 for (ii,op1) in enumerate(OpOrder)
     for op2 in OpOrder[ii+1:end]
         @eval isless(::$op1,::$op2) = true
@@ -155,12 +194,10 @@ for (ii,op1) in enumerate(OpOrder)
 end
 isless(A::scal,B::scal) = (real(A.v),imag(A.v)) < (real(B.v),imag(B.v))
 
-sortsentinel(x::Integer) = (1,x)
-sortsentinel(x::Symbol) = (2,x)
 # do not order parameters by whether they are purely real, or conjugated or not
 isless(A::param,B::param) = (A.name,sortsentinel.(A.inds)) < (B.name,sortsentinel.(B.inds))
 isless(A::σ,B::σ) = (sortsentinel.(A.inds),A.a) < (sortsentinel.(B.inds),B.a)
-for op in (a,adag,σminus,σplus)
+for op in (δ,a,adag,σminus,σplus)
     @eval isless(A::$op,B::$op) = sortsentinel.(A.inds) < sortsentinel.(B.inds)
 end
 for op in (ExpVal,Corr,OpSumAnalytic)
@@ -175,7 +212,7 @@ function isless(A::OpProd,B::OpProd)
 end
 
 # prefactors do not count for length calculation
-for op in [scal,param]
+for op in [scal,δ,param]
     @eval length(::$op) = 0
 end
 for op in [adag,a,σ,σminus,σplus]
@@ -209,7 +246,12 @@ function *(A::Operator,B::Operator)::Operator
     elseif A isa scal && B isa OpProd && B.A isa scal
         scal(A.v*B.A.v)*B.B
     elseif B isa OpProd && (A*B.A) != OpProd(A,B.A)
+        # if A*B.A is not ordered as we want, evaluate A*B.A first
         (A*B.A)*B.B
+    elseif A isa δ && A.inds[2] in indextuple(B)
+        # if second index of δ_iA,iB shows up on RHS, replace by iA 
+        # (relies on indices in δ being sorted)
+        A * replace_index(B,A.inds[2],A.inds[1])
     elseif A isa σ && B isa σ && A.inds == B.inds
         # σa σb = δab + i ϵabc σc = δab + 1/2 [σa,σb]
         A.a==B.a ? scal(1) : scal(1//2)*comm(A,B)
@@ -307,9 +349,24 @@ end
 for op in (a,adag,σplus,σminus)
     @eval comm(A::$op,B::$op) = scal(0)
 end
-comm(A::a,B::adag) = scal(A.inds==B.inds ? 1 : 0)
-comm(A::adag,B::a) = scal(A.inds==B.inds ? -1 : 0)
-comm(A::σplus,B::σminus) = A.inds==B.inds ? σz(A.inds) : scal(0)
+function indδ(Ainds::OpIndices,Binds::OpIndices)::Operator
+    length(Ainds) != length(Binds) && return scal(0)
+    out = δ[]
+    for (iA, iB) in zip(Ainds,Binds)
+        # if the two are equal, this gives an (implicit) factor of 1
+        iA == iB && continue
+        # now, iA != iB
+        if iA isa Int || iB isa Int
+            return scal(0)
+        else
+            push!(out,δ(iA,iB))
+        end
+    end
+    return prod(out)
+end
+comm(A::a,B::adag) = indδ(A.inds,B.inds)
+comm(A::adag,B::a) = -indδ(A.inds,B.inds)
+comm(A::σplus,B::σminus) = indδ(A.inds,B.inds)*σz(A.inds)
 comm(A::σminus,B::σplus) = -comm(B,A)
 
 # levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
@@ -317,9 +374,7 @@ comm(A::σminus,B::σplus) = -comm(B,A)
 const levicivita_lut = [0 1 -1; -1 0 1; 1 -1 0]
 
 function comm(A::σ,B::σ)
-    if A.inds != B.inds
-        scal(0)
-    elseif A.a == B.a
+    if A.a == B.a
         scal(0)
     else
         a = Int(A.a)
@@ -327,7 +382,7 @@ function comm(A::σ,B::σ)
         # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
         c = 6 - a - b
         s = levicivita_lut[a,b]
-        scal(2im*s)*σ(c,A.inds)
+        indδ(A.inds,B.inds)*scal(2im*s)*σ(c,A.inds)
     end
 end
 
@@ -335,7 +390,7 @@ replace_index(A::scal,iold,inew) = A
 replace_index(A::param,iold,inew) = param(A.name,A.state,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::ExpVal,iold,inew) = ExpVal(replace_index(A.A,iold,inew))
 replace_index(A::Corr,iold,inew) = Corr(replace_index(A.A,iold,inew))
-for op in (a,adag,σminus,σplus)
+for op in (δ,a,adag,σminus,σplus)
     @eval replace_index(A::$op,iold,inew) = $op((n-> n==iold ? inew : n).(A.inds))
 end
 replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
@@ -369,7 +424,7 @@ distribute_indices!(inds,A::scal) = A
 distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
 distribute_indices!(inds,A::Corr) = Corr(distribute_indices!(inds,A.A))
-for op in (a,adag,σminus,σplus)
+for op in (δ,a,adag,σminus,σplus)
     @eval distribute_indices!(inds,A::$op) = $op((popfirst!(inds) for _ in A.inds)...)
 end
 distribute_indices!(inds,A::σ) = σ(A.a,(popfirst!(inds) for _ in A.inds)...)
@@ -384,18 +439,18 @@ checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Canno
     checkinds(A,B)
     tmp = A*B.A
     res = OpSumAnalytic(B.ind,tmp)
-    for ind in indexset(A)
-        res += A*replace_index(B.A,B.ind,ind) - replace_index(tmp,B.ind,ind)
-    end
+    #for ind in indexset(A)
+    #    res += A*replace_index(B.A,B.ind,ind) - replace_index(tmp,B.ind,ind)
+    #end
     res
 end
 *(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = begin
     checkinds(B,A)
     tmp = A.A*B
     res = OpSumAnalytic(A.ind,tmp)
-    for ind in indexset(B)
-        res += replace_index(A.A,A.ind,ind)*B - replace_index(tmp,A.ind,ind)
-    end
+    #for ind in indexset(B)
+    #    res += replace_index(A.A,A.ind,ind)*B - replace_index(tmp,A.ind,ind)
+    #end
     res
 end
 # no need to check indices here since we just dispatch to another routine
@@ -406,9 +461,9 @@ comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = begin
     checkinds(A,B)
     tmp = comm(A,B.A)
     res = OpSumAnalytic(B.ind,tmp)
-    for ind=indexset(A)
-        res += comm(A,replace_index(B.A,B.ind,ind)) - replace_index(tmp,B.ind,ind)
-    end
+    #for ind=indexset(A)
+    #    res += comm(A,replace_index(B.A,B.ind,ind)) - replace_index(tmp,B.ind,ind)
+    #end
     res
 end
 comm(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = -comm(B,A)
@@ -434,6 +489,7 @@ mystring(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" my
 Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$")
 latex(A::σ) = string("\\sigma_{$(A.a)",length(A.inds)>0 ? ",$(A.inds...)}" : "}")
 latexindstr(inds::OpIndices) = length(inds)==0 ? "" : "_{$(inds...)}"
+latex(A::δ) = "δ" * latexindstr(A.inds)
 latex(A::a) = "a" * latexindstr(A.inds)
 latex(A::adag) = "a$(latexindstr(A.inds))^\\dagger"
 latex(A::σminus) = "\\sigma^-" * latexindstr(A.inds)
@@ -447,8 +503,7 @@ latex(A::Corr) = "\\langle $(latex(A.A)) \\rangle_{c}"
 latex(A::OpSumAnalytic) = string("\\sum_{$(A.ind)}",latex(A.A))
 
 indextuple(A::scal)::OpIndices = ()
-indextuple(A::param)::OpIndices = A.inds
-indextuple(A::Union{a,adag,σ,σminus,σplus})::OpIndices = A.inds
+indextuple(A::Union{param,δ,a,adag,σ,σminus,σplus})::OpIndices = A.inds
 indextuple(A::Union{OpProd,OpSum})::OpIndices = (indextuple(A.A)...,indextuple(A.B)...)
 indextuple(A::Union{ExpVal,Corr})::OpIndices = indextuple(A.A)
 indextuple(A::OpSumAnalytic)::OpIndices = (A.ind,indextuple(A.A)...)

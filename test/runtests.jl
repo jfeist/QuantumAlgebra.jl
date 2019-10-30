@@ -110,7 +110,7 @@ using Test
         @test comm(σx(5),σy(3)) == scal(0)
         @test comm(σx(5),σx(5)) == scal(0)
         @test comm(σx(1),σz(1)) == scal(-2im)*σy(1)
-        @test comm(σx(:mu),σy(:muuu)) == scal(0)
+        @test comm(σx(:mu),σy(:muuu)) == scal(2im)*QuantumAlgebra.δ(:mu,:muuu)*σz(:mu)
         @test scal(1//2im)*comm(σx(:m),σy(:m)) == σz(:m)
         @test σx(:a)*σy(:a)*σz(:a) == scal(1im)
 
@@ -203,10 +203,10 @@ using Test
         @test a(:n)*adag(:n)*a(:n)*adag(:n) == scal(1) + scal(3)*adag(:n)*a(:n) + adag(:n)*adag(:n)*a(:n)*a(:n)
 
         S = scal(1/√(2*6))*adag(:n)*adag(:n)*adag(:n) + scal(1/√2)*adag(:m)
-        for (A,val) in [(scal(1),1),
-                        (adag(:n)*a(:n),1.5),
-                        (adag(:n)*adag(:n)*a(:n)*a(:n),3)]
-            @test vacExpVal(A,S).v ≈ val
+        for (A,val) in [(scal(1),scal(1)),
+                        (adag(:n)*a(:n),scal(1.5) + 0.5 * QuantumAlgebra.δ(:n,:m)),
+                        (adag(:n)*adag(:n)*a(:n)*a(:n),scal(3))]
+            @test vacExpVal(A,S) ≈ val
         end
 
         tmp = scal(1+2im)*OpSumAnalytic(:i,a(:i)*adag(:i)*ascorr(adag(:n)*a(:m)))
