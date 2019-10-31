@@ -21,10 +21,11 @@ We define an abstract type that represents an operator, and some concrete subtyp
 - `scal(x)` representing a scalar _x_
 - `param(g,(i,j),state='n')` representing a named scalar parameter _g<sub>i,j</sub>_. `state` can be `'r'` for purely real parameters (invariant under complex conjugation), `'n'` for not-conjugated values, and `'c'` for a conjugated parameter _g<sub>i,j</sub><sup>*</sup>_.
 - `a(i)` and `adag(i)` representing _a<sub>i</sub>_ and _a<sub>i</sub><sup>†</sup>_, the annihilation and creation operators for bosonic mode _i_
+- `f(i)` and `fdag(i)` representing _f<sub>i</sub>_ and _f<sub>i</sub><sup>†</sup>_, the annihilation and creation operators for fermionic mode _i_
 - `σ(a,i)` representing the Pauli matrix _σ<sub>a,i</sub>_ for two-level system (TLS) _i_, where _a ∈ {x=1,y=2,z=3}_ is the type of Pauli matrix.
 - `OpProd(A,B)` representing _A B_, i.e., the product of two operators
 - `OpSum(A,B)` representing _A + B_, i.e., the sum of two operators
-- `OpSumAnalytical(i,A)` representing _∑<sub>i</sub> A_, i.e., an analytical sum over an index (assumed to run over all possible values of _i_).
+- `OpSumAnalytical(i,A)` or `∑(i,A)` representing _∑<sub>i</sub> A_, i.e., an analytical sum over an index (assumed to run over all possible values of _i_).
 - `ExpVal(A)` representing the expectation value ⟨_A_⟩
 - `Corr(AB)` representing the correlation ⟨_AB_⟩<sub>c</sub> = ⟨_AB_⟩ - ⟨_A_⟩⟨_B_⟩, with corresponding extensions for products of more operators.
 
@@ -36,6 +37,7 @@ All operations are defined in such a way that the finally created object is auto
     1. expectation values ⟨_A_⟩
     1. many-body correlations ⟨_AB_⟩<sub>c</sub>
     1. bosonic operators in normal ordering (i.e., first creation, then annihilation operators), ordered by mode index
+    1. fermionic operators in normal ordering (i.e., first creation, then annihilation operators), ordered by mode index
     1. Two-level Pauli matrices, ordered by TLS mode index. At most one Pauli matrix per TLS
 - Operator sums are ordered first by number of operators (both bare and within expectation values and correlations), and then with the same priority rules.
 

@@ -11,10 +11,11 @@ We define an abstract type that represents an operator, and some concrete subtyp
 - `scal(x)` representing a scalar ``x``
 - `param(g,(i,j),state='n')` representing a named scalar parameter ``g_{i,j}``. `state` can be `'r'` for purely real parameters (invariant under complex conjugation), `'n'` for not-conjugated values, and `'c'` for a conjugated parameter ``g_{i,j}^{*}``.
 - `a(i)` and `adag(i)` representing ``a_{i}`` and ``a_{i}^{†}``, the annihilation and creation operators for bosonic mode ``i``
+- `f(i)` and `fdag(i)` representing ``a_{i}`` and ``a_{i}^{†}``, the annihilation and creation operators for fermionic mode ``i``
 - `σ(a,i)` representing the Pauli matrix ``σ_{a,i}`` for two-level system (TLS) ``i``, where ``a ∈ {x=1,y=2,z=3}`` is the type of Pauli matrix.
 - `OpProd(A,B)` representing ``A B``, i.e., the product of two operators
 - `OpSum(A,B)` representing ``A + B``, i.e., the sum of two operators
-- `OpSumAnalytical(i,A)` representing ``∑_{i} A``, i.e., an analytical sum over an index (assumed to run over all possible values of ``i``).
+- `OpSumAnalytical(i,A)` or `∑(i,A)` representing ``∑_{i} A``, i.e., an analytical sum over an index (assumed to run over all possible values of ``i``).
 - `ExpVal(A)` representing the expectation value ``⟨A⟩``
 - `Corr(AB)` representing the correlation ``⟨AB⟩_{c} = ⟨AB⟩ - ⟨A⟩⟨B⟩``, with corresponding extensions for products of more operators.
 
@@ -26,6 +27,7 @@ All operations are defined in such a way that the finally created object is auto
     1. expectation values ``⟨A⟩``
     1. many-body correlations ``⟨AB⟩_{c}``
     1. bosonic operators in normal ordering (i.e., first creation, then annihilation operators), ordered by mode index
+    1. fermionic operators in normal ordering (i.e., first creation, then annihilation operators), ordered by mode index
     1. Two-level Pauli matrices, ordered by TLS mode index. At most one Pauli matrix per TLS
 - Operator sums are ordered first by number of operators (both bare and within expectation values and correlations), and then with the same priority rules.
 
