@@ -34,8 +34,10 @@ using Test
         @test tmp1 == tmp2
         @test tmp1' == tmpc
 
-        @test 5*a() == scal(5)*a()
-        @test a()*5 == a()*scal(5) == 5*a()
+        @test a()*5 == 5*a() == scal(5)*a()
+        @test a()+5 == 5+a() == scal(5)+a()
+        @test 5-a() == scal(5)+scal(-1)*a()
+        @test a()-5 == scal(-5)+a()
 
         @test_throws MethodError σx(:i,"a")
         @test σx(:i,:b) == σx((:i,:b))
@@ -66,6 +68,11 @@ using Test
         @test fdag(:a)*f(:b) + f(:b)*fdag(:a) == δ(:a,:b)
         @test f(:a)*f(:b) + f(:b)*f(:a) == scal(0)
         @test fdag(:a)*fdag(:b) + fdag(:b)*fdag(:a) == scal(0)
+
+        @test f()' == fdag()
+        @test fdag()' == f()
+        @test (fdag()*f())' == fdag()*f()
+        @test comm(fdag(),f()) == -comm(f(),fdag())
 
         @test scal(1+1im) < scal(2-1im)
         @test scal(1+1im) > scal(1-1im)
@@ -200,7 +207,11 @@ using Test
         @test Avac(H) == scal(0)
         @test vacA(H) == scal(0)
         @test vacA(adag(3)*σp(1)*σm(1)) == scal(0)
+        @test vacA(fdag(:n)) == scal(0)
+        @test vacA(f(:n)) == f(:n)
         @test vacA(a(:n)) == a(:n)
+        @test Avac(fdag(:n)) == fdag(:n)
+        @test Avac(f(:n)) == scal(0)
         @test Avac(a(3)*σp(1)*σm(1)) == scal(0)
         @test Avac(σm(1)*σp(1)) == scal(1)
         @test Avac(σp(1)*σm(1)) == scal(0)
@@ -255,6 +266,10 @@ using Test
 
         @test_throws MethodError distribute_indices!(copy(inds),OpSumAnalytic(:i,a(:i)))
         @test_throws ArgumentError distribute_indices!([:a,:b],tmp1)
+
+        @test QuantumAlgebra.exchange_inds(adag(:j)*a(:k),:k,:j) == adag(:k)*a(:j)
+        @test QuantumAlgebra.extindices(∑(:i,adag(:i)*a(:k))) == [:k]
+        @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
 
         @test string(OpSumAnalytic(:i,a(:i)) * adag(:n)) == "1 + ∑_i a†(n) a(i)"
         if QuantumAlgebra.using_σpm

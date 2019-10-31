@@ -57,6 +57,13 @@ struct δ <: Scalar
         end
     end
 end
+function δ(Ainds::OpIndices,Binds::OpIndices)::Operator
+    if length(Ainds) == length(Binds)
+        prod(collect(Operator,δ.(Ainds,Binds)))
+    else
+        scal(0)
+    end
+end
 
 abstract type BaseOperator <: Operator; end
 for (op,desc,sym) in (
@@ -367,19 +374,15 @@ end
 for op in (a,adag,σplus,σminus)
     @eval comm(A::$op,B::$op) = scal(0)
 end
-function indδ(Ainds::OpIndices,Binds::OpIndices)::Operator
-    length(Ainds) != length(Binds) && return scal(0)
-    prod(Operator[δ(iA,iB) for (iA,iB) in zip(Ainds,Binds)])
-end
-comm(A::a,B::adag) = indδ(A.inds,B.inds)
+comm(A::a,B::adag) = δ(A.inds,B.inds)
 comm(A::adag,B::a) = -comm(B,A)
-comm(A::σplus,B::σminus) = indδ(A.inds,B.inds)*σz(A.inds)
+comm(A::σplus,B::σminus) = δ(A.inds,B.inds)*σz(A.inds)
 comm(A::σminus,B::σplus) = -comm(B,A)
 
 # {f_i, fdag_j} = f_i fdag_j + fdag_j f_i = δ_{i,j}
 # f_i fdag_j = δ_{i,j} - fdag_j f_i
 # [f_i, fdag_j] = f_i fdag_j - fdag_j f_i = δ_{i,j} - fdag_j f_i - fdag_j f_i = δ_{i,j} - 2 fdag_j f_i
-comm(A::f,B::fdag) = indδ(A.inds,B.inds) - 2*B*A
+comm(A::f,B::fdag) = δ(A.inds,B.inds) - 2*B*A
 comm(A::fdag,B::f) = -comm(B,A)
 # {f_i,f_j} = f_i f_j + f_j f_i = 0
 # we assume that if we need the commutator, it's because of exchanging order
@@ -400,7 +403,7 @@ function comm(A::σ,B::σ)
         # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
         c = 6 - a - b
         s = levicivita_lut[a,b]
-        indδ(A.inds,B.inds)*scal(2im*s)*σ(c,A.inds)
+        δ(A.inds,B.inds)*scal(2im*s)*σ(c,A.inds)
     end
 end
 
