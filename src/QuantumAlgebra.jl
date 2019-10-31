@@ -237,9 +237,13 @@ length(A::OpProd) = length(A.A) + length(A.B)
 *(A::OpProd,       B::OpSum) = A*B.A + A*B.B # resolve ambiguity
 *(A::OpSumAnalytic,B::OpSum) = A*B.A + A*B.B # resolve ambiguity
 
-# allow multiplication by a number x by promoting it to scal(x) operator
+# allow addition, substraction, and multiplication with a number x by promoting it to scal(x) operator
 *(x::Number,A::Operator) = scal(x)*A
 *(A::Operator,x::Number) = scal(x)*A
++(x::Number,A::Operator) = scal(x)+A
++(A::Operator,x::Number) = scal(x)+A
+-(x::Number,A::Operator) = scal(x)-A
+-(A::Operator,x::Number) = A-scal(x)
 
 function *(A::Operator,B::Operator)::Operator
     if A isa scal && A.v==0
@@ -254,7 +258,7 @@ function *(A::Operator,B::Operator)::Operator
         # if A*B.A is not ordered as we want, evaluate A*B.A first
         (A*B.A)*B.B
     elseif A isa δ && A.inds[2] in indextuple(B)
-        # if second index of δ_iA,iB shows up on RHS, replace by iA 
+        # if second index of δ_iA,iB shows up on RHS, replace by iA
         # (relies on indices in δ being sorted)
         A * replace_index(B,A.inds[2],A.inds[1])
     elseif A isa σ && B isa σ && A.inds == B.inds
@@ -393,7 +397,7 @@ replace_index(A::OpSum,iold,inew) = replace_index(A.A,iold,inew) + replace_index
 replace_index(A::OpSumAnalytic,iold,inew) = begin
     (A.ind==iold || A.ind==inew) && error("replace_index in OpSumAnalytic cannot have iold ($iold) or inew ($inew) be the same as the sum index ($(A.ind))!")
     tmp = replace_index(A.A,iold,inew)
-    # we have to be careful here - when replacing an index inside the expression, there might be reorderings that 
+    # we have to be careful here - when replacing an index inside the expression, there might be reorderings that
     # have be done with the same index explicitly to make sure that the commutator shows up
     # so take out the term with the same index explicitly, and redo that one term
     OpSumAnalytic(A.ind,tmp) - replace_index(tmp,A.ind,inew) + replace_index(replace_index(A.A,A.ind,iold),iold,inew)
@@ -428,13 +432,13 @@ distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_
 
 checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Cannot multiply sum with index $(B.ind) with expression $(A) containing the same index")
 # when multiplying (or commuting) with an operator with an index, take into account that the term in the sum with equal index has to be treated specially
-*(A::Union{param,ExpVal,Corr,a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
+*(A::Union{param,ExpVal,Corr,BaseOperator},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
 # no need to check indices here since we just dispatch to another routine
 *(A::OpSumAnalytic,B::OpProd) = (A*B.A)*B.B
 *(A::OpSumAnalytic,B::Operator) = (checkinds(B,A); OpSumAnalytic(A.ind,A.A*B))
 
-comm(A::Union{a,adag,σ,σminus,σplus},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,comm(A,B.A)))
-comm(A::OpSumAnalytic,B::Union{a,adag,σ,σminus,σplus}) = -comm(B,A)
+comm(A::BaseOperator,B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,comm(A,B.A)))
+comm(A::OpSumAnalytic,B::BaseOperator) = -comm(B,A)
 
 print(io::IO,A::a) = print(io,"a($(A.inds...))")
 print(io::IO,A::adag) = print(io,"a†($(A.inds...))")
