@@ -73,12 +73,15 @@ using Test
 
         @test a(1) * (σy(1) * a(1))' == a(1) * (adag(1) * σy(1)) == adag(1)*a(1)*σy(1) + σy(1)
 
+        @test ∑(:j,a(:j))*∑(:i,a(:i)) == ∑(:i,∑(:j,a(:i)*a(:j)))
+
         tmp = OpSumAnalytic(:i,adag(:i)*a(:i))
         @test tmp' == tmp
-        @test_throws ErrorException a(:i)*OpSumAnalytic(:i,a(:i))
+        @test a(:i)*OpSumAnalytic(:i,a(:i)) == OpSumAnalytic(:i_1,a(:i_1)*a(:i))
         @test adag(:n)*tmp == OpSumAnalytic(:i,adag(:n)*adag(:i)*a(:i))
         @test a(:n)   *tmp == OpSumAnalytic(:i,adag(:i)*a(:n)*a(:i)) + a(:n)
-        @test_throws ErrorException param(:g,:i)*OpSumAnalytic(:i,a(:i))
+        @test param(:g,:i)*OpSumAnalytic(:i,a(:i)) == OpSumAnalytic(:i_1,param(:g,:i)*a(:i_1))
+        @test param(:g,:i_1)*a(:i)*OpSumAnalytic(:i,a(:i)) == OpSumAnalytic(:i_2,param(:g,:i_1)*a(:i)*a(:i_2))
         @test param(:g,:n)*OpSumAnalytic(:i,a(:i)) == ∑(:i,param(:g,:n)*a(:i))
 
         @test Pr"gz_i,mu" == param(:gz,'r',(:i,:mu))
@@ -175,8 +178,7 @@ using Test
         @test CorrOrExp(a(5)*a(:i)) == Corr(a(5)*a(:i))
 
         H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
-        # cannot commute with an operator with the same index as in the sum
-        @test_throws ErrorException comm(a(:i),H)
+        @test comm(a(:i),H) == param(:ω,'r',:i)*a(:i)
         @test comm(a(:n),H) == param(:ω,'r',:n)*a(:n)
         @test comm(H,a(:n)) == -param(:ω,'r',:n)*a(:n)
         @test comm(adag(:n),H) == -param(:ω,'r',:n)*adag(:n)

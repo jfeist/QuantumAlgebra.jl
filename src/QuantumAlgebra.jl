@@ -115,6 +115,9 @@ struct OpSumAnalytic <: Operator
     OpSumAnalytic(ind::Symbol,A::Operator) = begin
         if A isa OpProd && A.A isa scal
             A.A*OpSumAnalytic(ind,A.B)
+        elseif A isa OpSumAnalytic && A.ind < ind
+            # reorder nested sums by indices
+            OpSumAnalytic(A.ind,OpSumAnalytic(ind,A.A))
         else
             for t in preftuple(A)
                 # if there is a δ in the expression and it has the sum index, the sum disappears
@@ -330,26 +333,28 @@ adjoint(A::OpSum) = A.A' + A.B'
 adjoint(A::OpProd) = A.B' * A.A'
 adjoint(A::ExpVal) = ExpVal(A.A')
 adjoint(A::Corr) = Corr(A.A')
-# since the term inside is fully simplified, we have normal ordering or single two-level operators
-# the order reversion of the adjoint and subsequent simplification thus never needs commutations of non-commuting operators
-# (which would be problematic because we would have to take into account that the sum index can be equal to any other index)
 adjoint(A::OpSumAnalytic) = OpSumAnalytic(A.ind,A.A')
 
 comm(A::Scalar,B::Operator) = scal(0)
 comm(A::Scalar,B::OpProd)   = scal(0)
 comm(A::Scalar,B::OpSum)    = scal(0)
+comm(A::Scalar,B::OpSumAnalytic) = scal(0)
 comm(A::Operator,B::Scalar) = scal(0)
 comm(A::OpSum,   B::Scalar) = scal(0)
 comm(A::OpProd,  B::Scalar) = scal(0)
+comm(A::OpSumAnalytic,B::Scalar) = scal(0)
 comm(A::Scalar,B::Scalar)   = scal(0)
 comm(A::OpProd,B::Operator) = comm(A.A,B)*A.B + A.A*comm(A.B,B)
+comm(A::OpProd,B::OpSumAnalytic) = comm(A.A,B)*A.B + A.A*comm(A.B,B)
 comm(A::OpProd,B::OpProd)   = comm(A.A,B)*A.B + A.A*comm(A.B,B)
 comm(A::Operator,B::OpProd) = comm(A,B.A)*B.B + B.A*comm(A,B.B)
+comm(A::OpSumAnalytic, B::OpProd) = comm(A,B.A)*B.B + B.A*comm(A,B.B)
 comm(A::OpSum,B::Operator)  = comm(A.A,B) + comm(A.B,B)
 comm(A::OpSum,B::OpSum)     = comm(A.A,B) + comm(A.B,B)
 comm(A::OpSum,B::OpProd)    = comm(A.A,B) + comm(A.B,B)
 comm(A::Operator,B::OpSum)  = comm(A,B.A) + comm(A,B.B)
 comm(A::OpProd,  B::OpSum)  = comm(A,B.A) + comm(A,B.B)
+comm(A::OpSumAnalytic, B::OpSum) = comm(A,B.A) + comm(A,B.B)
 # different types of operators commute
 commgroups = (Union{a,adag},Union{f,fdag},Union{σ,σminus,σplus})
 for (ii,op) in enumerate(commgroups)
@@ -445,15 +450,31 @@ distribute_indices!(inds,A::OpProd) = distribute_indices!(inds,A.A)*distribute_i
 distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_indices!(inds,A.B)
 # on purpose do not define this for OpSumAnalytic or δ
 
-checkinds(A::Operator,B::OpSumAnalytic) = B.ind in indextuple(A) && error("Cannot multiply sum with index $(B.ind) with expression $(A) containing the same index")
+"sum indices have no semantic meaning, so rename them in case they happen to occur in the other expression"
+function ensure_compatible_sumind(S::OpSumAnalytic,A::Operator)
+    Ainds = indextuple(A)
+    if S.ind in Ainds
+        oldinds = Set{OpIndex}((Ainds...,indextuple(S)...))
+        m = match(r"(.*)_([0-9]+)",string(S.ind))
+        indstem, ii = (m === nothing) ? (string(S.ind), 1) : (m.captures[1], 1+parse(Int,m.captures[2]))
+        while (newind = Symbol(indstem,:_,ii)) in oldinds
+            ii += 1
+        end
+        OpSumAnalytic(newind,replace_index(S.A,S.ind,newind))
+    else
+        S
+    end
+end
+
 # when multiplying (or commuting) with an operator with an index, take into account that the term in the sum with equal index has to be treated specially
-*(A::Union{param,ExpVal,Corr,BaseOperator},B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,A*B.A))
+*(A::Union{param,ExpVal,Corr,BaseOperator},B::OpSumAnalytic) = (B = ensure_compatible_sumind(B,A); OpSumAnalytic(B.ind,A*B.A))
 # no need to check indices here since we just dispatch to another routine
 *(A::OpSumAnalytic,B::OpProd) = (A*B.A)*B.B
-*(A::OpSumAnalytic,B::Operator) = (checkinds(B,A); OpSumAnalytic(A.ind,A.A*B))
+*(A::OpSumAnalytic,B::Operator) = (A = ensure_compatible_sumind(A,B); OpSumAnalytic(A.ind,A.A*B))
 
-comm(A::BaseOperator,B::OpSumAnalytic) = (checkinds(A,B); OpSumAnalytic(B.ind,comm(A,B.A)))
-comm(A::OpSumAnalytic,B::BaseOperator) = -comm(B,A)
+comm(A::Union{param,ExpVal,Corr,BaseOperator},B::OpSumAnalytic) = (B = ensure_compatible_sumind(B,A); OpSumAnalytic(B.ind,comm(A,B.A)))
+comm(A::OpSumAnalytic,B::OpSumAnalytic) = (B = ensure_compatible_sumind(B,A); OpSumAnalytic(B.ind,comm(A,B.A)))
+comm(A::OpSumAnalytic,B::Operator) = -comm(B,A)
 
 print(io::IO,A::a) = print(io,"a($(A.inds...))")
 print(io::IO,A::adag) = print(io,"a†($(A.inds...))")
