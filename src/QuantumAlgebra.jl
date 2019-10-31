@@ -1,6 +1,6 @@
 module QuantumAlgebra
 
-export scal,param,a,adag,OpSumAnalytic,ExpVal,Corr
+export scal,param,a,adag,f,fdag,OpSumAnalytic,ExpVal,Corr
 export σx,σy,σz,σp,σm,comm,latex
 export Avac,vacA,vacExpVal
 export CorrOrExp,ascorr
@@ -62,6 +62,8 @@ abstract type BaseOperator <: Operator; end
 for (op,desc,sym) in (
     (:a,   "bosonic annihilation","a"),
     (:adag,"bosonic creation","a^†"),
+    (:f,   "fermionic annihilation","f"),
+    (:fdag,"fermionic creation","f^†"),
     (:σminus,"TLS annihilation","σ^-"),
     (:σplus,"TLS creation","σ^+"))
     @eval begin
@@ -176,7 +178,7 @@ prodtuple(A::Operator) = (A,)
 prodtuple(A::OpProd) = (prodtuple(A.A)...,prodtuple(A.B)...)
 
 # make a tuple from a product, containing only either prefactor types, expectation value types, or operators
-for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,σ,σplus,σminus))]
+for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,f,fdag,σ,σplus,σminus))]
     name = Symbol(name,:tuple)
     types = Union{types...}
     @eval $name(A::$types) = (A,)
@@ -190,7 +192,7 @@ prodtuples(A::Operator) = (preftuple(A), exptuple(A), optuple(A))
 sumtuple(A::Operator) = (A,)
 sumtuple(A::OpSum) = (sumtuple(A.A)...,sumtuple(A.B)...)
 
-OpOrder = (scal,δ,param,ExpVal,Corr,adag,a,σplus,σminus,σ,OpProd,OpSumAnalytic,OpSum)
+OpOrder = (scal,δ,param,ExpVal,Corr,adag,a,fdag,f,σplus,σminus,σ,OpProd,OpSumAnalytic,OpSum)
 for (ii,op1) in enumerate(OpOrder)
     for op2 in OpOrder[ii+1:end]
         @eval isless(::$op1,::$op2) = true
@@ -202,7 +204,7 @@ isless(A::scal,B::scal) = (real(A.v),imag(A.v)) < (real(B.v),imag(B.v))
 # do not order parameters by whether they are purely real, or conjugated or not
 isless(A::param,B::param) = (A.name,sortsentinel.(A.inds)) < (B.name,sortsentinel.(B.inds))
 isless(A::σ,B::σ) = (sortsentinel.(A.inds),A.a) < (sortsentinel.(B.inds),B.a)
-for op in (δ,a,adag,σminus,σplus)
+for op in (δ,a,adag,f,fdag,σminus,σplus)
     @eval isless(A::$op,B::$op) = sortsentinel.(A.inds) < sortsentinel.(B.inds)
 end
 for op in (ExpVal,Corr,OpSumAnalytic)
@@ -220,7 +222,7 @@ end
 for op in [scal,δ,param]
     @eval length(::$op) = 0
 end
-for op in [adag,a,σ,σminus,σplus]
+for op in [adag,a,fdag,f,σ,σminus,σplus]
     @eval length(::$op) = 1
 end
 for op in [ExpVal,Corr,OpSumAnalytic]
@@ -264,9 +266,7 @@ function *(A::Operator,B::Operator)::Operator
     elseif A isa σ && B isa σ && A.inds == B.inds
         # σa σb = δab + i ϵabc σc = δab + 1/2 [σa,σb]
         A.a==B.a ? scal(1) : scal(1//2)*comm(A,B)
-    elseif A isa σplus && B isa σplus && A.inds == B.inds
-        scal(0)
-    elseif A isa σminus && B isa σminus && A.inds == B.inds
+    elseif A isa Union{σplus,σminus,f,fdag} && typeof(B)==typeof(A) && A.inds == B.inds
         scal(0)
     elseif A>B
         B*A + comm(A,B)
@@ -321,6 +321,8 @@ adjoint(A::scal) = scal(conj(A.v))
 adjoint(A::param) = A.state=='r' ? A : param(A.name,A.state=='n' ? 'c' : 'n',A.inds)
 adjoint(A::a) = adag(A.inds)
 adjoint(A::adag) = a(A.inds)
+adjoint(A::f) = fdag(A.inds)
+adjoint(A::fdag) = f(A.inds)
 adjoint(A::σminus) = σplus(A.inds)
 adjoint(A::σplus) = σminus(A.inds)
 adjoint(A::σ) = A
@@ -348,13 +350,15 @@ comm(A::OpSum,B::OpSum)     = comm(A.A,B) + comm(A.B,B)
 comm(A::OpSum,B::OpProd)    = comm(A.A,B) + comm(A.B,B)
 comm(A::Operator,B::OpSum)  = comm(A,B.A) + comm(A,B.B)
 comm(A::OpProd,  B::OpSum)  = comm(A,B.A) + comm(A,B.B)
-# all boson operators commute with all atomic operators
-for op in (a,adag)
-    for op2 in (σ,σminus,σplus)
+# different types of operators commute
+commgroups = (Union{a,adag},Union{f,fdag},Union{σ,σminus,σplus})
+for (ii,op) in enumerate(commgroups)
+    for op2 in commgroups[ii+1:end]
         @eval comm(A::$op,B::$op2) = scal(0)
         @eval comm(A::$op2,B::$op) = scal(0)
     end
 end
+# these operators commute with themselves
 for op in (a,adag,σplus,σminus)
     @eval comm(A::$op,B::$op) = scal(0)
 end
@@ -363,9 +367,20 @@ function indδ(Ainds::OpIndices,Binds::OpIndices)::Operator
     prod(Operator[δ(iA,iB) for (iA,iB) in zip(Ainds,Binds)])
 end
 comm(A::a,B::adag) = indδ(A.inds,B.inds)
-comm(A::adag,B::a) = -indδ(A.inds,B.inds)
+comm(A::adag,B::a) = -comm(B,A)
 comm(A::σplus,B::σminus) = indδ(A.inds,B.inds)*σz(A.inds)
 comm(A::σminus,B::σplus) = -comm(B,A)
+
+# {f_i, fdag_j} = f_i fdag_j + fdag_j f_i = δ_{i,j}
+# f_i fdag_j = δ_{i,j} - fdag_j f_i
+# [f_i, fdag_j] = f_i fdag_j - fdag_j f_i = δ_{i,j} - fdag_j f_i - fdag_j f_i = δ_{i,j} - 2 fdag_j f_i
+comm(A::f,B::fdag) = indδ(A.inds,B.inds) - 2*B*A
+comm(A::fdag,B::f) = -comm(B,A)
+# {f_i,f_j} = f_i f_j + f_j f_i = 0
+# we assume that if we need the commutator, it's because of exchanging order
+# [f_i,f_j] = f_i f_j - f_j f_i = -f_j f_i - f_j f_i
+comm(A::f,B::f) = -2*B*A
+comm(A::fdag,B::fdag) = -2*B*A
 
 # levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
 # for c=6-a-b, i.e, when a,b,c is a permutation of 1,2,3
@@ -388,7 +403,7 @@ replace_index(A::scal,iold,inew) = A
 replace_index(A::param,iold,inew) = param(A.name,A.state,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::ExpVal,iold,inew) = ExpVal(replace_index(A.A,iold,inew))
 replace_index(A::Corr,iold,inew) = Corr(replace_index(A.A,iold,inew))
-for op in (δ,a,adag,σminus,σplus)
+for op in (δ,a,adag,f,fdag,σminus,σplus)
     @eval replace_index(A::$op,iold,inew) = $op((n-> n==iold ? inew : n).(A.inds))
 end
 replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
@@ -422,7 +437,7 @@ distribute_indices!(inds,A::scal) = A
 distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
 distribute_indices!(inds,A::Corr) = Corr(distribute_indices!(inds,A.A))
-for op in (a,adag,σminus,σplus)
+for op in (a,adag,f,fdag,σminus,σplus)
     @eval distribute_indices!(inds,A::$op) = $op((popfirst!(inds) for _ in A.inds)...)
 end
 distribute_indices!(inds,A::σ) = σ(A.a,(popfirst!(inds) for _ in A.inds)...)
@@ -442,6 +457,8 @@ comm(A::OpSumAnalytic,B::BaseOperator) = -comm(B,A)
 
 print(io::IO,A::a) = print(io,"a($(A.inds...))")
 print(io::IO,A::adag) = print(io,"a†($(A.inds...))")
+print(io::IO,A::f) = print(io,"f($(A.inds...))")
+print(io::IO,A::fdag) = print(io,"f†($(A.inds...))")
 print(io::IO,A::σ) = print(io,"σ$(A.a)($(A.inds...))")
 print(io::IO,A::σminus) = print(io,"σ-($(A.inds...))")
 print(io::IO,A::σplus) = print(io,"σ+($(A.inds...))")
@@ -464,6 +481,8 @@ latexindstr(inds::OpIndices) = length(inds)==0 ? "" : "_{$(inds...)}"
 latex(A::δ) = "δ" * latexindstr(A.inds)
 latex(A::a) = "a" * latexindstr(A.inds)
 latex(A::adag) = "a$(latexindstr(A.inds))^\\dagger"
+latex(A::f) = "f" * latexindstr(A.inds)
+latex(A::fdag) = "f$(latexindstr(A.inds))^\\dagger"
 latex(A::σminus) = "\\sigma^-" * latexindstr(A.inds)
 latex(A::σplus) = "\\sigma^+" * latexindstr(A.inds)
 latex(A::scal) = imag(A.v)==0 ? mystring(real(A.v)) : (real(A.v)==0 ? mystring(imag(A.v))*"i" : mystring(A.v))
@@ -475,7 +494,7 @@ latex(A::Corr) = "\\langle $(latex(A.A)) \\rangle_{c}"
 latex(A::OpSumAnalytic) = string("\\sum_{$(A.ind)}",latex(A.A))
 
 indextuple(A::scal)::OpIndices = ()
-indextuple(A::Union{param,δ,a,adag,σ,σminus,σplus})::OpIndices = A.inds
+indextuple(A::Union{param,δ,a,adag,f,fdag,σ,σminus,σplus})::OpIndices = A.inds
 indextuple(A::Union{OpProd,OpSum})::OpIndices = (indextuple(A.A)...,indextuple(A.B)...)
 indextuple(A::Union{ExpVal,Corr})::OpIndices = indextuple(A.A)
 indextuple(A::OpSumAnalytic)::OpIndices = (A.ind,indextuple(A.A)...)
@@ -524,7 +543,7 @@ See also: [`ExpVal`](@ref), [`Corr`](@ref)"""
 function ascorr end
 
 ascorr(A::Scalar) = A
-for op in (adag,a,σ,σminus,σplus)
+for op in (adag,a,f,fdag,σ,σminus,σplus)
     @eval ascorr(A::$op) = ExpVal(A)
 end
 ascorr(A::OpSum) = ascorr(A.A) + ascorr(A.B)
@@ -571,6 +590,8 @@ CorrOrExp(A::Operator) = length(A)==1 ? ExpVal(A) : Corr(A)
 
 Avac(A::a) = scal(0)
 Avac(A::adag) = A
+Avac(A::f) = scal(0)
+Avac(A::fdag) = A
 Avac(A::σminus) = scal(0)
 Avac(A::σplus) = A
 # vacuum is an eigenstate of σz
@@ -592,6 +613,8 @@ Avac(A::Scalar) = A
 
 vacA(A::a) = A
 vacA(A::adag) = scal(0)
+vacA(A::f) = A
+vacA(A::fdag) = scal(0)
 vacA(A::σminus) = A
 vacA(A::σplus) = scal(0)
 # vacuum is an eigenstate of σz
