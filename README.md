@@ -13,7 +13,13 @@ to, which fulfills some invariants that then allows easy use of the resulting
 expressions. It is recommended to use an interface that can display LaTeX
 formulas (e.g., Jupyter notebooks) for convenient output formatting.
 
-Example notebooks are in the `examples` folder. You can view them on [nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/master/examples/) or try them out interactively on [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/master?filepath=examples).
+While there is some documentation, it is not always kept fully up to date, and
+it is recommended to look at the latest commit messages to get an idea about new
+features etc.  You can also check out the example notebooks in the `examples`.
+You can view them on
+[nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/master/examples/)
+or try them out interactively on
+[Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/master?filepath=examples).
 
 ## Overview
 

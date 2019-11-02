@@ -7,11 +7,20 @@ to, which fulfills some invariants that then allows easy use of the resulting
 expressions. It is recommended to use an interface that can display LaTeX
 formulas (e.g., Jupyter notebooks) for convenient output formatting.
 
+While there is some documentation, it is not always kept fully up to date, and
+it is recommended to look at the latest commit messages to get an idea about new
+features etc. You can also check out the example notebooks in the `examples`
+folder in the [github repository](https://github.com/jfeist/QuantumAlgebra.jl).
+You can view them on
+[nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/master/examples/)
+or try them out interactively on
+[Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/master?filepath=examples).
+
 We define an abstract type that represents an operator, and some concrete subtypes to describe various operators. We have:
 - `scal(x)` representing a scalar ``x``
 - `param(g,(i,j),state='n')` representing a named scalar parameter ``g_{i,j}``. `state` can be `'r'` for purely real parameters (invariant under complex conjugation), `'n'` for not-conjugated values, and `'c'` for a conjugated parameter ``g_{i,j}^{*}``.
 - `a(i)` and `adag(i)` representing ``a_{i}`` and ``a_{i}^{†}``, the annihilation and creation operators for bosonic mode ``i``
-- `f(i)` and `fdag(i)` representing ``a_{i}`` and ``a_{i}^{†}``, the annihilation and creation operators for fermionic mode ``i``
+- `f(i)` and `fdag(i)` representing ``f_{i}`` and ``f_{i}^{†}``, the annihilation and creation operators for fermionic mode ``i``
 - `σ(a,i)` representing the Pauli matrix ``σ_{a,i}`` for two-level system (TLS) ``i``, where ``a ∈ {x=1,y=2,z=3}`` is the type of Pauli matrix.
 - `OpProd(A,B)` representing ``A B``, i.e., the product of two operators
 - `OpSum(A,B)` representing ``A + B``, i.e., the sum of two operators
