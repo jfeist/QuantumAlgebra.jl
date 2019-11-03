@@ -16,10 +16,10 @@ formulas (e.g., Jupyter notebooks) for convenient output formatting.
 
 While there is some documentation, it is not always kept fully up to date, and
 it is recommended to look at the latest commit messages to get an idea about new
-features etc.  You can also check out the example notebooks in the `examples`.
-You can view them on
+features etc. You can also check out the notebooks in the `examples` folder, which
+can be viewed online with
 [nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/master/examples/)
-or try them out interactively on
+and even tried out interactively with
 [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/master?filepath=examples).
 
 ## Overview

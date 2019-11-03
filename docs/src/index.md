@@ -11,9 +11,9 @@ While there is some documentation, it is not always kept fully up to date, and
 it is recommended to look at the latest commit messages to get an idea about new
 features etc. You can also check out the example notebooks in the `examples`
 folder in the [github repository](https://github.com/jfeist/QuantumAlgebra.jl).
-You can view them on
+You can view them online directly with
 [nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/master/examples/)
-or try them out interactively on
+and even try them out interactively with
 [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/master?filepath=examples).
 
 We define an abstract type that represents an operator, and some concrete subtypes to describe various operators. We have:
