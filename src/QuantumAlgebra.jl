@@ -329,6 +329,7 @@ end
 
 adjoint(A::scal) = scal(conj(A.v))
 adjoint(A::param) = A.state=='r' ? A : param(A.name,A.state=='n' ? 'c' : 'n',A.inds)
+adjoint(A::δ) = A
 adjoint(A::a) = adag(A.inds)
 adjoint(A::adag) = a(A.inds)
 adjoint(A::f) = fdag(A.inds)
