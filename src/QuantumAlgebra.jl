@@ -194,7 +194,7 @@ for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,f
     @eval $name(A::$types) = (A,)
     @eval $name(A::Operator) = ()
     @eval $name(A::OpSum) = error("cannot get $($name) for OpSum!")
-    @eval $name(A::OpSumAnalytic) = ($name(A.A)...,)
+    @eval $name(A::OpSumAnalytic) = $name(A.A)
     @eval $name(A::OpProd) = ($name(A.A)...,$name(A.B)...)
 end
 prodtuples(A::Operator) = (preftuple(A), exptuple(A), optuple(A))
@@ -221,11 +221,18 @@ for op in (ExpVal,Corr,OpSumAnalytic)
     @eval isless(A::$op,B::$op) = A.A < B.A
 end
 function isless(A::OpProd,B::OpProd)
-    # order operator products first by number of operators (also within expectation values),
-    # then by operators, expectation values and correlations, then by reversed prefactors (to order params, not scalars). Again use tuples to write this easily
-    Aprefs,Aexps,Aops = prodtuples(A)
-    Bprefs,Bexps,Bops = prodtuples(B)
-    (length(A),Aops,Aexps,reverse(Aprefs)) < (length(B),Bops,Bexps,reverse(Bprefs))
+    # only evaluate each part that we need for each step of the comparison to avoid unnecessary work
+    # order operator products first by number of operators (also within expectation values)
+    lA,lB = length(A), length(B)
+    lA == lB || return lA < lB
+    # then by operators
+    Aops, Bops = optuple(A), optuple(B)
+    Aops == Bops || return Aops < Bops
+    # then by expectation values and correlations
+    Aexps, Bexps = exptuple(A), exptuple(B)
+    Aexps == Bexps || return Aexps < Bexps
+    # then by reversed prefactors (to order params, not scalars)
+    reverse(preftuple(A)) < reverse(preftuple(B))
 end
 
 # prefactors do not count for length calculation
