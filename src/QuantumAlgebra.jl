@@ -10,7 +10,7 @@ export @Pr_str, @Pc_str, ∑
 using Printf
 
 # we will want to overload these operators and functions for our custom types
-import Base: ==, ≈, *, +, -, isless, length, adjoint, print, zero, one
+import Base: ==, ≈, *, +, -, isless, length, adjoint, print, zero, one, iterate
 
 # define for σx, σy, σz
 @enum SpatialIndex x=1 y=2 z=3
@@ -184,13 +184,26 @@ end
 ≈(A::ExpVal, B::ExpVal) = A.A ≈ B.A
 ≈(A::Corr, B::Corr) = A.A ≈ B.A
 
+struct OpProdIter A::OpProd end
+proditer(A::Operator) = (A,)
+proditer(A::OpProd) = OpProdIter(A)
+proditer(A::OpSumAnalytic) = proditer(A.A)
+proditer(A::OpSum) = error("cannot get proditer for OpSum!")
+iterate(iter::OpProdIter, state::OpProd=iter.A) = (@assert !isa(state.A,OpProd); (state.A,state.B))
+iterate(iter::OpProdIter, state::Nothing) = state
+iterate(iter::OpProdIter, state::OpSumAnalytic) = iterate(iter::OpProdIter, state.A)
+iterate(iter::OpProdIter, state::Operator) = (state,nothing)
+
 prodtuple(A::Operator) = (A,)
+prodtuple(A::OpSumAnalytic) = prodtuple(A.A)
+prodtuple(A::OpSum) = error("cannot get prodtuple for OpSum!")
 prodtuple(A::OpProd) = (prodtuple(A.A)...,prodtuple(A.B)...)
 
 # make a tuple from a product, containing only either prefactor types, expectation value types, or operators
 for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,f,fdag,σ,σplus,σminus))]
-    name = Symbol(name,:tuple)
     types = Union{types...}
+    @eval $(Symbol(name,:iter))(A::Operator) = Iterators.filter(x->x isa $types, proditer(A))
+    name = Symbol(name,:tuple)
     @eval $name(A::$types) = (A,)
     @eval $name(A::Operator) = ()
     @eval $name(A::OpSum) = error("cannot get $($name) for OpSum!")
@@ -220,17 +233,33 @@ end
 for op in (ExpVal,Corr,OpSumAnalytic)
     @eval isless(A::$op,B::$op) = A.A < B.A
 end
+
+# return -1 if A<B, 0 if A==B, 1 if B<A
+function iterlesseq(A,B)::Int
+    resa = iterate(A)
+    resb = iterate(B)
+    while resa !== nothing && resb !== nothing
+        vala,statea = resa
+        valb,stateb = resb
+        vala == valb || return isless(vala,valb) ? -1 : 1
+        resa = iterate(A,statea)
+        resb = iterate(B,stateb)
+    end
+    resa === nothing && resb === nothing && return 0
+    # the longer iterator is larger
+    resa === nothing ? 1 : -1
+end
+
 function isless(A::OpProd,B::OpProd)
     # only evaluate each part that we need for each step of the comparison to avoid unnecessary work
     # order operator products first by number of operators (also within expectation values)
     lA,lB = length(A), length(B)
     lA == lB || return lA < lB
     # then by operators
-    Aops, Bops = optuple(A), optuple(B)
-    Aops == Bops || return Aops < Bops
-    # then by expectation values and correlations
-    Aexps, Bexps = exptuple(A), exptuple(B)
-    Aexps == Bexps || return Aexps < Bexps
+    c1 = iterlesseq(opiter(A),opiter(B))
+    c1 == 0 || return c1 < 0
+    c2 = iterlesseq(expiter(A),expiter(B))
+    c2 == 0 || return c2 < 0
     # then by reversed prefactors (to order params, not scalars)
     reverse(preftuple(A)) < reverse(preftuple(B))
 end
