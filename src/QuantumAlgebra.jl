@@ -184,25 +184,24 @@ end
 ≈(A::ExpVal, B::ExpVal) = A.A ≈ B.A
 ≈(A::Corr, B::Corr) = A.A ≈ B.A
 
-struct OpProdIter A::OpProd end
-proditer(A::Operator) = (A,)
-proditer(A::OpProd) = OpProdIter(A)
-proditer(A::OpSumAnalytic) = proditer(A.A)
-proditer(A::OpSum) = error("cannot get proditer for OpSum!")
-iterate(iter::OpProdIter, state::OpProd=iter.A) = (@assert !isa(state.A,OpProd); (state.A,state.B))
+struct OpProdIter{swallow_∑} A::Operator end
+Base.eltype(::OpProdIter) = Operator
+proditer(A::Operator,swallow_∑::Bool)::OpProdIter{swallow_∑} = A isa OpSum ? error("cannot get proditer for OpSum!") : OpProdIter{swallow_∑}(A)
+# if iter.A is an OpProd, default function argument will call more specific function below
+iterate(iter::OpProdIter, state::Operator=iter.A) = (state,nothing)
+iterate(iter::OpProdIter, state::OpProd) = (@assert !isa(state.A,OpProd); (state.A,state.B))
+iterate(iter::OpProdIter{true},  state::OpSumAnalytic) = iterate(iter, state.A)
+iterate(iter::OpProdIter{false}, state::OpSumAnalytic) = (state,nothing)
 iterate(iter::OpProdIter, state::Nothing) = state
-iterate(iter::OpProdIter, state::OpSumAnalytic) = iterate(iter::OpProdIter, state.A)
-iterate(iter::OpProdIter, state::Operator) = (state,nothing)
 
 prodtuple(A::Operator) = (A,)
-prodtuple(A::OpSumAnalytic) = prodtuple(A.A)
 prodtuple(A::OpSum) = error("cannot get prodtuple for OpSum!")
 prodtuple(A::OpProd) = (prodtuple(A.A)...,prodtuple(A.B)...)
 
 # make a tuple from a product, containing only either prefactor types, expectation value types, or operators
 for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,f,fdag,σ,σplus,σminus))]
     types = Union{types...}
-    @eval $(Symbol(name,:iter))(A::Operator) = Iterators.filter(x->x isa $types, proditer(A))
+    @eval $(Symbol(name,:iter))(A::Operator,swallow_∑::Bool) = Iterators.filter(x->x isa $types, proditer(A,swallow_∑))
     name = Symbol(name,:tuple)
     @eval $name(A::$types) = (A,)
     @eval $name(A::Operator) = ()
@@ -239,8 +238,8 @@ function iterlesseq(A,B)::Int
     resa = iterate(A)
     resb = iterate(B)
     while resa !== nothing && resb !== nothing
-        vala,statea = resa
-        valb,stateb = resb
+        vala, statea = resa
+        valb, stateb = resb
         vala == valb || return isless(vala,valb) ? -1 : 1
         resa = iterate(A,statea)
         resb = iterate(B,stateb)
@@ -256,12 +255,16 @@ function isless(A::OpProd,B::OpProd)
     lA,lB = length(A), length(B)
     lA == lB || return lA < lB
     # then by operators
-    c1 = iterlesseq(opiter(A),opiter(B))
+    c1 = iterlesseq(opiter(A,true),opiter(B,true))
     c1 == 0 || return c1 < 0
-    c2 = iterlesseq(expiter(A),expiter(B))
+    c2 = iterlesseq(expiter(A,true),expiter(B,true))
     c2 == 0 || return c2 < 0
     # then by reversed prefactors (to order params, not scalars)
-    reverse(preftuple(A)) < reverse(preftuple(B))
+    rpA = reverse(preftuple(A))
+    rpB = reverse(preftuple(B))
+    rpA == rpB || return rpA < rpB
+    # finally without swallowing opsumanalytic to make sure we always have definite ordering
+    iterlesseq(proditer(A,false),proditer(B,false)) < 0
 end
 
 # prefactors do not count for length calculation
