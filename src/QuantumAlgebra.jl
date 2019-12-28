@@ -211,6 +211,14 @@ for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,f
 end
 prodtuples(A::Operator) = (preftuple(A), exptuple(A), optuple(A))
 
+struct OpSumIter A::Operator end
+Base.eltype(::OpSumIter) = Operator
+sumiter(A::Operator) = OpSumIter(A)
+# if iter.A is an OpSum, default function argument will call more specific function below
+iterate(iter::OpSumIter, state::Operator=iter.A) = (state,nothing)
+iterate(iter::OpSumIter, state::OpSum) = (@assert !isa(state.A,OpSum); (state.A,state.B))
+iterate(iter::OpSumIter, state::Nothing) = state
+
 sumtuple(A::Operator) = (A,)
 sumtuple(A::OpSum) = (sumtuple(A.A)...,sumtuple(A.B)...)
 
