@@ -751,6 +751,7 @@ macro Pr_str(s)
     param(par,'r',inds...)
 end
 
-#include("precompile.jl")
+include("precompile.jl")
+_precompile_()
 
 end # module
