@@ -33,7 +33,7 @@ struct param{T<:OpIndices} <: Scalar
     state::Char
     inds::T
     function param(name,state::Char,inds::OpIndex...)
-        state in ('n','r','c') || error("state has to be one of n,r,c")
+        state in ('n','r','c') || throw(ArgumentError("state has to be one of n,r,c"))
         new{typeof(inds)}(name,state,inds)
     end
     param(name,inds::OpIndex...) = param(name,'n',inds...)
@@ -186,7 +186,8 @@ end
 
 struct OpProdIter{swallow_∑} A::Operator end
 Base.eltype(::OpProdIter) = Operator
-proditer(A::Operator,swallow_∑::Bool)::OpProdIter{swallow_∑} = A isa OpSum ? error("cannot get proditer for OpSum!") : OpProdIter{swallow_∑}(A)
+proditer(A::Operator,swallow_∑::Bool) = OpProdIter{swallow_∑}(A)
+proditer(A::OpSum,swallow_∑::Bool) = throw(ArgumentError("cannot get proditer for OpSum!"))
 # if iter.A is an OpProd, default function argument will call more specific function below
 iterate(iter::OpProdIter, state::Operator=iter.A) = (state,nothing)
 iterate(iter::OpProdIter, state::OpProd) = (@assert !isa(state.A,OpProd); (state.A,state.B))
@@ -195,7 +196,7 @@ iterate(iter::OpProdIter{false}, state::OpSumAnalytic) = (state,nothing)
 iterate(iter::OpProdIter, state::Nothing) = state
 
 prodtuple(A::Operator) = (A,)
-prodtuple(A::OpSum) = error("cannot get prodtuple for OpSum!")
+prodtuple(A::OpSum) = throw(ArgumentError("cannot get prodtuple for OpSum!"))
 prodtuple(A::OpProd) = (prodtuple(A.A)...,prodtuple(A.B)...)
 
 # make a tuple from a product, containing only either prefactor types, expectation value types, or operators
@@ -205,7 +206,7 @@ for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,f
     name = Symbol(name,:tuple)
     @eval $name(A::$types) = (A,)
     @eval $name(A::Operator) = ()
-    @eval $name(A::OpSum) = error("cannot get $($name) for OpSum!")
+    @eval $name(A::OpSum) = throw(ArgumentError("cannot get $($name) for OpSum!"))
     @eval $name(A::OpSumAnalytic) = $name(A.A)
     @eval $name(A::OpProd) = ($name(A.A)...,$name(A.B)...)
 end
@@ -466,7 +467,7 @@ replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::OpProd,iold,inew) = replace_index(A.A,iold,inew)*replace_index(A.B,iold,inew)
 replace_index(A::OpSum,iold,inew) = replace_index(A.A,iold,inew) + replace_index(A.B,iold,inew)
 replace_index(A::OpSumAnalytic,iold,inew) = begin
-    (A.ind==iold || A.ind==inew) && error("replace_index in OpSumAnalytic cannot have iold ($iold) or inew ($inew) be the same as the sum index ($(A.ind))!")
+    (A.ind==iold || A.ind==inew) && throw(ArgumentError("replace_index in OpSumAnalytic cannot have iold ($iold) or inew ($inew) be the same as the sum index ($(A.ind))!"))
     tmp = replace_index(A.A,iold,inew)
     # we have to be careful here - when replacing an index inside the expression, there might be reorderings that
     # have be done with the same index explicitly to make sure that the commutator shows up
@@ -632,7 +633,7 @@ ascorr(A::OpSumAnalytic) = begin
     res
 end
 function ascorr(A::OpProd)::Operator
-    A.A isa OpSumAnalytic && error("should not occurr!")
+    A.A isa OpSumAnalytic && error("should not occur!")
     A.A isa scal && A.B isa OpSumAnalytic && return A.A*ascorr(A.B)
     preftup, exptup, optup = prodtuples(A)
     pref = prod((scal(1),preftup...,exptup...))
@@ -654,7 +655,7 @@ function ascorr(A::OpProd)::Operator
             + ExpVal(A)*ExpVal(C)*Corr(B*D) + Corr(A*C)*ExpVal(B)*ExpVal(D) + Corr(A*C)*Corr(B*D)
             + ExpVal(A)*ExpVal(D)*Corr(B*C) + Corr(A*D)*ExpVal(B)*ExpVal(C) + Corr(A*D)*Corr(B*C))
     else
-        error("ERROR: Only correlations up to fourth order are implemented for now")
+        throw(ArgumentError("ERROR: Only correlations up to fourth order are implemented for now"))
     end
 end
 CorrOrExp(A::Operator) = length(A)==1 ? ExpVal(A) : Corr(A)

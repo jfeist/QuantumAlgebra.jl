@@ -19,7 +19,7 @@ using Test
         @test param(:ω) == param(:ω,()) == param(:ω,'n') == param(:ω,'n',())
         @test param(:ω,'n',(:i)) == param(:ω,:i)
         @test param(:ω,'n',(:i,:j,2)) == param(:ω,:i,:j,2)
-        @test_throws ErrorException param(:ω,'g')
+        @test_throws ArgumentError param(:ω,'g')
         @test_throws MethodError param(:ω,2,:i,"a")
         @test_throws MethodError a("a")
 
@@ -113,7 +113,7 @@ using Test
         @test sumtuple(a(5)+a(4)) == (a(4),a(5))
         @test sumtuple(a(5)+a(4)) != (a(5),a(4))
 
-        @test_throws ErrorException prodtuples(a(5)+a(4))
+        @test_throws ArgumentError prodtuples(a(5)+a(4))
         # tuples come out ordered!
         if QuantumAlgebra.using_σpm
             tmp1 = scal(3)*param(:ω)*param(:g)*ExpVal(σp(:k))*σp(:k)*adag(5)*a(5)
@@ -179,7 +179,7 @@ using Test
         @test ascorr(*(tmpas...)) == Corr(*(tmpas...)) + *(tmpEVs...) + tmpEVs[1]*Corr(tmpas[2]*tmpas[3]) + tmpEVs[2]*Corr(tmpas[1]*tmpas[3]) + tmpEVs[3]*Corr(tmpas[1]*tmpas[2])
 
         @test a(1) < ascorr(a(1)*a(2)*a(3)*a(4))
-        @test_throws ErrorException ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
+        @test_throws ArgumentError ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
 
         if QuantumAlgebra.using_σpm
             @test ascorr(scal(-1)*param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*ExpVal(σp(1))
