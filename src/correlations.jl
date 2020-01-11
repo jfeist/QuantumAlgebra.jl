@@ -1,4 +1,8 @@
-export ascorr, CorrOrExp
+using Combinatorics
+
+export CorrOrExp, ascorr
+
+CorrOrExp(A::Operator) = length(A)==1 ? ExpVal(A) : Corr(A)
 
 """
     ascorr(expr::Operator)
@@ -42,25 +46,120 @@ function ascorr(A::OpProd)::Operator
     A.A isa scal && A.B isa OpSumAnalytic && return A.A*ascorr(A.B)
     preftup, exptup, optup = prodtuples(A)
     pref = prod((scal(1),preftup...,exptup...))
-    if length(optup)==0
-        pref
-    elseif length(optup)==1
-        pref*ExpVal(optup[1])
-    elseif length(optup)==2
-        A,B = optup
-        pref*(Corr(A*B) + ExpVal(A)*ExpVal(B))
-    elseif length(optup)==3
-        A,B,C = optup
-        pref*(Corr(A*B*C) + ExpVal(A)*Corr(B*C) + ExpVal(B)*Corr(A*C) + ExpVal(C)*Corr(A*B) + ExpVal(A)*ExpVal(B)*ExpVal(C))
-    elseif length(optup)==4
-        A,B,C,D = optup
-        pref*(Corr(A*B*C*D) + ExpVal(A)*ExpVal(B)*ExpVal(C)*ExpVal(D)
-            + ExpVal(A)*Corr(B*C*D) + ExpVal(B)*Corr(A*C*D) + ExpVal(C)*Corr(A*B*D) + ExpVal(D)*Corr(A*B*C)
-            + ExpVal(A)*ExpVal(B)*Corr(C*D) + Corr(A*B)*ExpVal(C)*ExpVal(D) + Corr(A*B)*Corr(C*D)
-            + ExpVal(A)*ExpVal(C)*Corr(B*D) + Corr(A*C)*ExpVal(B)*ExpVal(D) + Corr(A*C)*Corr(B*D)
-            + ExpVal(A)*ExpVal(D)*Corr(B*C) + Corr(A*D)*ExpVal(B)*ExpVal(C) + Corr(A*D)*Corr(B*C))
-    else
-        throw(ArgumentError("ERROR: Only correlations up to fourth order are implemented for now"))
+    pref*prodcorr(optup...)
+end
+
+"""
+    CorrExpTup_isless(a,b)
+
+isless for Tuples of integers that represent ExpVals and Corrs of sorted Operators (with n representing An such that n<m == An<Am).
+(n,) ⧋ ExpVal(An)
+(n,m,...) ⧋ Corr(An*Am*...)
+Defined in such a way that the same order is obtained as with `Operator` objects
+"""
+CorrExpTup_isless(a::Tuple{Int},b::Tuple{Int}) = a[1] < b[1]
+CorrExpTup_isless(a::Tuple{Int},b::NTuple{N,Int}) where {N} = true  # ExpVal < Corr
+CorrExpTup_isless(a::NTuple{N,Int},b::Tuple{Int}) where {N} = false # Corr > ExpVal
+CorrExpTup_isless(a::NTuple{N,Int},b::NTuple{M,Int}) where {N,M} = N==M ? a<b : N<M
+
+"""
+    CorrExpPerm_isless(a,b)
+
+isless for Tuples of Tuples representing products of Corr and ExpVal (see above) of a permutation of operators.
+E.g., ((1,3),(2,)) represents <A1 A3>_C <A2>.
+It is assumed that the total number of operators in a and b is equal, i.e., that `sum(length.(a)) == sum(length.(b))`."""
+function CorrExpPerm_isless(a::Tuple,b::Tuple)
+    for (ca,cb) in zip(a,b)
+        ca == cb || return CorrExpTup_isless(ca,cb)
+    end
+    # if we reach here, they are equal
+    return false
+end
+
+const _PRODCORR_INDS_CACHE = Dict{Int,Vector{Any}}()
+
+"""
+    prodcorr_inds(N::Int)
+
+for N operators, create an array of tuples of tuples that represents the terms in a sum of products
+of expectation values and correlators. Each tuple corresponds to a sum term, see
+[`CorrExpTup_isless`](@ref) and [`CorrExpPerm_isless`](@ref) for details of the format.
+The returned array and terms are sorted such that if the N operators are sorted, the represented
+expression is also sorted with the conventions of the QuantumAlgebra package.
+This allows to directly construct the nested OpSums and OpProds without having to go through simplification.
+"""
+function prodcorr_inds(N::Int)
+    N == 1 && return Any[(1,)]
+    # get return value for N from cache if present, otherwise calculate and cache it
+    get!(_PRODCORR_INDS_CACHE,N) do
+        terms = Any[Tuple(tuple.(1:N))]
+        for n = 2:N-1
+            append!(terms,ncomb_inds(n,1:N))
+        end
+        [(tuple(1:N...),),sort!(terms,lt=CorrExpPerm_isless)...]
     end
 end
-CorrOrExp(A::Operator) = length(A)==1 ? ExpVal(A) : Corr(A)
+
+function ncomb_inds(n,inds,used_combs=Set())
+    terms = []
+    for c in combinations(inds,n)
+        C = Tuple(c)
+        C in used_combs && continue
+        push!(used_combs,C)
+        notCinds = setdiff(inds,c)
+        S = tuple.(notCinds)
+        push!(terms,Tuple(sort!([C,S...],lt=CorrExpTup_isless)))
+        if n<length(inds)
+            # pass a copy of used_combs here so getting, e.g., <jk>*C here does not prevent a term <jk> <a><b> later
+            for CC in ncomb_inds(n,notCinds,copy(used_combs))
+                push!(terms,Tuple(sort!([C,CC...],lt=CorrExpTup_isless)))
+            end
+        end
+    end
+    terms
+end
+
+function _sorted_Op_expr(op::Symbol,args)
+    length(args)==1 && return args[1]
+    ex = :( $op($(args[end-1]),$(args[end])) )
+    for n = length(args)-2:-1:1
+        ex = :( $op($(args[n]),$ex) )
+    end
+    ex
+end
+_CorrOrExp_expr(args) = length(args)==1 ? :( ExpVal($(args[1])) ) : :( Corr($(_sorted_Op_expr(:OpProd,args))) )
+# expression for a single term as a product of ExpVals and Corrs
+_sumterm_expr(C) = _sorted_Op_expr(:OpProd,[_CorrOrExp_expr(Symbol.((:A,),collect(c))) for c in C])
+# final expression of the sum of terms
+_prodcorr_expr(N) = _sorted_Op_expr(:OpSum,_sumterm_expr.(prodcorr_inds(N)))
+
+function _sortedOpChain(op,As::AbstractVector{<:Operator})
+    n = length(As) - 1
+    n == 0 && return As[1]
+    @inbounds begin
+        res = op(As[n],As[n+1])
+        while n>1
+            n -= 1
+            res = op(As[n],res)
+        end
+    end
+    res
+end
+# get `As[1]+As[2]+...+As[end]` for already sorted and distinct As (i.e., without sorting or combining)
+_sortedOpSum(As::AbstractVector{<:Operator}) = _sortedOpChain(OpSum,As)
+# get `As[1]*As[2]*...*As[end]` for already sorted As (i.e., without performing permutations and evaluating commutators etc)
+_sortedOpProd(As::AbstractVector{<:Operator}) = _sortedOpChain(OpProd,As)
+
+_CorrOrExp_inds(As,i) = ExpVal(As[i])
+_CorrOrExp_inds(As,is...) = Corr(_sortedOpProd(As[collect(is)]))
+_sumterm(As,C) = _sortedOpProd([_CorrOrExp_inds(As,c...) for c in C])
+
+prodcorr() = scal(1)
+# for up to order 6, evaluate prodcorr definitions with the generated code directly
+# for larger N, the expressions get so long that compilation times become too long (5s for N=7)
+for N=1:6
+    args = [ :( $(Symbol(:A,i))::BaseOperator ) for i=1:N]
+    # since ExpVal, Corr, OpProd, etc are not specialized on types anyway, do not specialize prodcorr
+    @eval prodcorr($(args...)) = (@nospecialize; $(_prodcorr_expr(N)))
+end
+prodcorr(As::Vararg{BaseOperator,N}) where N = (@nospecialize; Abroadc = (collect(As),); _sortedOpSum(_sumterm.(Abroadc,prodcorr_inds(N))));

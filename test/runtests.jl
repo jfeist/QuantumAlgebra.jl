@@ -179,7 +179,7 @@ using Test
         @test ascorr(*(tmpas...)) == Corr(*(tmpas...)) + *(tmpEVs...) + tmpEVs[1]*Corr(tmpas[2]*tmpas[3]) + tmpEVs[2]*Corr(tmpas[1]*tmpas[3]) + tmpEVs[3]*Corr(tmpas[1]*tmpas[2])
 
         @test a(1) < ascorr(a(1)*a(2)*a(3)*a(4))
-        @test_throws ArgumentError ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
+        @test a(1) < ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
 
         if QuantumAlgebra.using_σpm()
             @test ascorr(scal(-1)*param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*ExpVal(σp(1))
