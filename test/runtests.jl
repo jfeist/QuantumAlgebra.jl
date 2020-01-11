@@ -6,7 +6,7 @@ using Test
     for with_σpm in (false,true)
         QuantumAlgebra.use_σpm(with_σpm)
 
-        @test QuantumAlgebra.using_σpm == with_σpm
+        @test QuantumAlgebra.using_σpm() == with_σpm
 
         @test QuantumAlgebra.SpatialIndex(QuantumAlgebra.x) == QuantumAlgebra.x
 
@@ -115,7 +115,7 @@ using Test
 
         @test_throws ArgumentError prodtuples(a(5)+a(4))
         # tuples come out ordered!
-        if QuantumAlgebra.using_σpm
+        if QuantumAlgebra.using_σpm()
             tmp1 = scal(3)*param(:ω)*param(:g)*ExpVal(σp(:k))*σp(:k)*adag(5)*a(5)
             tmp2 = ( (scal(3),param(:g),param(:ω)), (ExpVal(σp(:k)),), (adag(5),a(5),σp(:k)) )
             @test prodtuples(tmp1) == tmp2
@@ -181,7 +181,7 @@ using Test
         @test a(1) < ascorr(a(1)*a(2)*a(3)*a(4))
         @test_throws ArgumentError ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
 
-        if QuantumAlgebra.using_σpm
+        if QuantumAlgebra.using_σpm()
             @test ascorr(scal(-1)*param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*ExpVal(σp(1))
             @test ascorr(OpSumAnalytic(:i,σp(:i)*σm(:n))) == OpSumAnalytic(:i,Corr(σp(:i)*σm(:n))) + OpSumAnalytic(:i,ExpVal(σp(:i))*ExpVal(σm(:n)))
         else
@@ -217,7 +217,7 @@ using Test
         @test Avac(σp(1)*σm(1)) == scal(0)
         @test Avac(σp(1)) == σp(1)
         @test vacA(σm(1)) == σm(1)
-        if QuantumAlgebra.using_σpm
+        if QuantumAlgebra.using_σpm()
             @test Avac(σm(1)) == scal(0)
             @test vacA(σp(1)) == scal(0)
         else
@@ -246,7 +246,7 @@ using Test
         @test latex(tmp) == tmplatex
         @test ascorr(tmp) == tmp
         @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
-        if QuantumAlgebra.using_σpm
+        if QuantumAlgebra.using_σpm()
             @test latex(σp()) == "\\sigma^+"
         else
             @test latex(σz()) == "\\sigma_{z}"
@@ -256,7 +256,7 @@ using Test
         tmp1 = param(:ω,:y)*a(1)*adag(1)*a(3)*adag(4)*ExpVal(a(5))*Corr(adag(5)*a(9))
         tmp2 = param(:ω,:a)*ExpVal(a(:b))*Corr(adag(:c)*a(:d))*adag(:e)*a(:f) + param(:ω,:g)*ExpVal(a(:h))*Corr(adag(:i)*a(:j))*adag(:k)*adag(:l)*a(:m)*a(:n)
         @test distribute_indices!(copy(inds),tmp1) == tmp2
-        if QuantumAlgebra.using_σpm
+        if QuantumAlgebra.using_σpm()
             tmp1 = a(1,:n)*adag()*σm(1,:n)*σp()
             @test distribute_indices!(copy(inds),tmp1) == adag()*a(:a,:b)*σp()*σm(:c,:d)
         else
@@ -272,7 +272,7 @@ using Test
         @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
 
         @test string(OpSumAnalytic(:i,a(:i)) * adag(:n)) == "1 + ∑_i a†(n) a(i)"
-        if QuantumAlgebra.using_σpm
+        if QuantumAlgebra.using_σpm()
             @test string(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5))) == "⟨a†(5i)⟩ ⟨a(5)⟩ σ+(3) + ⟨a†(5i) a(5)⟩c σ+(3) + ⟨a†(5i)⟩ ⟨a(5)⟩ a†(5) a(5) σ+(3) + ⟨a†(5i) a(5)⟩c a†(5) a(5) σ+(3)"
         else
             @test string(a(5)*adag(5)*σz(3)*ascorr(adag(5,:i)*a(5))) == "⟨a†(5i)⟩ ⟨a(5)⟩ σz(3) + ⟨a†(5i) a(5)⟩c σz(3) + ⟨a†(5i)⟩ ⟨a(5)⟩ a†(5) a(5) σz(3) + ⟨a†(5i) a(5)⟩c a†(5) a(5) σz(3)"

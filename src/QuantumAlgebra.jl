@@ -96,20 +96,21 @@ zero(::Operator) = scal(0)
 one(::Type{<:Operator}) = scal(1)
 one(::Operator) = scal(1)
 
-using_σpm = false
-use_σpm(t::Bool=true) = eval(:( using_σpm = $t; nothing ))
+const _using_σpm = Ref(false)
+use_σpm(t::Bool=true) = (_using_σpm[] = t; nothing)
 use_σxyz() = use_σpm(false)
+using_σpm() = _using_σpm[]
 
 "`σp(n)`: construct ``σ^+_n = \\frac12 σ_{x,n} + \\frac{i}{2} σ_{y,n}``"
-σp(n...) = using_σpm ? σplus(n...) : scal(1//2)*σ(x,n...) + scal(1im//2)*σ(y,n...)
+σp(n...) = using_σpm() ? σplus(n...) : scal(1//2)*σ(x,n...) + scal(1im//2)*σ(y,n...)
 "`σm(n)`: construct ``σ^-_n = \\frac12 σ_{x,n} - \\frac{i}{2} σ_{y,n}``"
-σm(n...) = using_σpm ? σminus(n...) : scal(1//2)*σ(x,n...) - scal(1im//2)*σ(y,n...)
+σm(n...) = using_σpm() ? σminus(n...) : scal(1//2)*σ(x,n...) - scal(1im//2)*σ(y,n...)
 "`σx(n)`: construct ``σ_{x,n}``"
-σx(n...) = using_σpm ? σminus(n...) + σplus(n...) : σ(x,n...)
+σx(n...) = using_σpm() ? σminus(n...) + σplus(n...) : σ(x,n...)
 "`σy(n)`: construct ``σ_{y,n}``"
-σy(n...) = using_σpm ? scal(1im) * (σminus(n...) - σplus(n...)) : σ(y,n...)
+σy(n...) = using_σpm() ? scal(1im) * (σminus(n...) - σplus(n...)) : σ(y,n...)
 "`σz(n)`: construct ``σ_{z,n}``"
-σz(n...) = using_σpm ? scal(2)*σplus(n...)*σminus(n...) - scal(1) : σ(z,n...)
+σz(n...) = using_σpm() ? scal(2)*σplus(n...)*σminus(n...) - scal(1) : σ(z,n...)
 
 struct OpProd <: Operator; A::Operator; B::Operator; end
 struct OpSum  <: Operator; A::Operator; B::Operator; end
