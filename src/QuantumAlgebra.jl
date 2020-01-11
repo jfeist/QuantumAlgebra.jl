@@ -266,6 +266,7 @@ function isless(A::OpProd,B::OpProd)
     # then by operators
     c1 = iterlesseq(opiter(A,true),opiter(B,true))
     c1 == 0 || return c1 < 0
+    # then by expectation values
     c2 = iterlesseq(expiter(A,true),expiter(B,true))
     c2 == 0 || return c2 < 0
     # then by reversed prefactors (to order params, not scalars)
