@@ -176,7 +176,8 @@ using Test
         tmpas = a.(1:3)
         @test *(tmpas...) == a(1)*a(2)*a(3)
         tmpEVs = ExpVal.(tmpas)
-        @test ascorr(*(tmpas...)) == Corr(*(tmpas...)) + *(tmpEVs...) + tmpEVs[1]*Corr(tmpas[2]*tmpas[3]) + tmpEVs[2]*Corr(tmpas[1]*tmpas[3]) + tmpEVs[3]*Corr(tmpas[1]*tmpas[2])
+        # multiply with scal(1) to trigger reordering (with prefactor, the ordering is different than without for now)
+        @test ascorr(*(8,Pr"g",tmpas...)) * scal(1) == 8*Pr"g" * (Corr(*(tmpas...)) + *(tmpEVs...) + tmpEVs[1]*Corr(tmpas[2]*tmpas[3]) + tmpEVs[2]*Corr(tmpas[1]*tmpas[3]) + tmpEVs[3]*Corr(tmpas[1]*tmpas[2]))
 
         @test a(1) < ascorr(a(1)*a(2)*a(3)*a(4))
         @test a(1) < ascorr(a(1)*a(2)*a(3)*a(4)*a(5))
