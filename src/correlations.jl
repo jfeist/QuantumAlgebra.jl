@@ -26,9 +26,7 @@ See also: [`ExpVal`](@ref), [`Corr`](@ref)"""
 function ascorr end
 
 ascorr(A::Scalar) = A
-for op in (adag,a,f,fdag,σ,σminus,σplus)
-    @eval ascorr(A::$op) = ExpVal(A)
-end
+ascorr(A::BaseOperator) = ExpVal(A)
 ascorr(A::OpSum) = ascorr(A.A) + ascorr(A.B)
 ascorr(A::OpSumAnalytic) = begin
     # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index

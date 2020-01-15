@@ -2,9 +2,8 @@ replace_index(A::scal,iold,inew) = A
 replace_index(A::param,iold,inew) = param(A.name,A.state,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::ExpVal,iold,inew) = ExpVal(replace_index(A.A,iold,inew))
 replace_index(A::Corr,iold,inew) = Corr(replace_index(A.A,iold,inew))
-for op in (δ,a,adag,f,fdag,σminus,σplus)
-    @eval replace_index(A::$op,iold,inew) = $op((n-> n==iold ? inew : n).(A.inds))
-end
+replace_index(A::Union{δ,σminus,σplus},iold,inew) = basetype(A)((n-> n==iold ? inew : n).(A.inds))
+replace_index(A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate},iold,inew) = basetype(A)(A.name,(n-> n==iold ? inew : n).(A.inds)...)
 replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::OpProd,iold,inew) = replace_index(A.A,iold,inew)*replace_index(A.B,iold,inew)
 replace_index(A::OpSum,iold,inew) = replace_index(A.A,iold,inew) + replace_index(A.B,iold,inew)
@@ -36,16 +35,15 @@ distribute_indices!(inds,A::scal) = A
 distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
 distribute_indices!(inds,A::Corr) = Corr(distribute_indices!(inds,A.A))
-for op in (a,adag,f,fdag,σminus,σplus)
-    @eval distribute_indices!(inds,A::$op) = $op((popfirst!(inds) for _ in A.inds)...)
-end
+distribute_indices!(inds,A::Union{σminus,σplus}) = basetype(A)((popfirst!(inds) for _ in A.inds)...)
+distribute_indices!(inds,A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate}) = basetype(A)(A.name,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::σ) = σ(A.a,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::OpProd) = distribute_indices!(inds,A.A)*distribute_indices!(inds,A.B)
 distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_indices!(inds,A.B)
 # on purpose do not define this for OpSumAnalytic or δ
 
 indextuple(A::scal)::OpIndices = ()
-indextuple(A::Union{param,δ,a,adag,f,fdag,σ,σminus,σplus})::OpIndices = A.inds
+indextuple(A::Union{param,δ,BosonDestroy,BosonCreate,FermionDestroy,FermionCreate,σ,σminus,σplus})::OpIndices = A.inds
 indextuple(A::Union{OpProd,OpSum})::OpIndices = (indextuple(A.A)...,indextuple(A.B)...)
 indextuple(A::Union{ExpVal,Corr})::OpIndices = indextuple(A.A)
 indextuple(A::OpSumAnalytic)::OpIndices = (A.ind,indextuple(A.A)...)

@@ -22,7 +22,7 @@ export comm
 sortsentinel(x::Integer) = (1,x)
 sortsentinel(x::Symbol) = (2,x)
 
-OpOrder = (scal,δ,param,ExpVal,Corr,adag,a,fdag,f,σplus,σminus,σ,OpProd,OpSumAnalytic,OpSum)
+OpOrder = (scal,δ,param,ExpVal,Corr,BosonCreate,BosonDestroy,FermionCreate,FermionDestroy,σplus,σminus,σ,OpProd,OpSumAnalytic,OpSum)
 for (ii,op1) in enumerate(OpOrder)
     for op2 in OpOrder[ii+1:end]
         @eval isless(::$op1,::$op2) = true
@@ -32,9 +32,11 @@ end
 isless(A::scal,B::scal) = (real(A.v),imag(A.v)) < (real(B.v),imag(B.v))
 
 # do not order parameters by whether they are purely real, or conjugated or not
-isless(A::param,B::param) = (A.name,sortsentinel.(A.inds)) < (B.name,sortsentinel.(B.inds))
+for op in (param,BosonCreate,BosonDestroy,FermionCreate,FermionDestroy)
+    @eval isless(A::$op,B::$op) = (A.name,sortsentinel.(A.inds)) < (B.name,sortsentinel.(B.inds))
+end
 isless(A::σ,B::σ) = (sortsentinel.(A.inds),A.a) < (sortsentinel.(B.inds),B.a)
-for op in (δ,a,adag,f,fdag,σminus,σplus)
+for op in (δ,σminus,σplus)
     @eval isless(A::$op,B::$op) = sortsentinel.(A.inds) < sortsentinel.(B.inds)
 end
 for op in (ExpVal,Corr,OpSumAnalytic)
@@ -77,24 +79,18 @@ function isless(A::OpProd,B::OpProd)
 end
 
 # prefactors do not count for length calculation
-for op in [scal,δ,param]
-    @eval length(::$op) = 0
-end
-for op in [adag,a,fdag,f,σ,σminus,σplus]
-    @eval length(::$op) = 1
-end
-for op in [ExpVal,Corr,OpSumAnalytic]
-    @eval length(A::$op) = length(A.A)
-end
+length(::Union{scal,δ,param}) = 0
+length(::BaseOperator) = 1
+length(A::Union{ExpVal,Corr,OpSumAnalytic}) = length(A.A)
 length(A::OpProd) = length(A.A) + length(A.B)
 
 adjoint(A::scal) = scal(conj(A.v))
 adjoint(A::param) = A.state=='r' ? A : param(A.name,A.state=='n' ? 'c' : 'n',A.inds)
 adjoint(A::δ) = A
-adjoint(A::a) = adag(A.inds)
-adjoint(A::adag) = a(A.inds)
-adjoint(A::f) = fdag(A.inds)
-adjoint(A::fdag) = f(A.inds)
+adjoint(A::BosonDestroy) = BosonCreate(A.name,A.inds)
+adjoint(A::BosonCreate) = BosonDestroy(A.name,A.inds)
+adjoint(A::FermionDestroy) = FermionCreate(A.name,A.inds)
+adjoint(A::FermionCreate) = FermionDestroy(A.name,A.inds)
 adjoint(A::σminus) = σplus(A.inds)
 adjoint(A::σplus) = σminus(A.inds)
 adjoint(A::σ) = A
@@ -145,7 +141,7 @@ function *(A::Operator,B::Operator)::Operator
     elseif A isa σ && B isa σ && A.inds == B.inds
         # σa σb = δab + i ϵabc σc = δab + 1/2 [σa,σb]
         A.a==B.a ? scal(1) : scal(1//2)*comm(A,B)
-    elseif A isa Union{σplus,σminus,f,fdag} && typeof(B)==typeof(A) && A.inds == B.inds
+    elseif A isa Union{σplus,σminus,FermionDestroy,FermionCreate} && A == B
         scal(0)
     elseif A>B
         B*A + comm(A,B)
@@ -217,7 +213,7 @@ comm(A::Operator,B::OpSum)  = comm(A,B.A) + comm(A,B.B)
 comm(A::OpProd,  B::OpSum)  = comm(A,B.A) + comm(A,B.B)
 comm(A::OpSumAnalytic, B::OpSum) = comm(A,B.A) + comm(A,B.B)
 # different types of operators commute
-commgroups = (Union{a,adag},Union{f,fdag},Union{σ,σminus,σplus})
+commgroups = (Union{BosonDestroy,BosonCreate},Union{FermionDestroy,FermionCreate},Union{σ,σminus,σplus})
 for (ii,op) in enumerate(commgroups)
     for op2 in commgroups[ii+1:end]
         @eval comm(A::$op,B::$op2) = scal(0)
@@ -225,24 +221,25 @@ for (ii,op) in enumerate(commgroups)
     end
 end
 # these operators commute with themselves
-for op in (a,adag,σplus,σminus)
+for op in (BosonDestroy,BosonCreate,σplus,σminus)
     @eval comm(A::$op,B::$op) = scal(0)
 end
-comm(A::a,B::adag) = δ(A.inds,B.inds)
-comm(A::adag,B::a) = -comm(B,A)
+comm(A::BosonDestroy,B::BosonCreate) = A.name == B.name ? δ(A.inds,B.inds) : scal(0)
+comm(A::BosonCreate,B::BosonDestroy) = -comm(B,A)
 comm(A::σplus,B::σminus) = δ(A.inds,B.inds)*σz(A.inds)
 comm(A::σminus,B::σplus) = -comm(B,A)
 
 # {f_i, fdag_j} = f_i fdag_j + fdag_j f_i = δ_{i,j}
 # f_i fdag_j = δ_{i,j} - fdag_j f_i
 # [f_i, fdag_j] = f_i fdag_j - fdag_j f_i = δ_{i,j} - fdag_j f_i - fdag_j f_i = δ_{i,j} - 2 fdag_j f_i
-comm(A::f,B::fdag) = δ(A.inds,B.inds) - 2*B*A
-comm(A::fdag,B::f) = -comm(B,A)
+# if they correspond to operators on different systems (i.e., with different names), also Fermion operators commute
+comm(A::FermionDestroy,B::FermionCreate) = A.name == B.name ? δ(A.inds,B.inds) - 2*B*A : scal(0)
+comm(A::FermionCreate,B::FermionDestroy) = -comm(B,A)
 # {f_i,f_j} = f_i f_j + f_j f_i = 0
 # we assume that if we need the commutator, it's because of exchanging order
 # [f_i,f_j] = f_i f_j - f_j f_i = -f_j f_i - f_j f_i
-comm(A::f,B::f) = -2*B*A
-comm(A::fdag,B::fdag) = -2*B*A
+comm(A::FermionDestroy,B::FermionDestroy) = A.name == B.name ? -2*B*A : scal(0)
+comm(A::FermionCreate,B::FermionCreate) = A.name == B.name ? -2*B*A : scal(0)
 
 # levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
 # for c=6-a-b, i.e, when a,b,c is a permutation of 1,2,3

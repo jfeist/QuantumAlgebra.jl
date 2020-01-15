@@ -3,10 +3,8 @@ export latex
 
 using Printf
 
-print(io::IO,A::a) = print(io,"a($(A.inds...))")
-print(io::IO,A::adag) = print(io,"a†($(A.inds...))")
-print(io::IO,A::f) = print(io,"f($(A.inds...))")
-print(io::IO,A::fdag) = print(io,"f†($(A.inds...))")
+print(io::IO,A::Union{BosonDestroy,FermionDestroy}) = print(io,"$(A.name)($(A.inds...))")
+print(io::IO,A::Union{BosonCreate,FermionCreate}) = print(io,"$(A.name)†($(A.inds...))")
 print(io::IO,A::σ) = print(io,"σ$(A.a)($(A.inds...))")
 print(io::IO,A::σminus) = print(io,"σ-($(A.inds...))")
 print(io::IO,A::σplus) = print(io,"σ+($(A.inds...))")
@@ -27,10 +25,8 @@ Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$"
 latex(A::σ) = string("\\sigma_{$(A.a)",length(A.inds)>0 ? ",$(A.inds...)}" : "}")
 latexindstr(inds::OpIndices) = length(inds)==0 ? "" : "_{$(inds...)}"
 latex(A::δ) = "δ" * latexindstr(A.inds)
-latex(A::a) = "a" * latexindstr(A.inds)
-latex(A::adag) = "a$(latexindstr(A.inds))^\\dagger"
-latex(A::f) = "f" * latexindstr(A.inds)
-latex(A::fdag) = "f$(latexindstr(A.inds))^\\dagger"
+latex(A::Union{BosonDestroy,FermionDestroy}) = "$(A.name)$(latexindstr(A.inds))"
+latex(A::Union{BosonCreate,FermionCreate}) = "$(A.name)$(latexindstr(A.inds))^\\dagger"
 latex(A::σminus) = "\\sigma^-" * latexindstr(A.inds)
 latex(A::σplus) = "\\sigma^+" * latexindstr(A.inds)
 latex(A::scal) = imag(A.v)==0 ? mystring(real(A.v)) : (real(A.v)==0 ? mystring(imag(A.v))*"i" : mystring(A.v))

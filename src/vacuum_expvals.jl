@@ -1,11 +1,7 @@
 export Avac, vacA, vacExpVal
 
-Avac(A::a) = scal(0)
-Avac(A::adag) = A
-Avac(A::f) = scal(0)
-Avac(A::fdag) = A
-Avac(A::σminus) = scal(0)
-Avac(A::σplus) = A
+Avac(A::Union{BosonDestroy,FermionDestroy,σminus}) = scal(0)
+Avac(A::Union{BosonCreate,FermionCreate,σplus}) = A
 # vacuum is an eigenstate of σz
 Avac(A::σ) = (A.a == z) ? scal(-1) : A
 Avac(A::OpSum) = Avac(A.A) + Avac(A.B)
@@ -23,12 +19,9 @@ Avac(A::OpProd) = begin
 end
 Avac(A::Scalar) = A
 
-vacA(A::a) = A
-vacA(A::adag) = scal(0)
-vacA(A::f) = A
-vacA(A::fdag) = scal(0)
-vacA(A::σminus) = A
-vacA(A::σplus) = scal(0)
+vacA(A::Union{BosonDestroy,FermionDestroy,σminus}) = A
+vacA(A::Union{BosonCreate,FermionCreate,σplus}) = scal(0)
+
 # vacuum is an eigenstate of σz
 vacA(A::σ) = (A.a == z) ? scal(-1) : A
 vacA(A::OpSum) = vacA(A.A) + vacA(A.B)

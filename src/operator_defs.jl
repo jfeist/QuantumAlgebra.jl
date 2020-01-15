@@ -1,4 +1,5 @@
 export scal,param,a,adag,f,fdag,OpSumAnalytic,ExpVal,Corr
+export @boson_ops,@fermion_ops
 export σx,σy,σz,σp,σm
 export @Pr_str, @Pc_str, ∑
 
@@ -52,11 +53,44 @@ function δ(Ainds::OpIndices,Binds::OpIndices)::Operator
 end
 
 abstract type BaseOperator <: Operator; end
+for (op,desc) in (
+    (:BosonDestroy,"bosonic annihilation"),
+    (:BosonCreate,"bosonic creation"),
+    (:FermionDestroy,"fermionic annihilation"),
+    (:FermionCreate,"fermionic creation"))
+    @eval begin
+        "`$($op)(name,inds)`: represent $($desc) operator ``name_{inds}``"
+        struct $op{T<:OpIndices} <: BaseOperator
+            name::Symbol
+            inds::T
+            $op(name::Symbol,inds::OpIndex...) = new{typeof(inds)}(name,inds)
+            $op(name::Symbol,inds::Tuple) = $op(name,inds...)
+        end
+    end
+end
+
+"`@boson_ops name`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
+macro boson_ops(name)
+    quote
+        ann = (args...) -> BosonDestroy($(Meta.quot(name)),args...)
+        cre = (args...) -> BosonCreate($(Meta.quot(name)),args...)
+        ann,cre
+    end
+end
+
+"`@fermion_ops name`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
+macro fermion_ops(name)
+    quote
+        ann = (args...) -> FermionDestroy($(Meta.quot(name)),args...)
+        cre = (args...) -> FermionCreate($(Meta.quot(name)),args...)
+        ann,cre
+    end
+end
+
+a, adag = @boson_ops a
+f, fdag = @fermion_ops f
+
 for (op,desc,sym) in (
-    (:a,   "bosonic annihilation","a"),
-    (:adag,"bosonic creation","a^†"),
-    (:f,   "fermionic annihilation","f"),
-    (:fdag,"fermionic creation","f^†"),
     (:σminus,"TLS annihilation","σ^-"),
     (:σplus,"TLS creation","σ^+"))
     @eval begin
@@ -69,7 +103,8 @@ for (op,desc,sym) in (
     end
 end
 
-"`σ(a,n)`: represent Pauli matrix ``σ_{a,n}`` for two-level system (TLS) ``n``, where ``a ∈ \\{x,y,z\\}`` or ``\\{1,2,3\\}`` is the type of Pauli matrix."
+
+"`σ(a,inds)`: represent Pauli matrix ``σ_{a,inds}`` for two-level system (TLS), where ``a ∈ \\{x,y,z\\}``."
 struct σ{T<:OpIndices} <: BaseOperator
     a::SpatialIndex
     inds::T

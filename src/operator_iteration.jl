@@ -16,7 +16,7 @@ prodtuple(A::OpSum) = throw(ArgumentError("cannot get prodtuple for OpSum!"))
 prodtuple(A::OpProd) = (prodtuple(A.A)...,prodtuple(A.B)...)
 
 # make a tuple from a product, containing only either prefactor types, expectation value types, or operators
-for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(adag,a,f,fdag,σ,σplus,σminus))]
+for (name,types) in [(:pref,(scal,param,δ)),(:exp,(ExpVal,Corr)),(:op,(BosonDestroy,BosonCreate,FermionDestroy,FermionCreate,σ,σplus,σminus))]
     types = Union{types...}
     @eval $(Symbol(name,:iter))(A::Operator,swallow_∑::Bool) = Iterators.filter(x->x isa $types, proditer(A,swallow_∑))
     name = Symbol(name,:tuple)
