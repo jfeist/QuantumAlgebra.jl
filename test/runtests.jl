@@ -243,7 +243,7 @@ using Test
         @test latex(scal(1+2im//5)) == "\\left(1+\\frac{2}{5}i\\right)"
 
         tmp = OpSumAnalytic(:i,ascorr(adag(:n)*a(:i)))
-        tmplatex = "\\sum_{i}\\langle a_{n}^\\dagger a_{i} \\rangle_{c} + \\sum_{i}\\langle a_{n}^\\dagger \\rangle \\langle a_{i} \\rangle"
+        tmplatex = "\\sum_{i}\\langle {a}_{n}^\\dagger {a}_{i} \\rangle_{c} + \\sum_{i}\\langle {a}_{n}^\\dagger \\rangle \\langle {a}_{i} \\rangle"
         @test latex(tmp) == tmplatex
         @test ascorr(tmp) == tmp
         @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
