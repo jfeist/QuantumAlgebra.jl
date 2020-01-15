@@ -25,8 +25,8 @@ Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$"
 latex(A::σ) = string("\\sigma_{$(A.a)",length(A.inds)>0 ? ",$(A.inds...)}" : "}")
 latexindstr(inds::OpIndices) = length(inds)==0 ? "" : "_{$(inds...)}"
 latex(A::δ) = "δ" * latexindstr(A.inds)
-latex(A::Union{BosonDestroy,FermionDestroy}) = "$(A.name)$(latexindstr(A.inds))"
-latex(A::Union{BosonCreate,FermionCreate}) = "$(A.name)$(latexindstr(A.inds))^\\dagger"
+latex(A::Union{BosonDestroy,FermionDestroy}) = "{$(A.name)}$(latexindstr(A.inds))"
+latex(A::Union{BosonCreate,FermionCreate}) = "{$(A.name)}$(latexindstr(A.inds))^\\dagger"
 latex(A::σminus) = "\\sigma^-" * latexindstr(A.inds)
 latex(A::σplus) = "\\sigma^+" * latexindstr(A.inds)
 latex(A::scal) = imag(A.v)==0 ? mystring(real(A.v)) : (real(A.v)==0 ? mystring(imag(A.v))*"i" : mystring(A.v))
