@@ -4,7 +4,7 @@ export comm
 
 ==(A::scal,B::scal) = A.v == B.v
 ==(A::OpProd,B::OpProd) = A.A == B.A && A.B == B.B
-==(A::OpSum, B::OpSum)  = A.A == B.A && A.B == B.B
+==(A::OpSum, B::OpSum) = A.terms == B.terms
 ==(A::OpSumAnalytic, B::OpSumAnalytic) = A.A == B.A && A.ind == B.ind
 ==(A::ExpVal, B::ExpVal) = A.A == B.A
 ==(A::Corr, B::Corr) = A.A == B.A
@@ -13,7 +13,7 @@ export comm
 ≈(A::Operator,B::Operator) = A == B
 ≈(A::scal,B::scal) = A.v ≈ B.v
 ≈(A::OpProd,B::OpProd) = A.A ≈ B.A && A.B ≈ B.B
-≈(A::OpSum, B::OpSum)  = A.A ≈ B.A && A.B ≈ B.B
+≈(A::OpSum, B::OpSum) = length(A.terms)==length(B.terms) && all(tA ≈ tB && sA ≈ sB for ((tA,sA),(tB,sB)) in zip(A.terms,B.terms))
 ≈(A::OpSumAnalytic, B::OpSumAnalytic) = A.A ≈ B.A && A.ind == B.ind
 ≈(A::ExpVal, B::ExpVal) = A.A ≈ B.A
 ≈(A::Corr, B::Corr) = A.A ≈ B.A
@@ -94,7 +94,7 @@ adjoint(A::FermionCreate) = FermionDestroy(A.name,A.inds)
 adjoint(A::σminus) = σplus(A.inds)
 adjoint(A::σplus) = σminus(A.inds)
 adjoint(A::σ) = A
-adjoint(A::OpSum) = A.A' + A.B'
+adjoint(A::OpSum) = OpSum(t' => s' for (t,s) in A.terms)
 adjoint(A::OpProd) = A.B' * A.A'
 adjoint(A::ExpVal) = ExpVal(A.A')
 adjoint(A::Corr) = Corr(A.A')
@@ -107,12 +107,12 @@ one(::Operator) = scal(1)
 
 *(A::Operator) = A # needed to make prod((A,)) work
 *(A::OpProd,B::Operator) = A.A*(A.B*B)
-*(A::OpSum,B::Operator)      = A.A*B + A.B*B
-*(A::OpSum,B::OpSum)         = A.A*B + A.B*B # resolve ambiguity
-*(A::OpSum,B::OpSumAnalytic) = A.A*B + A.B*B # resolve ambiguity
-*(A::Operator,     B::OpSum) = A*B.A + A*B.B
-*(A::OpProd,       B::OpSum) = A*B.A + A*B.B # resolve ambiguity
-*(A::OpSumAnalytic,B::OpSum) = A*B.A + A*B.B # resolve ambiguity
+*(A::OpSum,B::Operator)      = +((s*t*B for (t,s) in A.terms)...)
+*(A::OpSum,B::OpSum)         = invoke(*,Tuple{OpSum,Operator},A,B)
+*(A::OpSum,B::OpSumAnalytic) = invoke(*,Tuple{OpSum,Operator},A,B)
+*(A::Operator,     B::OpSum) = +((s*A*t for (t,s) in B.terms)...)
+*(A::OpProd,       B::OpSum) = invoke(*,Tuple{Operator,OpSum},A,B)
+*(A::OpSumAnalytic,B::OpSum) = invoke(*,Tuple{Operator,OpSum},A,B)
 
 # allow addition, substraction, and multiplication with a number x by promoting it to scal(x) operator
 *(x::Number,A::Operator) = scal(x)*A
@@ -154,42 +154,37 @@ end
 -(A::Operator) = scal(-1)*A
 -(A::Operator,B::Operator) = A + scal(-1)*B
 
-separate_prefac(A::Operator) = (1,A)
-separate_prefac(A::OpProd) = A.A isa scal ? (A.A.v,A.B) : (1,A)
-function combinable(A::Operator,B::Operator)
-    sA, oA = separate_prefac(A)
-    sB, oB = separate_prefac(B)
-    if oA==oB
-        true, scal(sA+sB)*oA
-    else
-        false, scal(0)
-    end
-end
+"""`separate_prefac(A)`: write operator A as (oA,sA) where sA is a scalar prefactor"""
+separate_prefac(A::OpProd) = A.A isa scal ? (A.B,A.A) : (A,scal(1))
+separate_prefac(A::scal) = (scal(1),A)
+separate_prefac(A::Operator) = (A,scal(1))
 
-+(A::OpSum,B::Operator) = A.A + (A.B + B)
+function +(A::OpSum,B::OpSum)
+    for (oB,sB) in B.terms
+        _add_sum_term!(A,oB,sB)
+    end
+    _clean_sum(A)
+end
+function +(A::OpSum,B::Operator)
+    B == scal(0) && return A
+    oB, sB = separate_prefac(B)
+    _clean_sum(_add_sum_term!(A,oB,sB))
+end
++(A::Operator,B::OpSum) = B + A
+
 function +(A::Operator,B::Operator)::Operator
     A isa scal && A.v == 0 && return B
     A isa scal && B isa scal && return scal(A.v+B.v)
-    A isa scal && B isa OpSum && B.A isa scal && return scal(A.v+B.A.v) + B.B
-
     # ignore scalars in ordering
-    sA, oA = separate_prefac(A)
-    if B isa OpSum
-        sB, oB = separate_prefac(B.A)
-        oA>oB && return B.A + (A + B.B)
+    oA, sA = separate_prefac(A)
+    oB, sB = separate_prefac(B)
+    if oA==oB
+        sAB = sA + sB
+        sAB == scal(0) && return sAB
+        OpProd(sAB,oA) # no ordering changes etc here, can use OpProd directly
     else
-        sB, oB = separate_prefac(B)
-        oA>oB && return B + A
+        OpSum((oA=>sA,oB=>sB))
     end
-
-    flag, S = combinable(A,B)
-    flag && return S
-
-    if B isa OpSum
-        flag, S = combinable(A,B.A)
-        flag && return S + B.B
-    end
-    return OpSum(A,B)
 end
 
 comm(A::Scalar,B::Operator) = scal(0)
@@ -206,12 +201,13 @@ comm(A::OpProd,B::OpSumAnalytic) = comm(A.A,B)*A.B + A.A*comm(A.B,B)
 comm(A::OpProd,B::OpProd)   = comm(A.A,B)*A.B + A.A*comm(A.B,B)
 comm(A::Operator,B::OpProd) = comm(A,B.A)*B.B + B.A*comm(A,B.B)
 comm(A::OpSumAnalytic, B::OpProd) = comm(A,B.A)*B.B + B.A*comm(A,B.B)
-comm(A::OpSum,B::Operator)  = comm(A.A,B) + comm(A.B,B)
-comm(A::OpSum,B::OpSum)     = comm(A.A,B) + comm(A.B,B)
-comm(A::OpSum,B::OpProd)    = comm(A.A,B) + comm(A.B,B)
-comm(A::Operator,B::OpSum)  = comm(A,B.A) + comm(A,B.B)
-comm(A::OpProd,  B::OpSum)  = comm(A,B.A) + comm(A,B.B)
-comm(A::OpSumAnalytic, B::OpSum) = comm(A,B.A) + comm(A,B.B)
+comm(A::OpSum,B::Operator)      = _map_opsum_ops(t->comm(t,B),A)
+comm(A::OpSum,B::OpProd)        = _map_opsum_ops(t->comm(t,B),A)
+comm(A::OpSum,B::OpSumAnalytic) = _map_opsum_ops(t->comm(t,B),A)
+comm(A::Operator,     B::OpSum) = _map_opsum_ops(t->comm(A,t),B)
+comm(A::OpProd,       B::OpSum) = _map_opsum_ops(t->comm(A,t),B)
+comm(A::OpSumAnalytic,B::OpSum) = _map_opsum_ops(t->comm(A,t),B)
+comm(A::OpSum,B::OpSum) = +(((sA*sB)*comm(oA,oB) for (oA,sA) in A.terms for (oB,sB) in B.terms)...)
 # different types of operators commute
 commgroups = (Union{BosonDestroy,BosonCreate},Union{FermionDestroy,FermionCreate},Union{σ,σminus,σplus})
 for (ii,op) in enumerate(commgroups)

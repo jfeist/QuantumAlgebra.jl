@@ -1,3 +1,5 @@
+using DataStructures
+
 export scal,param,a,adag,f,fdag,OpSumAnalytic,ExpVal,Corr
 export @boson_ops,@fermion_ops
 export σx,σy,σz,σp,σm
@@ -113,7 +115,43 @@ struct σ{T<:OpIndices} <: BaseOperator
 end
 
 struct OpProd <: Operator; A::Operator; B::Operator; end
-struct OpSum  <: Operator; A::Operator; B::Operator; end
+
+struct OpSum  <: Operator
+    # sum of Operators is saved as Dictionary of operators with scalar prefactors
+    terms::SortedDict{Operator,scal}
+    OpSum(A::Operator) = new(SortedDict(A => scal(1)))
+    OpSum(A::scal) = new(SortedDict(scal(1) => A))
+    OpSum(A::OpProd) = new(SortedDict(A.A isa scal ? A.B => A.A : A => scal(1)))
+    OpSum(A::OpSum) = A
+    function OpSum(itr)
+        A = new(SortedDict{Operator,scal}())
+        for (t,s) in itr
+            _add_sum_term!(A,t,s)
+        end
+        _clean_sum(A)
+    end
+end
+function _add_sum_term!(A::OpSum,oB::Operator,sB::scal)
+    sB == scal(0) && return A
+    sB += get(A.terms,oB,scal(0))
+    if sB == scal(0)
+        delete!(A.terms,oB)
+    else
+        A.terms[oB] = sB
+    end
+    A
+end
+# all scalar terms go into prefactor of operator scal(1)
+_add_sum_term!(A::OpSum,oB::scal,sB::scal) = invoke(_add_sum_term!,Tuple{OpSum,Operator,scal},A,scal(1),oB*sB)
+
+function _clean_sum(A)
+    length(A.terms) == 0 && return scal(0)
+    length(A.terms) == 1 && ((t,s) = first(A.terms); return s*t)
+    A
+end
+
+# map function where scalar prefactors are unchanged
+_map_opsum_ops(f,A::OpSum) = OpSum(f(t)=>s for (t,s) in A.terms)
 
 "`OpSumAnalytic(i::Symbol,A::Operator)` or `∑(i,A)`: represent ``\\sum_{i} A``, with all possible values of ``i`` assumed to be included"
 struct OpSumAnalytic <: Operator
@@ -137,7 +175,7 @@ struct OpSumAnalytic <: Operator
             return new(ind,A)
         end
     end
-    OpSumAnalytic(ind::Symbol,A::OpSum) = OpSumAnalytic(ind,A.A) + OpSumAnalytic(ind,A.B)
+    OpSumAnalytic(ind::Symbol,A::OpSum) = _map_opsum_ops(t->OpSumAnalytic(ind,t), A)
 end
 
 const ∑ = OpSumAnalytic
@@ -146,7 +184,7 @@ const ∑ = OpSumAnalytic
 struct ExpVal <: Scalar
     A::Operator
     ExpVal(A::Scalar) = A
-    ExpVal(A::OpSum) = ExpVal(A.A) + ExpVal(A.B)
+    ExpVal(A::OpSum) = _map_opsum_ops(ExpVal, A)
     ExpVal(A::OpProd) = A.A isa Scalar ? A.A*ExpVal(A.B) : new(A)
     ExpVal(A::OpSumAnalytic) = OpSumAnalytic(A.ind,ExpVal(A.A))
     ExpVal(A::Operator) = new(A)
@@ -164,7 +202,7 @@ See also: [`ascorr`](@ref)
 struct Corr <: Scalar
     A::Operator
     Corr(A::Scalar) = A
-    Corr(A::OpSum) = Corr(A.A) + Corr(A.B)
+    Corr(A::OpSum) = _map_opsum_ops(Corr, A)
     Corr(A::OpProd) = A.A isa Scalar ? A.A*Corr(A.B) : new(A)
     Corr(A::Operator) = new(A)
 end

@@ -4,7 +4,7 @@ Avac(A::Union{BosonDestroy,FermionDestroy,σminus}) = scal(0)
 Avac(A::Union{BosonCreate,FermionCreate,σplus}) = A
 # vacuum is an eigenstate of σz
 Avac(A::σ) = (A.a == z) ? scal(-1) : A
-Avac(A::OpSum) = Avac(A.A) + Avac(A.B)
+Avac(A::OpSum) = _map_opsum_ops(Avac,A)
 Avac(A::OpSumAnalytic) = OpSumAnalytic(A.ind,Avac(A.A))
 Avac(A::OpProd) = begin
     Bv = Avac(A.B)
@@ -24,7 +24,7 @@ vacA(A::Union{BosonCreate,FermionCreate,σplus}) = scal(0)
 
 # vacuum is an eigenstate of σz
 vacA(A::σ) = (A.a == z) ? scal(-1) : A
-vacA(A::OpSum) = vacA(A.A) + vacA(A.B)
+vacA(A::OpSum) = _map_opsum_ops(vacA,A)
 vacA(A::OpSumAnalytic) = OpSumAnalytic(A.ind,vacA(A.A))
 vacA(A::OpProd) = begin
     if A.A isa Scalar
@@ -62,7 +62,7 @@ _vacExpVal(A::Scalar) = A
 # the terms that survive until here have at most a single σ of any particle
 # so it does not matter if we are inside a product
 _vacExpVal(A::σ) = A.a == z ? scal(-1) : scal(0)
-_vacExpVal(A::OpSum) = _vacExpVal(A.A) + _vacExpVal(A.B)
+_vacExpVal(A::OpSum) = _map_opsum_ops(_vacExpVal,A)
 _vacExpVal(A::OpSumAnalytic) = OpSumAnalytic(A.ind,_vacExpVal(A.A))
 # we know that the operators here commute (all a and a† have disappeared, and at most a single σ remaining for each particle)
 _vacExpVal(A::OpProd) = _vacExpVal(A.A) * _vacExpVal(A.B)

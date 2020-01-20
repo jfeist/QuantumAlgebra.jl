@@ -27,7 +27,7 @@ function ascorr end
 
 ascorr(A::Scalar) = A
 ascorr(A::BaseOperator) = ExpVal(A)
-ascorr(A::OpSum) = ascorr(A.A) + ascorr(A.B)
+ascorr(A::OpSum) = _map_opsum_ops(ascorr,A)
 ascorr(A::OpSumAnalytic) = begin
     # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
     # is assumed to be distinct from the indices of the expressions
@@ -129,7 +129,7 @@ function _sortedOpChain(op,As::AbstractVector{<:Operator})
     res
 end
 # get `As[1]+As[2]+...+As[end]` for already sorted and distinct As (i.e., without sorting or combining)
-_sortedOpSum(As::AbstractVector{<:Operator}) = _sortedOpChain(OpSum,As)
+# _sortedOpSum(As::AbstractVector{<:Operator}) = _sortedOpChain(OpSum,As)
 # get `As[1]*As[2]*...*As[end]` for already sorted As (i.e., without performing permutations and evaluating commutators etc)
 _sortedOpProd(As::AbstractVector{<:Operator}) = _sortedOpChain(OpProd,As)
 _sortedOpProd(A::Operator) = A
@@ -140,4 +140,4 @@ _CorrOrExp_inds(As,is::Tuple{Vararg{Int}}) = Corr(_sortedOpProd(As[collect(is)])
 _sumterm(prefs,As,C) = _sortedOpProd(prefs...,_CorrOrExp_inds.((As,),C)...)
 
 prodcorr(prefs::Tuple,::Tuple{}) = _sortedOpProd(prefs...)
-prodcorr(prefs::Tuple,@nospecialize(As::NTuple{N,BaseOperator})) where N = _sortedOpSum(_sumterm.((prefs,),(collect(As),),prodcorr_inds(N)))
+prodcorr(prefs::Tuple,@nospecialize(As::NTuple{N,BaseOperator})) where N = OpSum(separate_prefac(_sumterm(prefs,collect(As),C)) for C in prodcorr_inds(N))

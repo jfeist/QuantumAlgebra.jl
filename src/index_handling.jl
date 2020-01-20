@@ -6,7 +6,7 @@ replace_index(A::Union{δ,σminus,σplus},iold,inew) = basetype(A)((n-> n==iold 
 replace_index(A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate},iold,inew) = basetype(A)(A.name,(n-> n==iold ? inew : n).(A.inds)...)
 replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::OpProd,iold,inew) = replace_index(A.A,iold,inew)*replace_index(A.B,iold,inew)
-replace_index(A::OpSum,iold,inew) = replace_index(A.A,iold,inew) + replace_index(A.B,iold,inew)
+replace_index(A::OpSum,iold,inew) = _map_opsum_ops(t->replace_index(t,iold,inew),A)
 replace_index(A::OpSumAnalytic,iold,inew) = begin
     (A.ind==iold || A.ind==inew) && throw(ArgumentError("replace_index in OpSumAnalytic cannot have iold ($iold) or inew ($inew) be the same as the sum index ($(A.ind))!"))
     tmp = replace_index(A.A,iold,inew)
@@ -39,17 +39,23 @@ distribute_indices!(inds,A::Union{σminus,σplus}) = basetype(A)((popfirst!(inds
 distribute_indices!(inds,A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate}) = basetype(A)(A.name,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::σ) = σ(A.a,(popfirst!(inds) for _ in A.inds)...)
 distribute_indices!(inds,A::OpProd) = distribute_indices!(inds,A.A)*distribute_indices!(inds,A.B)
-distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_indices!(inds,A.B)
+distribute_indices!(inds,A::OpSum) = _map_opsum_ops(t->distribute_indices!(inds,t),A)
 # on purpose do not define this for OpSumAnalytic or δ
+
+@inline tuplejoin(x) = x
+@inline tuplejoin(x, y) = (x..., y...)
+@inline tuplejoin(x, y, z...) = (x..., tuplejoin(y, z...)...)
 
 indextuple(A::scal)::OpIndices = ()
 indextuple(A::Union{param,δ,BosonDestroy,BosonCreate,FermionDestroy,FermionCreate,σ,σminus,σplus})::OpIndices = A.inds
-indextuple(A::Union{OpProd,OpSum})::OpIndices = (indextuple(A.A)...,indextuple(A.B)...)
+indextuple(A::OpProd)::OpIndices = (indextuple(A.A)...,indextuple(A.B)...)
+indextuple(A::OpSum)::OpIndices = tuplejoin((indextuple(t) for t in A.terms)...)
 indextuple(A::Union{ExpVal,Corr})::OpIndices = indextuple(A.A)
 indextuple(A::OpSumAnalytic)::OpIndices = (A.ind,indextuple(A.A)...)
 indexset(A) = Set{OpIndex}(indextuple(A))
 sumindextuple(A::Operator)::OpIndices = ()
-sumindextuple(A::Union{OpProd,OpSum})::OpIndices = (sumindextuple(A.A)...,sumindextuple(A.B)...)
+sumindextuple(A::OpProd)::OpIndices = (sumindextuple(A.A)...,sumindextuple(A.B)...)
+sumindextuple(A::OpSum)::OpIndices = tuplejoin((sumindextuple(t) for t in A.terms)...)
 sumindextuple(A::Union{ExpVal,Corr})::OpIndices = sumindextuple(A.A)
 sumindextuple(A::OpSumAnalytic)::OpIndices = (A.ind,sumindextuple(A.A)...)
 sumindexset(A) = Set{OpIndex}(sumindextuple(A))
