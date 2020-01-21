@@ -27,7 +27,7 @@ function ascorr end
 
 ascorr(A::Scalar) = A
 ascorr(A::BaseOperator) = ExpVal(A)
-ascorr(A::OpSum) = _map_opsum_ops(ascorr,A)
+ascorr(A::OpSum) = sum(s*ascorr(t) for (t,s) in A.terms)
 ascorr(A::OpSumAnalytic) = begin
     # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
     # is assumed to be distinct from the indices of the expressions
