@@ -72,8 +72,8 @@ end
 "`@boson_ops name`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
 macro boson_ops(name)
     quote
-        ann = (args...) -> BosonDestroy($(Meta.quot(name)),args...)
-        cre = (args...) -> BosonCreate($(Meta.quot(name)),args...)
+        ann(args...) = BosonDestroy($(Meta.quot(name)),args...)
+        cre(args...) = BosonCreate($(Meta.quot(name)),args...)
         ann,cre
     end
 end
@@ -81,8 +81,8 @@ end
 "`@fermion_ops name`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
 macro fermion_ops(name)
     quote
-        ann = (args...) -> FermionDestroy($(Meta.quot(name)),args...)
-        cre = (args...) -> FermionCreate($(Meta.quot(name)),args...)
+        ann(args...) = FermionDestroy($(Meta.quot(name)),args...)
+        cre(args...) = FermionCreate($(Meta.quot(name)),args...)
         ann,cre
     end
 end

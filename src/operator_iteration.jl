@@ -38,3 +38,9 @@ iterate(iter::OpSumIter, state::Nothing) = state
 
 sumtuple(A::Operator) = (A,)
 sumtuple(A::OpSum) = (sumtuple(A.A)...,sumtuple(A.B)...)
+
+isscalar(A::Scalar) = true
+isscalar(A::BaseOperator) = false
+isscalar(A::OpProd) = all(map(isscalar,proditer(A)))
+isscalar(A::OpSum) = all(map(isscalar,sumiter(A)))
+isscalar(A::OpSumAnalytic) = isscalar(A.A)

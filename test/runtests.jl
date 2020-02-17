@@ -3,6 +3,15 @@ using QuantumAlgebra: δ, prodtuples, prodtuple, sumtuple, distribute_indices!
 using Test
 
 @testset "QuantumAlgebra.jl" begin
+
+    b, bdag = @boson_ops b
+    @test b(:i)*bdag(:j) == bdag(:j)*b(:i) + δ(:i,:j)
+    @test b(:i)*adag(:j) == adag(:j)*b(:i)
+
+    c, cdag = @fermion_ops c
+    @test c(:i)*cdag(:j) + cdag(:j)*c(:i) == δ(:i,:j)
+    @test c(:i)*fdag(:j) == fdag(:j)*c(:i)
+
     for with_σpm in (false,true)
         QuantumAlgebra.use_σpm(with_σpm)
 
