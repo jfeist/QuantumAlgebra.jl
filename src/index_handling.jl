@@ -1,10 +1,18 @@
+function repinds(iold,inew,inds::OpIndices)
+    newinds = OpIndices(undef,length(inds))
+    @inbounds for ii = 1:length(inds)
+        newinds[ii] = inds[ii]==iold ? inew : inds[ii]
+    end
+    newinds
+end
 replace_index(A::scal,iold,inew) = A
-replace_index(A::param,iold,inew) = param(A.name,A.state,(n-> n==iold ? inew : n).(A.inds))
+replace_index(A::param,iold,inew) = param(A.name,A.state,repinds(iold,inew,A.inds))
 replace_index(A::ExpVal,iold,inew) = ExpVal(replace_index(A.A,iold,inew))
 replace_index(A::Corr,iold,inew) = Corr(replace_index(A.A,iold,inew))
-replace_index(A::Union{δ,σminus,σplus},iold,inew) = basetype(A)((n-> n==iold ? inew : n).(A.inds))
-replace_index(A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate},iold,inew) = basetype(A)(A.name,(n-> n==iold ? inew : n).(A.inds)...)
-replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
+replace_index(A::δ,iold,inew) = δ((n -> n==iold ? inew : n).(A.inds)...)
+replace_index(A::Union{σminus,σplus},iold,inew) = basetype(A)(repinds(iold,inew,A.inds))
+replace_index(A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate},iold,inew) = basetype(A)(A.name,repinds(iold,inew,A.inds))
+replace_index(A::σ,iold,inew) = σ(A.a,repinds(iold,inew,A.inds))
 replace_index(A::OpProd,iold,inew) = replace_index(A.A,iold,inew)*replace_index(A.B,iold,inew)
 replace_index(A::OpSum,iold,inew) = replace_index(A.A,iold,inew) + replace_index(A.B,iold,inew)
 replace_index(A::OpSumAnalytic,iold,inew) = begin
@@ -24,7 +32,7 @@ replace_index(A::Operator,reps) = begin
 end
 
 function exchange_inds(A::Operator,i1,i2)
-    ss = gensym()
+    ss = make_index(gensym())
     A = replace_index(A,i1,ss)
     A = replace_index(A,i2,i1)
     A = replace_index(A,ss,i2)
@@ -32,30 +40,32 @@ function exchange_inds(A::Operator,i1,i2)
 end
 
 distribute_indices!(inds,A::scal) = A
-distribute_indices!(inds,A::param) = param(A.name,A.state,(popfirst!(inds) for _ in A.inds)...)
+distribute_indices!(inds,A::param) = param(A.name,A.state,make_indices([popfirst!(inds) for _ in A.inds]))
 distribute_indices!(inds,A::ExpVal) = ExpVal(distribute_indices!(inds,A.A))
 distribute_indices!(inds,A::Corr) = Corr(distribute_indices!(inds,A.A))
-distribute_indices!(inds,A::Union{σminus,σplus}) = basetype(A)((popfirst!(inds) for _ in A.inds)...)
-distribute_indices!(inds,A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate}) = basetype(A)(A.name,(popfirst!(inds) for _ in A.inds)...)
-distribute_indices!(inds,A::σ) = σ(A.a,(popfirst!(inds) for _ in A.inds)...)
+distribute_indices!(inds,A::Union{σminus,σplus}) = basetype(A)(make_indices([popfirst!(inds) for _ in A.inds]))
+distribute_indices!(inds,A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate}) = basetype(A)(A.name,make_indices([popfirst!(inds) for _ in A.inds]))
+distribute_indices!(inds,A::σ) = σ(A.a,make_indices([popfirst!(inds) for _ in A.inds]))
 distribute_indices!(inds,A::OpProd) = distribute_indices!(inds,A.A)*distribute_indices!(inds,A.B)
 distribute_indices!(inds,A::OpSum) = distribute_indices!(inds,A.A) + distribute_indices!(inds,A.B)
 # on purpose do not define this for OpSumAnalytic or δ
 
-indextuple(A::scal)::OpIndices = ()
-indextuple(A::Union{param,δ,BosonDestroy,BosonCreate,FermionDestroy,FermionCreate,σ,σminus,σplus})::OpIndices = A.inds
-indextuple(A::Union{OpProd,OpSum})::OpIndices = (indextuple(A.A)...,indextuple(A.B)...)
-indextuple(A::Union{ExpVal,Corr})::OpIndices = indextuple(A.A)
-indextuple(A::OpSumAnalytic)::OpIndices = (A.ind,indextuple(A.A)...)
-indexset(A) = Set{OpIndex}(indextuple(A))
-sumindextuple(A::Operator)::OpIndices = ()
-sumindextuple(A::Union{OpProd,OpSum})::OpIndices = (sumindextuple(A.A)...,sumindextuple(A.B)...)
-sumindextuple(A::Union{ExpVal,Corr})::OpIndices = sumindextuple(A.A)
-sumindextuple(A::OpSumAnalytic)::OpIndices = (A.ind,sumindextuple(A.A)...)
-sumindexset(A) = Set{OpIndex}(sumindextuple(A))
+indices(A::scal)::OpIndices = OpIndices()
+indices(A::Union{param,BosonDestroy,BosonCreate,FermionDestroy,FermionCreate,σ,σminus,σplus})::OpIndices = A.inds
+indices(A::δ)::OpIndices = OpIndex[A.inds...]
+indices(A::Union{OpProd,OpSum})::OpIndices = vcat(indices(A.A),indices(A.B))
+indices(A::Union{ExpVal,Corr})::OpIndices = indices(A.A)
+indices(A::OpSumAnalytic)::OpIndices = vcat(A.ind,indices(A.A))
+indexset(A) = Set{OpIndex}(indices(A))
+sumindices(A::Operator)::OpIndices = OpIndices()
+sumindices(A::OpProd)::OpIndices = vcat(sumindices(A.A),sumindices(A.B))
+sumindices(A::OpSum)::OpIndices = reduce(vcat,sumindices.(A.terms))
+sumindices(A::Union{ExpVal,Corr})::OpIndices = sumindices(A.A)
+sumindices(A::OpSumAnalytic)::OpIndices = vcat(A.ind,sumindices(A.A))
+sumindexset(A) = Set{OpIndex}(sumindices(A))
 
 "`extindices(A::Operator)` return externally visible indices of an expression"
-extindices(A::Operator) = [ind for ind in indextuple(A) if !in(ind,sumindextuple(A))]
+extindices(A::Operator) = setdiff(indices(A),sumindices(A))
 
 "`symmetric_index_nums(A::Operator)` return sequence of numbers of exchange-symmetric indices"
 function symmetric_index_nums(A::Operator)
@@ -73,15 +83,16 @@ end
 
 "sum indices have no semantic meaning, so rename them in case they happen to occur in the other expression"
 function ensure_compatible_sumind(S::OpSumAnalytic,A::Operator)
-    Ainds = indextuple(A)
+    Ainds = indices(A)
     if S.ind in Ainds
-        oldinds = Set{OpIndex}((Ainds...,indextuple(S)...))
+        oldinds = Set{OpIndex}(vcat(Ainds,indices(S)))
         m = match(r"(.*)_([0-9]+)",string(S.ind))
         indstem, ii = (m === nothing) ? (string(S.ind), 1) : (m.captures[1], 1+parse(Int,m.captures[2]))
         while (newind = Symbol(indstem,:_,ii)) in oldinds
             ii += 1
         end
-        OpSumAnalytic(newind,replace_index(S.A,S.ind,newind))
+        newind_ = SymbolicIndex(newind)
+        OpSumAnalytic(newind_,replace_index(S.A,S.ind,newind_))
     else
         S
     end

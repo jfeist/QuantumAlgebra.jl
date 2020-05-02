@@ -2,13 +2,12 @@
 import Base: ==, ≈, *, +, -, isless, length, adjoint, print, zero, one
 export comm
 
+# Operator equality should be checked by equality, not identity ===
+@generated function ==(a::T, b::T) where T<:Operator
+    mapreduce(F -> :((a.$F == b.$F)), (A, B) -> :($A && $B), fieldnames(a))
+end
+# for scal, we want to compare equal regardless of the type parameter
 ==(A::scal,B::scal) = A.v == B.v
-==(A::OpProd,B::OpProd) = A.A == B.A && A.B == B.B
-==(A::OpSum, B::OpSum)  = A.A == B.A && A.B == B.B
-==(A::OpSumAnalytic, B::OpSumAnalytic) = A.A == B.A && A.ind == B.ind
-==(A::ExpVal, B::ExpVal) = A.A == B.A
-==(A::Corr, B::Corr) = A.A == B.A
-==(A::param, B::param) = (A.name,A.inds,A.state) == (B.name,B.inds,B.state)
 
 ≈(A::Operator,B::Operator) = A == B
 ≈(A::scal,B::scal) = A.v ≈ B.v
@@ -20,7 +19,7 @@ export comm
 
 # we sometimes want to sort integers and symbols together, with integers coming first
 sortsentinel(x::Integer) = (1,x)
-sortsentinel(x::Symbol) = (2,x)
+sortsentinel(x::SymbolicIndex) = (2,x)
 
 OpOrder = (scal,δ,param,ExpVal,Corr,BosonCreate,BosonDestroy,FermionCreate,FermionDestroy,σplus,σminus,σ,OpProd,OpSumAnalytic,OpSum)
 for (ii,op1) in enumerate(OpOrder)
@@ -134,7 +133,7 @@ function *(A::Operator,B::Operator)::Operator
     elseif B isa OpProd && (A*B.A) != OpProd(A,B.A)
         # if A*B.A is not ordered as we want, evaluate A*B.A first
         (A*B.A)*B.B
-    elseif A isa δ && A.inds[2] in indextuple(B)
+    elseif A isa δ && A.inds[2] in indices(B)
         # if second index of δ_iA,iB shows up on RHS, replace by iA
         # (relies on indices in δ being sorted)
         A * replace_index(B,A.inds[2],A.inds[1])

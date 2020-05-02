@@ -1,5 +1,5 @@
 using QuantumAlgebra
-using QuantumAlgebra: δ, prodtuples, prodtuple, sumtuple, distribute_indices!
+using QuantumAlgebra: δ, prodtuples, prodtuple, sumtuple, distribute_indices!, make_indices
 using Test
 
 @testset "QuantumAlgebra.jl" begin
@@ -277,8 +277,8 @@ using Test
         @test_throws MethodError distribute_indices!(copy(inds),OpSumAnalytic(:i,a(:i)))
         @test_throws ArgumentError distribute_indices!([:a,:b],tmp1)
 
-        @test QuantumAlgebra.exchange_inds(adag(:j)*a(:k),:k,:j) == adag(:k)*a(:j)
-        @test QuantumAlgebra.extindices(∑(:i,adag(:i)*a(:k))) == [:k]
+        @test QuantumAlgebra.exchange_inds(adag(:j)*a(:k),make_indices(:k,:j)...) == adag(:k)*a(:j)
+        @test QuantumAlgebra.extindices(∑(:i,adag(:i)*a(:k))) == make_indices(:k)
         @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
 
         @test string(OpSumAnalytic(:i,a(:i)) * adag(:n)) == "1 + ∑_i a†(n) a(i)"

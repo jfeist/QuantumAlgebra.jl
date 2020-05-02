@@ -7,40 +7,68 @@ export @Pr_str, @Pc_str, ∑
 @enum SpatialIndex x=1 y=2 z=3
 SpatialIndex(a::SpatialIndex) = a
 
-const OpIndex = Union{Int,Symbol}
-const OpIndices = NTuple{N,OpIndex} where N
+const _SymbolicIndexTable = Dict{Symbol,Int}()
+const _SymbolicIndexTableInv = Dict{Int,Symbol}()
+_SymbolicIndexMax = 0
+
+struct SymbolicIndex
+    i::Int
+    function SymbolicIndex(ind::Symbol)
+        i = get!(_SymbolicIndexTable,ind) do
+            global _SymbolicIndexMax += 1
+            _SymbolicIndexTableInv[_SymbolicIndexMax] = ind
+            _SymbolicIndexMax
+        end
+        new(i)
+    end
+end
+sym(ind::SymbolicIndex) = _SymbolicIndexTableInv[ind.i]
+Base.show(io::IO, ind::SymbolicIndex) = print(io, sym(ind))
+
+const OpIndex = Union{Int,SymbolicIndex}
+const OpIndices = Vector{OpIndex}
+const OpIndexIn = Union{OpIndex,Symbol,OpIndices}
+
+make_index(ii::OpIndex)::OpIndex = ii
+make_index(ii::Symbol)::OpIndex = SymbolicIndex(ii)
+make_indices(inds::OpIndices) = inds
+make_indices(inds::Vector)::OpIndices = make_index.(inds)
+make_indices(inds...)::OpIndices = collect(make_index.(inds))
+Base.isless(i1::SymbolicIndex,i2::SymbolicIndex) = isless(sym(i1), sym(i2))
 
 abstract type Operator end
 abstract type Scalar <: Operator; end
 "Represent a scalar value (i.e., a number)"
 struct scal{T<:Number} <: Scalar; v::T; end
 "`param(g,(:i,:j),'n')`: represent a scalar named parameter ``g_{i,j}``. state can be purely real (`'r'`), not conjugated (`'n'`), or conjugated (`'c'`)"
-struct param{T<:OpIndices} <: Scalar
+struct param <: Scalar
     name::Symbol
     state::Char
-    inds::T
-    function param(name,state::Char,inds::OpIndex...)
+    inds::OpIndices
+    function param(name,state::Char,inds::OpIndexIn...)
         state in ('n','r','c') || throw(ArgumentError("state has to be one of n,r,c"))
-        new{typeof(inds)}(name,state,inds)
+        new(name,state,make_indices(inds...))
     end
-    param(name,inds::OpIndex...) = param(name,'n',inds...)
+    param(name,inds::OpIndexIn...) = param(name,'n',inds...)
     param(name,state::Char,inds::Tuple) = param(name,state,inds...)
     param(name,inds::Tuple) = param(name,'n',inds...)
 end
 struct δ <: Scalar
     inds::Tuple{OpIndex,OpIndex}
     δ(inds) = δ(inds...)
-    function δ(iA::OpIndex,iB::OpIndex)
+    function δ(iA::OpIndexIn,iB::OpIndexIn)
+        _iA = make_index(iA)
+        _iB = make_index(iB)
         # sort indices
-        if iA == iB
+        if _iA == _iB
             scal(1)
-        elseif iA isa Integer && iB isa Integer
+        elseif _iA isa Integer && _iB isa Integer
             # e.g., δ_1,3 = 0 (integers are not symbolic!)
             scal(0)
-        elseif sortsentinel(iB) < sortsentinel(iA)
-            new((iB,iA))
+        elseif sortsentinel(_iB) < sortsentinel(_iA)
+            new((_iB,_iA))
         else
-            new((iA,iB))
+            new((_iA,_iB))
         end
     end
 end
@@ -60,10 +88,10 @@ for (op,desc) in (
     (:FermionCreate,"fermionic creation"))
     @eval begin
         "`$($op)(name,inds)`: represent $($desc) operator ``name_{inds}``"
-        struct $op{T<:OpIndices} <: BaseOperator
+        struct $op <: BaseOperator
             name::Symbol
-            inds::T
-            $op(name::Symbol,inds::OpIndex...) = new{typeof(inds)}(name,inds)
+            inds::OpIndices
+            $op(name::Symbol,inds::OpIndexIn...) = new(name,make_indices(inds...))
             $op(name::Symbol,inds::Tuple) = $op(name,inds...)
         end
     end
@@ -95,9 +123,9 @@ for (op,desc,sym) in (
     (:σplus,"TLS creation","σ^+"))
     @eval begin
         "`$($op)(inds)`: represent $($desc) operator ``$($sym)_{inds}``"
-        struct $op{T<:OpIndices} <: BaseOperator
-            inds::T
-            $op(inds::OpIndex...) = new{typeof(inds)}(inds)
+        struct $op <: BaseOperator
+            inds::OpIndices
+            $op(inds::OpIndexIn...) = new(make_indices(inds...))
             $op(inds::Tuple) = $op(inds...)
         end
     end
@@ -105,10 +133,10 @@ end
 
 
 "`σ(a,inds)`: represent Pauli matrix ``σ_{a,inds}`` for two-level system (TLS), where ``a ∈ \\{x,y,z\\}``."
-struct σ{T<:OpIndices} <: BaseOperator
+struct σ <: BaseOperator
     a::SpatialIndex
-    inds::T
-    σ(a,inds::OpIndex...) = new{typeof(inds)}(SpatialIndex(a),inds)
+    inds::OpIndices
+    σ(a,inds::OpIndexIn...) = new(SpatialIndex(a),make_indices(inds...))
     σ(a,inds::Tuple) = σ(a,inds...)
 end
 
@@ -117,10 +145,10 @@ struct OpSum  <: Operator; A::Operator; B::Operator; end
 
 "`OpSumAnalytic(i::Symbol,A::Operator)` or `∑(i,A)`: represent ``\\sum_{i} A``, with all possible values of ``i`` assumed to be included"
 struct OpSumAnalytic <: Operator
-    ind::Symbol
+    ind::SymbolicIndex
     A::Operator
-    OpSumAnalytic(ind::Symbol,A::scal) = A.v == 0 ? A : new(ind,A)
-    OpSumAnalytic(ind::Symbol,A::Operator) = begin
+    OpSumAnalytic(ind::SymbolicIndex,A::scal) = A.v == 0 ? A : new(ind,A)
+    OpSumAnalytic(ind::SymbolicIndex,A::Operator) = begin
         if A isa OpProd && A.A isa scal
             A.A*OpSumAnalytic(ind,A.B)
         elseif A isa OpSumAnalytic && A.ind < ind
@@ -137,7 +165,8 @@ struct OpSumAnalytic <: Operator
             return new(ind,A)
         end
     end
-    OpSumAnalytic(ind::Symbol,A::OpSum) = OpSumAnalytic(ind,A.A) + OpSumAnalytic(ind,A.B)
+    OpSumAnalytic(ind::SymbolicIndex,A::OpSum) = OpSumAnalytic(ind,A.A) + OpSumAnalytic(ind,A.B)
+    OpSumAnalytic(ind::Symbol,A) = OpSumAnalytic(make_index(ind),A)
 end
 
 const ∑ = OpSumAnalytic
