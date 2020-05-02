@@ -141,6 +141,8 @@ function _add_sum_term!(A::OpSum,oB::Operator,sB::scal)
     end
     A
 end
+_add_sum_term!(A::OpSum,oB::OpSum,sB::scal) = error("ERROR: Cannot add a sum term that is a sum itself! A: $A, B: $oB, sB: $sB.")
+
 # all scalar terms go into prefactor of operator scal(1)
 _add_sum_term!(A::OpSum,oB::scal,sB::scal) = invoke(_add_sum_term!,Tuple{OpSum,Operator,scal},A,scal(1),oB*sB)
 
