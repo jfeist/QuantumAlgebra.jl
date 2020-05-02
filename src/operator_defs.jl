@@ -177,7 +177,7 @@ struct OpSumAnalytic <: Operator
             return new(ind,A)
         end
     end
-    OpSumAnalytic(ind::Symbol,A::OpSum) = _map_opsum_ops(t->OpSumAnalytic(ind,t), A)
+    OpSumAnalytic(ind::Symbol,A::OpSum) = sum(s*OpSumAnalytic(ind,t) for (t,s) in A.terms)
 end
 
 const ∑ = OpSumAnalytic

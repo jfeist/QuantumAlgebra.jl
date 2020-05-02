@@ -6,7 +6,7 @@ replace_index(A::Union{δ,σminus,σplus},iold,inew) = basetype(A)((n-> n==iold 
 replace_index(A::Union{BosonDestroy,BosonCreate,FermionDestroy,FermionCreate},iold,inew) = basetype(A)(A.name,(n-> n==iold ? inew : n).(A.inds)...)
 replace_index(A::σ,iold,inew) = σ(A.a,(n-> n==iold ? inew : n).(A.inds))
 replace_index(A::OpProd,iold,inew) = replace_index(A.A,iold,inew)*replace_index(A.B,iold,inew)
-replace_index(A::OpSum,iold,inew) = _map_opsum_ops(t->replace_index(t,iold,inew),A)
+replace_index(A::OpSum,iold,inew) = sum(s*replace_index(t,iold,inew) for (t,s) in A.terms)
 replace_index(A::OpSumAnalytic,iold,inew) = begin
     (A.ind==iold || A.ind==inew) && throw(ArgumentError("replace_index in OpSumAnalytic cannot have iold ($iold) or inew ($inew) be the same as the sum index ($(A.ind))!"))
     tmp = replace_index(A.A,iold,inew)
