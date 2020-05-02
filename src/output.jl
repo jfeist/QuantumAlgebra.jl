@@ -23,7 +23,7 @@ mystring(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" my
 
 Base.show(io::IO, ::MIME"text/latex", A::Operator) = print(io,"\$",latex(A),"\$")
 latex(A::σ) = string("\\sigma_{$(A.a)",length(A.inds)>0 ? ",$(A.inds...)}" : "}")
-latexindstr(inds::OpIndices) = length(inds)==0 ? "" : "_{$(inds...)}"
+latexindstr(inds) = length(inds)==0 ? "" : "_{$(inds...)}"
 latex(A::δ) = "δ" * latexindstr(A.inds)
 latex(A::Union{BosonDestroy,FermionDestroy}) = "{$(A.name)}$(latexindstr(A.inds))"
 latex(A::Union{BosonCreate,FermionCreate}) = "{$(A.name)}$(latexindstr(A.inds))^\\dagger"

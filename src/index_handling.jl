@@ -88,11 +88,10 @@ function ensure_compatible_sumind(S::OpSumAnalytic,A::Operator)
         oldinds = Set{OpIndex}(vcat(Ainds,indices(S)))
         m = match(r"(.*)_([0-9]+)",string(S.ind))
         indstem, ii = (m === nothing) ? (string(S.ind), 1) : (m.captures[1], 1+parse(Int,m.captures[2]))
-        while (newind = Symbol(indstem,:_,ii)) in oldinds
+        while (newind = SymbolicIndex(Symbol(indstem,:_,ii))) in oldinds
             ii += 1
         end
-        newind_ = SymbolicIndex(newind)
-        OpSumAnalytic(newind_,replace_index(S.A,S.ind,newind_))
+        OpSumAnalytic(newind,replace_index(S.A,S.ind,newind))
     else
         S
     end
