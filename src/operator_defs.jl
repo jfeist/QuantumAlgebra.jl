@@ -55,19 +55,11 @@ struct δ <: Scalar
     inds::Tuple{OpIndex,OpIndex}
     δ(inds) = δ(inds...)
     δ(iA,iB) = δ(make_index(iA),make_index(iB))
-    function δ(iA::OpIndex,iB::OpIndex)
-        if iA == iB
-            scal(1)
-        elseif iA isa Integer && iB isa Integer
-            # e.g., δ_1,3 = 0 (integers are not symbolic!)
-            scal(0)
-        # sort indices
-        elseif sortsentinel(iB) < sortsentinel(iA)
-            new((iB,iA))
-        else
-            new((iA,iB))
-        end
-    end
+    δ(iA::Int,iB::Int) = iA==iB ? scal(1) : scal(0)
+    δ(iA::SymbolicIndex,iB::SymbolicIndex) = iA==iB ? scal(1) : new(iB<iA ? (iB,iA) : (iA,iB))
+    # sort Integers before SymbolicIndex (IMPTE: ensure consistency with sortsentinel)
+    δ(iA::Int,iB::SymbolicIndex) = new((iA,iB))
+    δ(iA::SymbolicIndex,iB::Int) = new((iB,iA))
 end
 function δ(Ainds::OpIndices,Binds::OpIndices)::Operator
     if length(Ainds) == length(Binds)
