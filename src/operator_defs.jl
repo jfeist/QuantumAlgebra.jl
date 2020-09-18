@@ -27,7 +27,6 @@ Base.show(io::IO, ind::SymbolicIndex) = print(io, sym(ind))
 
 const OpIndex = Union{Int,SymbolicIndex}
 const OpIndices = Vector{OpIndex}
-const OpIndexIn = Union{OpIndex,Symbol,OpIndices}
 
 make_index(ii::OpIndex)::OpIndex = ii
 make_index(ii::Symbol)::OpIndex = SymbolicIndex(ii)
@@ -45,30 +44,28 @@ struct param <: Scalar
     name::Symbol
     state::Char
     inds::OpIndices
-    function param(name,state::Char,inds::OpIndexIn...)
+    function param(name,state::Char,inds...)
         state in ('n','r','c') || throw(ArgumentError("state has to be one of n,r,c"))
         new(name,state,make_indices(inds...))
     end
-    param(name,inds::OpIndexIn...) = param(name,'n',inds...)
     param(name,state::Char,inds::Tuple) = param(name,state,inds...)
-    param(name,inds::Tuple) = param(name,'n',inds...)
+    param(name,inds...) = param(name,'n',inds...)
 end
 struct δ <: Scalar
     inds::Tuple{OpIndex,OpIndex}
     δ(inds) = δ(inds...)
-    function δ(iA::OpIndexIn,iB::OpIndexIn)
-        _iA = make_index(iA)
-        _iB = make_index(iB)
-        # sort indices
-        if _iA == _iB
+    δ(iA,iB) = δ(make_index(iA),make_index(iB))
+    function δ(iA::OpIndex,iB::OpIndex)
+        if iA == iB
             scal(1)
-        elseif _iA isa Integer && _iB isa Integer
+        elseif iA isa Integer && iB isa Integer
             # e.g., δ_1,3 = 0 (integers are not symbolic!)
             scal(0)
-        elseif sortsentinel(_iB) < sortsentinel(_iA)
-            new((_iB,_iA))
+        # sort indices
+        elseif sortsentinel(iB) < sortsentinel(iA)
+            new((iB,iA))
         else
-            new((_iA,_iB))
+            new((iA,iB))
         end
     end
 end
@@ -91,7 +88,7 @@ for (op,desc) in (
         struct $op <: BaseOperator
             name::Symbol
             inds::OpIndices
-            $op(name::Symbol,inds::OpIndexIn...) = new(name,make_indices(inds...))
+            $op(name::Symbol,inds...) = new(name,make_indices(inds...))
             $op(name::Symbol,inds::Tuple) = $op(name,inds...)
         end
     end
@@ -125,7 +122,7 @@ for (op,desc,sym) in (
         "`$($op)(inds)`: represent $($desc) operator ``$($sym)_{inds}``"
         struct $op <: BaseOperator
             inds::OpIndices
-            $op(inds::OpIndexIn...) = new(make_indices(inds...))
+            $op(inds...) = new(make_indices(inds...))
             $op(inds::Tuple) = $op(inds...)
         end
     end
@@ -136,7 +133,7 @@ end
 struct σ <: BaseOperator
     a::SpatialIndex
     inds::OpIndices
-    σ(a,inds::OpIndexIn...) = new(SpatialIndex(a),make_indices(inds...))
+    σ(a,inds...) = new(SpatialIndex(a),make_indices(inds...))
     σ(a,inds::Tuple) = σ(a,inds...)
 end
 
