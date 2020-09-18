@@ -32,7 +32,7 @@ make_index(ii::OpIndex)::OpIndex = ii
 make_index(ii::Symbol)::OpIndex = SymbolicIndex(ii)
 make_indices(inds::OpIndices) = inds
 make_indices(inds::Vector)::OpIndices = make_index.(inds)
-make_indices(inds...)::OpIndices = collect(make_index.(inds))
+make_indices(inds...)::OpIndices = OpIndex[make_index(i) for i in inds]
 Base.isless(i1::SymbolicIndex,i2::SymbolicIndex) = isless(sym(i1), sym(i2))
 
 abstract type Operator end
