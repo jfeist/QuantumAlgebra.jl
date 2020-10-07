@@ -461,6 +461,8 @@ end
 function *(A::OpSum,B::OpSum)
     OpSum((tA*tB,sA*sB) for ((tA,sA),(tB,sB)) in Iterators.product(A.terms,B.terms))
 end
+*(A::Number,B::OpSum) = OpSum((tB,A*sB) for (tB,sB) in B.terms)
+*(B::OpSum,A::Number) = A*B
 
 function +(A::OpSum,B::OpSum)
     S = deepcopy(A)

@@ -92,35 +92,6 @@ for (op,desc) in (
     end
 end
 
-"`boson_ops(name::Symbol)`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
-function boson_ops(name::Symbol)
-    op_ind = NameIndex(name)
-    ann(args...) = BosonDestroy(op_ind,args...)
-    cre(args...) = BosonCreate(op_ind,args...)
-    ann,cre
-end
-
-"`@boson_ops name`: define functions `\$name` and `\$(name)dag` for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
-macro boson_ops(name)
-    :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = boson_ops($(Meta.quot(name))) )
-end
-
-"`fermion_ops(name::Symbol)`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
-function fermion_ops(name::Symbol)
-    op_ind = NameIndex(name)
-    ann(args...) = FermionDestroy(op_ind,args...)
-    cre(args...) = FermionCreate(op_ind,args...)
-    ann,cre
-end
-
-"`@fermion_ops name`: define functions `\$name` and `\$(name)dag` for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
-macro fermion_ops(name)
-    :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = fermion_ops($(Meta.quot(name))) )
-end
-
-@boson_ops a
-@fermion_ops f
-
 for (op,desc,sym) in (
     (:σminus,"TLS annihilation","σ^-"),
     (:σplus,"TLS creation","σ^+"))
@@ -138,24 +109,6 @@ end
 end
 Base.isempty(A::BaseOpProduct) = isempty(A.v)
 BaseOpProduct() = BaseOpProduct(BaseOperator[])
-
-## functions for constructing Pauli operators depending on whether we use (σ+,σ-) or (σx,σy,σz) as the "basic" operators
-
-const _using_σpm = Ref(false)
-use_σpm(t::Bool=true) = (_using_σpm[] = t; nothing)
-use_σxyz() = use_σpm(false)
-using_σpm() = _using_σpm[]
-
-"`σp(n)`: construct ``σ^+_n = \\frac12 σ_{x,n} + \\frac{i}{2} σ_{y,n}``"
-σp(n...) = using_σpm() ? σplus(n...) : OpSum((OpTerm(σ(x,n...))=>1//2, OpTerm(σ(y,n...))=>1im//2))
-"`σm(n)`: construct ``σ^-_n = \\frac12 σ_{x,n} - \\frac{i}{2} σ_{y,n}``"
-σm(n...) = using_σpm() ? σminus(n...) : OpSum((OpTerm(σ(x,n...))=>1//2, OpTerm(σ(y,n...))=>-1im//2))
-"`σx(n)`: construct ``σ_{x,n}``"
-σx(n...) = using_σpm() ? OpSum((OpTerm(σminus(n...))=>1, OpTerm(σplus(n...))=>1)) : σ(x,n...)
-"`σy(n)`: construct ``σ_{y,n}``"
-σy(n...) = using_σpm() ? OpSum((OpTerm(σminus(n...))=>1im, OpTerm(σplus(n...))=>-1im)) : σ(y,n...)
-"`σz(n)`: construct ``σ_{z,n}``"
-σz(n...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([σplus(n...),σminus(n...)]))=>2, OpTerm()=>-1)) : σ(z,n...)
 
 # a struct representing a delta function with unequal indices
 @concrete struct δ
@@ -190,28 +143,6 @@ end
     state::Char
     inds::OpIndices
 end
-Param(name::Symbol,args...) = Param(NameIndex(name),args...)
-
-## functions for constructing `param`s with string macros,
-# Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
-# Pr"ω_i,j" = param(:ω,'r',:i,:j) (real parameter)
-
-function parse_paramstr(s)
-    s = split(s,"_")
-    par = Symbol(s[1])
-    @assert length(s) <= 2
-    inds = length(s)==1 ? () : Meta.parse.(split(s[2],","))
-    par,inds
-end
-
-macro Pc_str(s)
-    par, inds = parse_paramstr(s)
-    Param(par,'n',make_indices(inds))
-end
-macro Pr_str(s)
-    par, inds = parse_paramstr(s)
-    Param(par,'r',make_indices(inds))
-end
 
 struct OpTerm
     nsuminds::IndexInt # have a sum over n indices, represented by OpIndex with issumindex(ind)==true
@@ -225,27 +156,11 @@ OpTerm() = OpTerm(BaseOpProduct())
 OpTerm(op::BaseOperator) = OpTerm(BaseOpProduct([op]))
 OpTerm(ops::BaseOpProduct) = OpTerm(0,δ[],Param[],ExpVal[],Corr[],ops)
 OpTerm(δs::Vector{δ},ops::BaseOpProduct) = OpTerm(0,δs,Param[],ExpVal[],Corr[],ops)
-
-_switch_bares(A::OpTerm,newbares::BaseOpProduct) = OpTerm(A.nsuminds,A.δs,A.params,A.expvals,A.corrs,newbares)
+OpTerm(p::Param) = OpTerm(0,δ[],Param[p],ExpVal[],Corr[],BaseOpProduct())
 
 Base.isempty(A::OpTerm) = A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs) && isempty(A.bares)
 
-function expval(A::OpTerm)
-    if isempty(A.bares)
-        A
-    else
-        OpTerm(A.nsuminds,A.δs,A.params,[A.expvals; ExpVal(A.bares)],A.corrs,BaseOpProduct())
-    end
-end
-function corr(A::OpTerm)
-    if isempty(A.bares)
-        A
-    else
-        OpTerm(A.nsuminds,A.δs,A.params,A.expvals,[A.corrs; Corr(A.bares)],BaseOpProduct())
-    end
-end
-
-PREFAC_TYPES = Union{Int,Float64,Rational{Int},ComplexF64,Complex{Int},Complex{Rational{Int}}}
+const PREFAC_TYPES = Union{Int,Float64,Rational{Int},ComplexF64,Complex{Int},Complex{Rational{Int}}}
 struct OpSum
     # sum of Operators is saved as Dictionary of operators with scalar prefactors
     terms::Dict{OpTerm,PREFAC_TYPES}
@@ -258,6 +173,8 @@ function OpSum(itr)
     end
     A
 end
+OpSum(A::Union{BaseOperator,Param}) = OpSum(OpTerm(A))
+OpSum(A::OpTerm) = OpSum(((A,1),))
 
 function _add_sum_term!(A::OpSum,oB::OpTerm,sB)
     iszero(sB) && return A
@@ -275,5 +192,108 @@ function _add_sum_term!(A::OpSum,oB::OpTerm,sB,sold)
     A
 end
 _map_opsum_ops(f,A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
+
+
+#################################################################
+## Here the "external" functions that always construct OpSum   ##
+#################################################################
+
+"`boson_ops(name::Symbol)`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
+function boson_ops(name::Symbol)
+    op_ind = NameIndex(name)
+    ann(args...) = OpSum(BosonDestroy(op_ind,args...))
+    cre(args...) = OpSum(BosonCreate(op_ind,args...))
+    ann,cre
+end
+
+"`@boson_ops name`: define functions `\$name` and `\$(name)dag` for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
+macro boson_ops(name)
+    :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = boson_ops($(Meta.quot(name))) )
+end
+
+"`fermion_ops(name::Symbol)`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
+function fermion_ops(name::Symbol)
+    op_ind = NameIndex(name)
+    ann(args...) = OpSum(FermionDestroy(op_ind,args...))
+    cre(args...) = OpSum(FermionCreate(op_ind,args...))
+    ann,cre
+end
+
+"`@fermion_ops name`: define functions `\$name` and `\$(name)dag` for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
+macro fermion_ops(name)
+    :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = fermion_ops($(Meta.quot(name))) )
+end
+
+@boson_ops a
+@fermion_ops f
+
+# functions for constructing Pauli operators depending on whether we use (σ+,σ-) or (σx,σy,σz) as the "basic" operators
+
+const _using_σpm = Ref(false)
+use_σpm(t::Bool=true) = (_using_σpm[] = t; nothing)
+use_σxyz() = use_σpm(false)
+using_σpm() = _using_σpm[]
+
+"`σp(n)`: construct ``σ^+_n = \\frac12 σ_{x,n} + \\frac{i}{2} σ_{y,n}``"
+σp(n...) = using_σpm() ? OpSum(σplus(n...)) : OpSum((OpTerm(σ(x,n...))=>1//2, OpTerm(σ(y,n...))=>1im//2))
+"`σm(n)`: construct ``σ^-_n = \\frac12 σ_{x,n} - \\frac{i}{2} σ_{y,n}``"
+σm(n...) = using_σpm() ? OpSum(σminus(n...)) : OpSum((OpTerm(σ(x,n...))=>1//2, OpTerm(σ(y,n...))=>-1im//2))
+"`σx(n)`: construct ``σ_{x,n}``"
+σx(n...) = using_σpm() ? OpSum((OpTerm(σminus(n...))=>1, OpTerm(σplus(n...))=>1)) : OpSum(σ(x,n...))
+"`σy(n)`: construct ``σ_{y,n}``"
+σy(n...) = using_σpm() ? OpSum((OpTerm(σminus(n...))=>1im, OpTerm(σplus(n...))=>-1im)) : OpSum(σ(y,n...))
+"`σz(n)`: construct ``σ_{z,n}``"
+σz(n...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([σplus(n...),σminus(n...)]))=>2, OpTerm()=>-1)) : OpSum(σ(z,n...))
+
+## functions for constructing `param`s with string macros,
+# Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
+# Pr"ω_i,j" = param(:ω,'r',:i,:j) (real parameter)
+
+param(name::Symbol,args...) = param(NameIndex(name),args...)
+param(name::NameIndex,state::Char,inds...) = OpSum(Param(name,state,make_indices(inds...)))
+
+function parse_paramstr(s)
+    s = split(s,"_")
+    par = Symbol(s[1])
+    @assert length(s) <= 2
+    inds = length(s)==1 ? () : Meta.parse.(split(s[2],","))
+    par,inds
+end
+
+macro Pc_str(s)
+    par, inds = parse_paramstr(s)
+    param(par,'n',inds)
+end
+macro Pr_str(s)
+    par, inds = parse_paramstr(s)
+    param(par,'r',inds)
+end
+
+function expval(A::OpTerm)
+    if isempty(A.bares)
+        A
+    else
+        OpTerm(A.nsuminds,A.δs,A.params,[A.expvals; ExpVal(A.bares)],A.corrs,BaseOpProduct())
+    end
+end
+function corr(A::OpTerm)
+    if isempty(A.bares)
+        A
+    else
+        OpTerm(A.nsuminds,A.δs,A.params,A.expvals,[A.corrs; Corr(A.bares)],BaseOpProduct())
+    end
+end
+
 expval(A::OpSum) = _map_opsum_ops(expval,A)
 corr(A::OpSum) = _map_opsum_ops(corr,A)
+
+function ∑(ind::OpIndex,A::OpTerm)
+    (issumindex(ind) || isintindex(ind)) && error("Index $ind to be summed over needs to be symbolic!")
+    sumind = sumindex(A.nsuminds+one(A.nsuminds))
+    f = replace_inds(Dict(ind=>sumind))
+    g = reorder_suminds()
+    # use the form that also sets nsuminds
+    g(f(A,sumind.num))
+end
+∑(ind::OpIndex,A::OpSum) = _map_opsum_ops(t->∑(ind,t),A)
+∑(ind::Symbol,A) = ∑(OpIndex(ind),A)
