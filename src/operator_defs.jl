@@ -1,8 +1,9 @@
-# export scal,param,a,adag,f,fdag,OpSumAnalytic,ExpVal,Corr
-# export boson_ops, fermion_ops
-# export @boson_ops,@fermion_ops
-# export σx,σy,σz,σp,σm
-# export @Pr_str, @Pc_str, ∑
+export boson_ops, fermion_ops
+export @boson_ops, @fermion_ops
+export σx,σy,σz,σp,σm
+export @Pr_str, @Pc_str, ∑
+export a, adag, f, fdag
+export param, expval, corr
 
 # define for σx, σy, σz
 @enum SpatialIndex x=1 y=2 z=3
@@ -12,8 +13,8 @@ const IndexInt = Int32
 
 @concrete struct OpIndex
     # sym is the index character, apart from two special values:
+    # '\0' for integer indices, which ensures they are ordered before any other indices
     # '#' for sum indices, which ensures that they are ordered before letters etc, and
-    # '\U10ffff' (unicode noncharacter, highest allowed value) for integer indices, which ensures they are ordered after any other indices
     sym::Char
     # num is integer subindex, special value typemin(IndexInt) means no subindex
     num::IndexInt
@@ -23,20 +24,20 @@ OpIndex(ii::OpIndex) = ii
 OpIndex(ii::Symbol) = OpIndex(string(ii))
 function OpIndex(ii::String)
     s = split(ii,"_")
-    length(s) <= 2 || error("index can have at most one subindex")
-    length(s[1]) == 1 || error("index names must be single character.")
+    length(s) <= 2 || throw(ArgumentError("index can have at most one subindex, got $ii with subindices $(s[2:end])"))
+    length(s[1]) == 1 || throw(ArgumentError("index names must be single character, got $ii."))
     sym = s[1][1]
     # we do not allow the ascii control characters as symbolic indices to ensure ordering
-    sym > '#' || error("Symbolic index name cannot be character below '#' (codepoint 35), passed Int(sym) = $(Int(sym)).")
+    sym > '#' || throw(ArgumentError("Symbolic index name cannot be character less than '#' (codepoint 35), passed Int(sym) = $(Int(sym))."))
     if length(s)==2
         OpIndex(sym,parse(IndexInt,s[2]))
     else
         OpIndex(sym)
     end
 end
-OpIndex(ii::Integer) = OpIndex('\U10ffff',ii)
+OpIndex(ii::Integer) = OpIndex('\0',ii)
 sumindex(ii) = OpIndex('#',ii)
-isintindex(ii::OpIndex) = ii.sym=='\U10ffff'
+isintindex(ii::OpIndex) = ii.sym=='\0'
 issumindex(ii::OpIndex) = ii.sym=='#'
 
 @inline Base.isless(i1::OpIndex,i2::OpIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
@@ -73,7 +74,7 @@ const NoName = NameIndex(Symbol())
     t::OpType
     a::SpatialIndex
     name::NameIndex
-    inds::OpIndices    
+    inds::OpIndices
 end
 # provide outer constructors useful for the specific operators
 BaseOperator(t,inds::OpIndices) = BaseOperator(t,x,NoName,inds)
@@ -250,7 +251,10 @@ using_σpm() = _using_σpm[]
 # Pr"ω_i,j" = param(:ω,'r',:i,:j) (real parameter)
 
 param(name::Symbol,args...) = param(NameIndex(name),args...)
-param(name::NameIndex,state::Char,inds...) = OpSum(Param(name,state,make_indices(inds...)))
+function param(name::NameIndex,state::Char,inds...)
+    state ∈ ('r','n','c') || throw(ArgumentError("state has to be one of n,r,c"))
+    OpSum(Param(name,state,make_indices(inds...)))
+end
 
 function parse_paramstr(s)
     s = split(s,"_")
