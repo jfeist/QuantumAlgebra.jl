@@ -143,7 +143,11 @@ CorrOrExp(A::OpTerm) = length(A)>1 ? corr(A) : expval(A)
         @test normal_form(comm(σx(5),σy(3))) == scal(0)
         @test normal_form(comm(σx(5),σx(5))) == scal(0)
         @test normal_form(comm(σx(1),σz(1))) == normal_form(-2im*σy(1))
-        @test normal_form(comm(σx(:μ),σy(:ν))) == normal_form(2im*myδ(:μ,:ν)*σz(:ν))
+        if QuantumAlgebra.using_σpm()
+            @test_throws ErrorException("TO BE IMPLEMENTED") normal_form(comm(σx(:μ),σy(:ν))) == normal_form(2im*myδ(:μ,:ν)*σz(:ν))
+        else
+            @test normal_form(comm(σx(:μ),σy(:ν))) == normal_form(2im*myδ(:μ,:ν)*σz(:ν))
+        end
         @test normal_form(1//2im * comm(σx(:m),σy(:m))) == normal_form(σz(:m))
         @test normal_form(σx(:a)*σy(:a)*σz(:a)) == scal(1im)
 
