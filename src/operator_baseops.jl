@@ -284,7 +284,8 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         else
             # σ-_i σ+_j = σ+_j σ-_i - δij σz_i = σ+_j σ-_i + δij (1 - 2 σ+_i σ-_i)
             # note that we return a σz to "fit" in ExchangeResult, but need to undo that later on
-            return (1, ExchangeResult(-1, dd, σ(z,A.inds)))
+            # note that we pass "+σz" instead of "-σz" so we do not have to flip the sign of the "1" term in _merge_runs
+            return (1, ExchangeResult(1, dd, σ(z,A.inds)))
         end
     end
 
@@ -403,11 +404,15 @@ function _merge_runs!(B, A, iLeft, iRight, iEnd, term_collector, prefactor)
                     if exc_res.op === nothing
                         # new product needs _full_ array (B[1:k-1] is already ordered)
                         onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; A[kk+1:iRight-1]; A[j+1:end]])
+                    elseif A[j].t == σplus_
+                        @assert exc_res.op.t == σ_
+                        # we got σz_i, have to replace it by (1 - 2 σ+_i σ-_i) (which is really -σz, see explanation in _exchange)
+                        onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; σplus(exc_res.op.inds); σminus(exc_res.op.inds); A[kk+1:iRight-1]; A[j+1:end]])
+                        t = OpTerm(exc_res.δs, onew)
+                        _add_sum_term!(term_collector,t,-2exc_res.pref*prefactor)
+                        # this one gives the "1" term that is used below
+                        onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; A[kk+1:iRight-1]; A[j+1:end]])
                     else
-                        if A[j].t == σplus_
-                            @assert exc_res.op.t == σ_
-                            error("TO BE IMPLEMENTED")
-                        end
                         # new product needs _full_ array (B[1:k-1] is already ordered)
                         onew = BaseOpProduct([B[1:k-1]; A[i+1:kk-1]; exc_res.op; A[kk+1:iRight-1]; A[j+1:end]])
                     end
