@@ -9,9 +9,14 @@ end
 scal(x) = OpSum(((OpTerm(),x),))
 comm(A,B) = A*B - B*A
 CorrOrExp(A::OpSum) = _map_opsum_ops(CorrOrExp,A)
-CorrOrExp(A::OpTerm) = length(A)>1 ? corr(A) : expval(A)
+CorrOrExp(A::OpTerm) = length(A.bares)>1 ? corr(A) : expval(A)
 
 @testset "QuantumAlgebra.jl" begin
+    @test isbitstype(QuantumAlgebra.OpIndex)
+    @test isbitstype(QuantumAlgebra.NameIndex)
+    @test isbitstype(QuantumAlgebra.BaseOperator)
+    @test isbitstype(QuantumAlgebra.Param)
+    @test isbitstype(QuantumAlgebra.δ)
 
     @boson_ops b
     @test normal_form(b(:i)*bdag(:j)) == bdag(:j)*b(:i) + myδ(:i,:j)
