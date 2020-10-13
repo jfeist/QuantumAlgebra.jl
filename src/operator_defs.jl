@@ -1,3 +1,5 @@
+using StaticArrays
+
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops
 export σx,σy,σz,σp,σm
@@ -39,15 +41,16 @@ OpIndex(ii::Integer) = OpIndex('\0',ii)
 sumindex(ii) = OpIndex('#',ii)
 isintindex(ii::OpIndex) = ii.sym=='\0'
 issumindex(ii::OpIndex) = ii.sym=='#'
+const NoIndex = OpIndex(typemin(IndexInt))
+isnoindex(ii::OpIndex) = ii == NoIndex
 
 @inline Base.isless(i1::OpIndex,i2::OpIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
 
-const OpIndices = Vector{OpIndex}
+const OpIndices = SVector{5,OpIndex}
 
 make_indices(inds::OpIndices) = inds
-make_indices(inds::Vector)::OpIndices = OpIndex.(inds)
-make_indices(inds::Tuple)::OpIndices = make_indices(inds...)
-make_indices(inds...)::OpIndices = OpIndex[OpIndex(i) for i in inds]
+make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
+make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::OpIndices = OpIndices(OpIndex(i1),OpIndex(i2),OpIndex(i3),OpIndex(i4),OpIndex(i5))
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
 @enum OpType BosonCreate_ BosonDestroy_ FermionCreate_ FermionDestroy_ σplus_ σminus_ σ_
@@ -115,6 +118,7 @@ BaseOpProduct() = BaseOpProduct(BaseOperator[])
 @concrete struct δ
     iA::OpIndex
     iB::OpIndex
+    δ(iA,iB) = (@assert !isnoindex(iA) && !isnoindex(iB); new(iA,iB))
 end
 function δ(Ainds::OpIndices,Binds::OpIndices)
     length(Ainds) == length(Binds) || return nothing
@@ -123,6 +127,7 @@ function δ(Ainds::OpIndices,Binds::OpIndices)
     jj = 0
     for (iA,iB) in zip(Ainds,Binds)
         if iA != iB
+            (isnoindex(iA) || isnoindex(iB)) && return nothing
             # if they are integer indices and different, the result is zero
             isintindex(iA) && isintindex(iB) && return nothing
             res[jj+=1] = iB<iA ? δ(iB,iA) : δ(iA,iB)

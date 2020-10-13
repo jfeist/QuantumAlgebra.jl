@@ -15,7 +15,9 @@ Base.print(io::IO,A::BaseOpProduct) = printspaced(io,A.v)
 
 subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digits(abs(i))))
 function Base.print(io::IO,ii::OpIndex)
-    if isintindex(ii)
+    if isnoindex(ii)
+        return
+    elseif isintindex(ii)
         print(io,ii.num)
     else
         print(io,ii.sym)
