@@ -155,17 +155,6 @@ function Base.adjoint(A::OpTerm)
 end
 Base.adjoint(A::OpSum) = OpSum((adjoint(t),adjoint(s)) for (t,s) in A.terms)
 
-function Base.print(io::IO,dd::Dict{OpIndex,OpIndex})
-    print(io,"{")
-    isfirst = true
-    for (a,b) in dd
-        isfirst || print(io,", ")
-        print(io,a," => ",b)
-        isfirst = false
-    end
-    print(io,"}")
-end
-
 function _normalize_without_commutation(A::OpTerm)::Union{OpTerm,Nothing}
     # first, clean up the δs
     if isempty(A.δs)
