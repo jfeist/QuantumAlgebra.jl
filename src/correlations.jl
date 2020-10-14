@@ -1,17 +1,25 @@
 using Base: tail
 using Combinatorics
 
-export CorrOrExp, ascorr
+export ascorr
 
-CorrOrExp(A::Operator) = length(A)==1 ? ExpVal(A) : Corr(A)
+function term2corr(A::OpTerm,C::Tuple)
+    corrs = deepcopy(A.corrs)
+    sizehint!(corrs,length(corrs)+length(C))
+    for grp in C
+        cc = Corr(BaseOpProduct(collect(map(i -> A.bares.v[i], grp))))
+        push!(corrs,cc)
+    end
+    sort!(corrs)
+    OpTerm(A.nsuminds,A.δs,A.params,A.expvals,corrs,BaseOpProduct())
+end
 
 """
     ascorr(expr::Operator)
 
 Take an expression `expr=A B C + D E...` and write its expectation value in
 terms of single-body expectation values ``⟨A⟩, ⟨B⟩, \\ldots``, and many-body
-correlations ``⟨AB⟩_c, ⟨ABC⟩_c``, etc. Currently, up to fourth-order
-correlations (i.e., products of four operators) are supported.
+correlations ``⟨AB⟩_c, ⟨ABC⟩_c``, etc.
 
 E.g., `ascorr(adag(:n)*a(:n))` returns ``⟨a^\\dagger_n a_n⟩_c + ⟨a^\\dagger_n⟩
 ⟨a_n⟩`` (which is equal to ``⟨a^\\dagger_n a_n⟩``), while
@@ -23,29 +31,35 @@ a_{n} \\rangle + \\langle a_{n}^\\dagger \\rangle \\langle a_{m} a_{n}
 \\rangle_{c}``.
 
 See also: [`ExpVal`](@ref), [`Corr`](@ref)"""
-function ascorr end
-
-ascorr(A::Scalar) = A
-ascorr(A::BaseOperator) = ExpVal(A)
-ascorr(A::OpSum) = ascorr(A.A) + ascorr(A.B)
-ascorr(A::OpSumAnalytic) = begin
-    # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
-    # is assumed to be distinct from the indices of the expressions
-    # then, calculate the correction expression for the term where the sum index is the same as any of the non-summed indices,
-    # and add the correction between that and the "incorrect" term where index identity is not taken into account
-    tmp = ascorr(A.A)
-    res = OpSumAnalytic(A.ind,tmp)
-    for ii in setdiff(indexset(A),sumindexset(A))
-        res += ascorr(replace_index(A.A,A.ind,ii)) - replace_index(tmp,A.ind,ii)
+function ascorr(A::OpSum)
+    newA = OpSum()
+    for (t,s) in A.terms
+        lt = length(t.bares)
+        if lt==0
+            _add_sum_term!(newA,t,s)
+        else
+            for C in prodcorr_inds(lt)
+                _add_sum_term!(newA,term2corr(t,C),s)
+            end
+        end
     end
-    res
+    newA
 end
-function ascorr(A::OpProd)::Operator
-    A.A isa OpSumAnalytic && error("should not occur!")
-    A.A isa scal && A.B isa OpSumAnalytic && return A.A*ascorr(A.B)
-    preftup, exptup, optup = prodtuples(A)
-    prodcorr((preftup...,exptup...),optup)
-end
+
+##################################################################################################################################
+#### MISSING: ####################################################################################################################
+##################################################################################################################################
+#     # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
+#     # is assumed to be distinct from the indices of the expressions
+#     # then, calculate the correction expression for the term where the sum index is the same as any of the non-summed indices,
+#     # and add the correction between that and the "incorrect" term where index identity is not taken into account
+#     tmp = ascorr(A.A)
+#     res = OpSumAnalytic(A.ind,tmp)
+#     for ii in setdiff(indexset(A),sumindexset(A))
+#         res += ascorr(replace_index(A.A,A.ind,ii)) - replace_index(tmp,A.ind,ii)
+#     end
+#     res
+# end
 
 """
     CorrExpTup_isless(a,b)
@@ -115,29 +129,3 @@ function ncomb_inds(n,inds,used_combs=Set())
     end
     terms
 end
-
-function _sortedOpChain(op,As::AbstractVector{<:Operator})
-    n = length(As) - 1
-    n == 0 && return As[1]
-    @inbounds begin
-        res = op(As[n],As[n+1])
-        while n>1
-            n -= 1
-            res = op(As[n],res)
-        end
-    end
-    res
-end
-# get `As[1]+As[2]+...+As[end]` for already sorted and distinct As (i.e., without sorting or combining)
-_sortedOpSum(As::AbstractVector{<:Operator}) = _sortedOpChain(OpSum,As)
-# get `As[1]*As[2]*...*As[end]` for already sorted As (i.e., without performing permutations and evaluating commutators etc)
-_sortedOpProd(As::AbstractVector{<:Operator}) = _sortedOpChain(OpProd,As)
-_sortedOpProd(A::Operator) = A
-_sortedOpProd(As::Vararg{Operator}) = OpProd(As[1],_sortedOpProd(tail(As)...))
-
-_CorrOrExp_inds(As,is::Tuple{Int}) = ExpVal(As[is[1]])
-_CorrOrExp_inds(As,is::Tuple{Vararg{Int}}) = Corr(_sortedOpProd(As[collect(is)]))
-_sumterm(prefs,As,C) = _sortedOpProd(prefs...,_CorrOrExp_inds.((As,),C)...)
-
-prodcorr(prefs::Tuple,::Tuple{}) = _sortedOpProd(prefs...)
-prodcorr(prefs::Tuple,@nospecialize(As::NTuple{N,BaseOperator})) where N = _sortedOpSum(_sumterm.((prefs,),(collect(As),),prodcorr_inds(N)))

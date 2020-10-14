@@ -244,11 +244,11 @@ CorrOrExp(A::OpTerm) = length(A.bares)>1 ? corr(A) : expval(A)
         # @test latex(scal(1+2im)) == "(1+2i)"
         # @test latex(scal(1+2im//5)) == "\\left(1+\\frac{2}{5}i\\right)"
 
-        # tmp = ∑(:i,ascorr(adag(:n)*a(:i)))
-        # tmplatex = "\\sum_{i}\\langle {a}_{n}^\\dagger {a}_{i} \\rangle_{c} + \\sum_{i}\\langle {a}_{n}^\\dagger \\rangle \\langle {a}_{i} \\rangle"
-        # @test latex(tmp) == tmplatex
-        # @test ascorr(tmp) == tmp
-        # @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
+        tmp = ∑(:i,ascorr(adag(:n)*a(:i)))
+        tmplatex = raw"\sum_{ \#_{1} }  \langle {a}_{n}^\dagger \rangle_{c} \langle {a}_{\#_{1}} \rangle_{c}  + \sum_{ \#_{1} }  \langle {a}_{n}^\dagger{a}_{\#_{1}} \rangle_{c} "
+        @test latex(tmp) == tmplatex
+        @test ascorr(tmp) == tmp
+        @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
         # if QuantumAlgebra.using_σpm()
         #     @test latex(σp()) == "\\sigma^+"
         # else
@@ -275,10 +275,10 @@ CorrOrExp(A::OpTerm) = length(A.bares)>1 ? corr(A) : expval(A)
         # @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
 
         # @test string(∑(:i,a(:i)) * adag(:n)) == "1 + ∑_i a†(n) a(i)"
-        # if QuantumAlgebra.using_σpm()
-        #     @test string(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5))) == "⟨a†(5i)⟩ ⟨a(5)⟩ σ+(3) + ⟨a†(5i) a(5)⟩c σ+(3) + ⟨a†(5i)⟩ ⟨a(5)⟩ a†(5) a(5) σ+(3) + ⟨a†(5i) a(5)⟩c a†(5) a(5) σ+(3)"
-        # else
-        #     @test string(a(5)*adag(5)*σz(3)*ascorr(adag(5,:i)*a(5))) == "⟨a†(5i)⟩ ⟨a(5)⟩ σz(3) + ⟨a†(5i) a(5)⟩c σz(3) + ⟨a†(5i)⟩ ⟨a(5)⟩ a†(5) a(5) σz(3) + ⟨a†(5i) a(5)⟩c a†(5) a(5) σz(3)"
-        # end
+        if QuantumAlgebra.using_σpm()
+            @test string(normal_form(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5)))) == " ⟨a†(5i) a(5)⟩c σ⁺(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) +  ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
+        else
+            @test string(normal_form(a(5)*adag(5)*σz(3)*ascorr(adag(5,:i)*a(5)))) == " ⟨a†(5i)⟩c ⟨a(5)⟩c σz(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σz(3) a(5) +  ⟨a†(5i) a(5)⟩c a†(5) σz(3) a(5) +  ⟨a†(5i) a(5)⟩c σz(3)"
+        end
     end
 end
