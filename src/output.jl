@@ -78,7 +78,7 @@ function print_term_scalar(io::IO,t::OpTerm,s::Number, print_connector::Bool)
         str = string(s)
     end
     print_as_connector(io,str,print_connector)
-    print(io,t)
+    print(io," ",t)
 end
 
 function Base.print(io::IO,A::OpSum)
@@ -109,14 +109,16 @@ function latex(A::BaseOperator)
 end
 
 function latex(ii::OpIndex)
-    if isintindex(ii)
-        "{$(ii.num)}"
+    if isnoindex(ii)
+        ""
+    elseif isintindex(ii)
+        "$(ii.num)"
     elseif issumindex(ii)
-        "{\\#_{$(ii.num)}}"
+        "\\#_{$(ii.num)}"
     elseif ii.num == typemin(ii.num)
-        "{$(ii.sym)}"
+        "$(ii.sym)"
     else
-        "{$(ii.sym)_{$(ii.num)}}"
+        "$(ii.sym)_{$(ii.num)}"
     end
 end
 
