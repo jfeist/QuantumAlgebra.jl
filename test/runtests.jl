@@ -1,5 +1,5 @@
 using QuantumAlgebra
-using QuantumAlgebra: δ, OpSum, OpTerm, BaseOpProduct, OpIndex, _map_opsum_ops #, prodtuples, prodtuple, sumtuple, distribute_indices!
+using QuantumAlgebra: δ, OpSum, OpTerm, BaseOpProduct, OpIndex, _map_opsum_ops
 using Test
 
 function myδ(i,j)
@@ -29,7 +29,7 @@ CorrOrExp(A::OpTerm) = length(A.bares)>1 ? corr(A) : expval(A)
     # all equal numbers should be equal scalars (ignore type)
     @test a() + 0 == a() + 0.0
     @test a() + 1 == a() + (1//1 + 0im)
-    #@test scal(1.5) == scal(3//2)
+    @test scal(1.5) == scal(3//2)
 
     @test QuantumAlgebra.SpatialIndex(QuantumAlgebra.x) == QuantumAlgebra.x
 
@@ -119,21 +119,10 @@ CorrOrExp(A::OpTerm) = length(A.bares)>1 ? corr(A) : expval(A)
 
         @test normal_form(a(1) * (σy(1) * a(1))') == normal_form(a(1) * (adag(1) * σy(1))) == normal_form(adag(1)*a(1)*σy(1) + σy(1))
 
-        # @test prodtuple(a(5)) == (a(5),)
-        # # tuples come out ordered!
-        # @test prodtuple(a(5)*a(4)) == (a(4),a(5))
-        # @test prodtuple(a(5)*a(4)) != (a(5),a(4))
-
-        # @test sumtuple(a(5)) == (a(5),)
-        # # tuples come out ordered!
-        # @test sumtuple(a(5)+a(4)) == (a(4),a(5))
-        # @test sumtuple(a(5)+a(4)) != (a(5),a(4))
-
-        # @test_throws ArgumentError prodtuples(a(5)+a(4))
         tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*adag(5)*a(5))
         if QuantumAlgebra.using_σpm()
             @test length(tmp1.terms) == 1
-            @test first(tmp1.terms)[1].bares == first((adag(5)*a(5)*σp(:k)).terms)[1].bares
+            @test first(tmp1.terms)[1].bares == first((adag(5)*σp(:k)*a(5)).terms)[1].bares
         else
             @test length(tmp1.terms) == 4
         end
@@ -218,38 +207,38 @@ CorrOrExp(A::OpTerm) = length(A.bares)>1 ? corr(A) : expval(A)
         HH = ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i))
         @test normal_form(a(:k,:k)*HH) == normal_form(param(:ω,'r',:k,:k)*a(:k,:k) + ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i)*a(:k,:k)))
 
-        # @test Avac(H) == scal(0)
-        # @test vacA(H) == scal(0)
-        # @test vacA(adag(3)*σp(1)*σm(1)) == scal(0)
-        # @test vacA(fdag(:n)) == scal(0)
-        # @test vacA(f(:n)) == f(:n)
-        # @test vacA(a(:n)) == a(:n)
-        # @test Avac(fdag(:n)) == fdag(:n)
-        # @test Avac(f(:n)) == scal(0)
-        # @test Avac(a(3)*σp(1)*σm(1)) == scal(0)
-        # @test Avac(σm(1)*σp(1)) == scal(1)
-        # @test Avac(σp(1)*σm(1)) == scal(0)
-        # @test Avac(σp(1)) == σp(1)
-        # @test vacA(σm(1)) == σm(1)
-        # if QuantumAlgebra.using_σpm()
-        #     @test Avac(σm(1)) == scal(0)
-        #     @test vacA(σp(1)) == scal(0)
-        # else
-        #     @test Avac(σx(1)) == vacA(σx(1)) == σx(1)
-        # end
-        # @test vacExpVal(σx(1)) == scal(0)
-        # @test vacExpVal(σp(1)) == scal(0)
-        # @test vacExpVal(∑(:i,σp(:i))) == scal(0)
-        # @test vacExpVal(σp(:i)*σm(:k)) == scal(0)
+        @test Avac(H) == scal(0)
+        @test vacA(H) == scal(0)
+        @test vacA(adag(3)*σp(1)*σm(1)) == scal(0)
+        @test vacA(fdag(:n)) == scal(0)
+        @test vacA(f(:n)) == f(:n)
+        @test vacA(a(:n)) == a(:n)
+        @test Avac(fdag(:n)) == fdag(:n)
+        @test Avac(f(:n)) == scal(0)
+        @test Avac(a(3)*σp(1)*σm(1)) == scal(0)
+        @test Avac(σm(1)*σp(1)) == scal(1)
+        @test Avac(σp(1)*σm(1)) == scal(0)
+        @test Avac(σp(1)) == σp(1)
+        @test vacA(σm(1)) == σm(1)
+        if QuantumAlgebra.using_σpm()
+            @test Avac(σm(1)) == scal(0)
+            @test vacA(σp(1)) == scal(0)
+        else
+            @test Avac(σx(1)) == vacA(σx(1)) == σx(1)
+        end
+        @test vacExpVal(σx(1)) == scal(0)
+        @test vacExpVal(σp(1)) == scal(0)
+        @test vacExpVal(∑(:i,σp(:i))) == scal(0)
+        @test vacExpVal(σp(:i)*σm(:k)) == scal(0)
 
         @test normal_form(a(:n)*adag(:n)*a(:n)*adag(:n)) == scal(1) + 3adag(:n)*a(:n) + adag(:n)*adag(:n)*a(:n)*a(:n)
 
-        # S = scal(1/√(2*6))*adag(:n)*adag(:n)*adag(:n) + scal(1/√2)*adag(:m)
-        # for (A,val) in [(scal(1),scal(1)),
-        #                 (adag(:n)*a(:n),scal(1.5) + 0.5 * myδ(:n,:m)),
-        #                 (adag(:n)*adag(:n)*a(:n)*a(:n),scal(3))]
-        #     @test vacExpVal(A,S) ≈ val
-        # end
+        S = scal(1/√(2*6))*adag(:n)*adag(:n)*adag(:n) + scal(1/√2)*adag(:m)
+        for (A,val) in [(scal(1),scal(1)),
+                        (adag(:n)*a(:n),scal(1.5) + 0.5 * myδ(:n,:m)),
+                        (adag(:n)*adag(:n)*a(:n)*a(:n),scal(3))]
+            @test vacExpVal(A,S) ≈ val
+        end
 
         # tmp = scal(1+2im)*∑(:i,a(:i)*adag(:i)*ascorr(adag(:n)*a(:m)))
         # @test latex(scal(1+2im)) == "(1+2i)"

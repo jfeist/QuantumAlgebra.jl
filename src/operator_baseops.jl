@@ -17,6 +17,17 @@ Base.length(A::OpTerm) = length(A.bares) + mapreduce(length,+,A.expvals;init=0) 
                            A.expvals == B.expvals && A.corrs == B.corrs && A.bares == B.bares)
 ==(A::OpSum,B::OpSum) = A.terms == B.terms
 
+function ≈(A::OpSum,B::OpSum)
+    length(A.terms) != length(B.terms) && return false
+    for (tA,sA) in A.terms
+        sB = get(B.terms,tA) do
+            return false
+        end
+        sA ≈ sB || return false
+    end
+    return true
+end
+
 function Base.hash(A::BaseOperator,h::UInt)
     h = hash(A.t,h)
     h = hash(A.a,h)
@@ -241,7 +252,9 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
     # different types of operators commute
     if A.t in (BosonDestroy_,BosonCreate_) && B.t in (FermionDestroy_,FermionCreate_,σ_,σminus_,σplus_)
         return (1,nothing)
-    elseif A.t in (FermionDestroy_,FermionCreate_) && B.t in (σ_,σminus_,σplus_)
+    elseif A.t in (FermionDestroy_,FermionCreate_) && B.t in (BosonDestroy_,BosonCreate_,σ_,σminus_,σplus_)
+        return (1,nothing)
+    elseif A.t in (σ_,σminus_,σplus_) && B.t in (BosonDestroy_,BosonCreate_,FermionDestroy_,FermionCreate_)
         return (1,nothing)
     end
 

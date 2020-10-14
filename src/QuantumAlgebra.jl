@@ -6,7 +6,7 @@ include("index_handling.jl")
 include("operator_baseops.jl")
 include("output.jl")
 # include("correlations.jl")
-# include("vacuum_expvals.jl")
+include("vacuum_expvals.jl")
 
 # include("precompile.jl")
 # _precompile_()

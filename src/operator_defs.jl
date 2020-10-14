@@ -53,7 +53,7 @@ make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
 make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::OpIndices = OpIndices(OpIndex(i1),OpIndex(i2),OpIndex(i3),OpIndex(i4),OpIndex(i5))
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
-@enum OpType BosonCreate_ BosonDestroy_ FermionCreate_ FermionDestroy_ σplus_ σminus_ σ_
+@enum OpType BosonCreate_ FermionCreate_ σplus_ σ_ σminus_ FermionDestroy_ BosonDestroy_
 
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]
