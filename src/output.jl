@@ -12,8 +12,9 @@ function printspaced(io::IO,v,trailing_space=false)
 end
 
 Base.print(io::IO,A::BaseOpProduct) = printspaced(io,A.v)
-
+const _SUPERSCRIPTNUMS = collect("⁰¹²³⁴⁵⁶⁷⁸⁹")
 subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digits(abs(i))))
+superscript(i::Integer) = (i<0 ? "⁻" : "") * join(_SUPERSCRIPTNUMS[d+1] for d in reverse(digits(abs(i))))
 function Base.print(io::IO,ii::OpIndex)
     if isnoindex(ii)
         return
@@ -102,7 +103,7 @@ Base.show(io::IO, ::MIME"text/latex", A::Union{BaseOperator,BaseOpProduct,ExpVal
 function latex(A::BaseOperator)
     A.t in (BosonDestroy_,FermionDestroy_) && return "{$(A.name)}$(latexindstr(A.inds))"
     A.t in (BosonCreate_,FermionCreate_) && return "{$(A.name)}$(latexindstr(A.inds))^\\dagger"
-    A.t == σ_ && return string("\\sigma_{$(A.a)",length(A.inds)>0 ? ",$(A.inds...)}" : "}")
+    A.t == σ_ && return string("\\sigma_{$(A.a)",hasinds(A.inds) ? ",$(A.inds...)}" : "}")
     A.t == σminus_ && return "\\sigma^-" * latexindstr(A.inds)
     A.t == σplus_ && return "\\sigma^+" * latexindstr(A.inds)
     error("latex should not reach this!)")

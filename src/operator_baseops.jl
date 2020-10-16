@@ -1,7 +1,7 @@
 # we will want to overload these operators and functions for our custom types
 import Base: ==, ≈, *, +, -
 
-export normal_form
+export normal_form, comm
 
 Base.length(A::BaseOpProduct) = length(A.v)
 Base.length(A::ExpVal) = length(A.ops)
@@ -63,6 +63,10 @@ function Base.hash(A::OpTerm,h::UInt)
     h = hash(A.bares,h)
     h
 end
+function Base.hash(A::OpSum,h::UInt)
+    h = hash(A.terms,h)
+    h
+end
 
 # Base.cmp(::AbstractArray,::AbstractArray) uses isequal and isless, so doesn't shortcut if a,b are themselves arrays
 # https://github.com/JuliaLang/julia/blob/539f3ce943f59dec8aff3f2238b083f1b27f41e5/base/abstractarray.jl
@@ -77,7 +81,7 @@ end
 @inline recursive_cmp(A::BaseOperator,B::BaseOperator) = cmp(A,B)
 @inline recursive_cmp(A::Param,B::Param) = cmp(A,B)
 @inline recursive_cmp(A::δ,B::δ) = cmp(A,B)
-@inline recursive_cmp(A::BaseOpProduct,B::BaseOpProduct) = recursive_cmp(A.v,B.v)
+@inline recursive_cmp(A::BaseOpProduct,B::BaseOpProduct) = (cc = cmp(length(A),length(B)); cc == 0 ? recursive_cmp(A.v,B.v) : cc)
 @inline recursive_cmp(A::ExpVal,B::ExpVal) = recursive_cmp(A.ops,B.ops)
 @inline recursive_cmp(A::Corr,B::Corr) = recursive_cmp(A.ops,B.ops)
 
@@ -136,6 +140,8 @@ end
 @inline Base.isless(A::ExpVal,B::ExpVal) = recursive_cmp(A,B) < 0
 @inline Base.isless(A::Corr,B::Corr) = recursive_cmp(A,B) < 0
 @inline Base.isless(A::OpTerm,B::OpTerm) = cmp(A,B) < 0
+
+comm(A,B) = A*B - B*A
 
 function Base.adjoint(A::BaseOperator)::BaseOperator
     if A.t == BosonDestroy_
