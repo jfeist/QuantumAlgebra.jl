@@ -1,5 +1,3 @@
-using StaticArrays
-
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops
 export σx,σy,σz,σp,σm
@@ -46,12 +44,12 @@ isnoindex(ii::OpIndex) = ii == NoIndex
 
 @inline Base.isless(i1::OpIndex,i2::OpIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
 
-const OpIndices = SVector{5,OpIndex}
+const OpIndices = NTuple{5,OpIndex}
 hasinds(inds::OpIndices) = !all(isnoindex.(inds))
 
 make_indices(inds::OpIndices) = inds
 make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
-make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::OpIndices = OpIndices(OpIndex(i1),OpIndex(i2),OpIndex(i3),OpIndex(i4),OpIndex(i5))
+make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::OpIndices = (OpIndex(i1),OpIndex(i2),OpIndex(i3),OpIndex(i4),OpIndex(i5))
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
 @enum OpType BosonCreate_ FermionCreate_ σplus_ σ_ σminus_ FermionDestroy_ BosonDestroy_
