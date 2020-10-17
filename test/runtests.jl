@@ -276,9 +276,9 @@ CorrOrExp(A::OpTerm) = length(A.bares)>1 ? corr(A) : expval(A)
 
         # @test string(∑(:i,a(:i)) * adag(:n)) == "1 + ∑_i a†(n) a(i)"
         if QuantumAlgebra.using_σpm()
-            @test string(normal_form(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5)))) == " ⟨a†(5i) a(5)⟩c σ⁺(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) +  ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
+            @test string(normal_form(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5)))) == " ⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) +  ⟨a†(5i) a(5)⟩c σ⁺(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) +  ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
         else
-            @test string(normal_form(a(5)*adag(5)*σz(3)*ascorr(adag(5,:i)*a(5)))) == " ⟨a†(5i)⟩c ⟨a(5)⟩c σz(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σz(3) a(5) +  ⟨a†(5i) a(5)⟩c a†(5) σz(3) a(5) +  ⟨a†(5i) a(5)⟩c σz(3)"
+            @test string(normal_form(a(5)*adag(5)*σz(3)*ascorr(adag(5,:i)*a(5)))) == " ⟨a†(5i)⟩c ⟨a(5)⟩c σz(3) +  ⟨a†(5i) a(5)⟩c σz(3) +  ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σz(3) a(5) +  ⟨a†(5i) a(5)⟩c a†(5) σz(3) a(5)"
         end
     end
 end

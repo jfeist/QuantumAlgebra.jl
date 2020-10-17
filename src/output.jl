@@ -86,7 +86,7 @@ function Base.print(io::IO,A::OpSum)
     if isempty(A.terms)
         print(io,0)
     else
-        for (ii,(t,s)) in enumerate(A.terms)
+        for (ii,(t,s)) in enumerate(sort!(Tuple.(collect(A.terms))))
             print_connector = ii != 1
             print_term_scalar(io,t,s, print_connector)
         end
