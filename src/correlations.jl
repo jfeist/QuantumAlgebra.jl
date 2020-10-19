@@ -1,4 +1,3 @@
-using Base: tail
 using Combinatorics
 
 export ascorr

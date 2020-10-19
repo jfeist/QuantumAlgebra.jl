@@ -45,7 +45,7 @@ isnoindex(ii::OpIndex) = ii == NoIndex
 @inline Base.isless(i1::OpIndex,i2::OpIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
 
 const OpIndices = NTuple{5,OpIndex}
-hasinds(inds::OpIndices) = !all(isnoindex.(inds))
+assignedinds(inds::OpIndices) = filter(!isnoindex,inds)
 
 make_indices(inds::OpIndices) = inds
 make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
