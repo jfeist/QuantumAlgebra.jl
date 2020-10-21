@@ -238,6 +238,14 @@ end
 # levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
 # for c=6-a-b, i.e, when a,b,c is a permutation of 1,2,3
 const levicivita_lut = [0 1 -1; -1 0 1; 1 -1 0]
+function ϵ_ab(A::BaseOperator,B::BaseOperator)
+    # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
+    a = Int(A.a)
+    b = Int(B.a)
+    c = 6 - a - b
+    s = @inbounds levicivita_lut[a,b]
+    c, s
+end
 
 struct ExchangeResult
     pref::Complex{Rational{Int}}
@@ -297,16 +305,23 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         end
     end
 
+    # B A as x A B + y, with A < B
     if A.t == σ_ && B.t == σ_
         if A.a == B.a || (dd = δ(A.inds,B.inds)) === nothing
             return (1,nothing)
         else
-            # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
-            a = Int(A.a)
-            b = Int(B.a)
-            c = 6 - a - b
-            s = levicivita_lut[a,b]
-            return (1, ExchangeResult(-2im*s,dd,σ(c,A.inds)))
+            # we need ϵbac
+            c, s = ϵ_ab(B,A)
+            if isempty(dd)
+                # indices were all the same,
+                # σb σa = δab + i ϵbac σc
+                # since A < B, we know that a != b
+                return (0, ExchangeResult(im*s,dd,σ(c,A.inds)))
+            else
+                # [σb_i,σa_j] = 2i εbac δij σc_i =>
+                # σb_j σa_i = σa_i σb_j + 2i εbac δij σc_i
+                return (1, ExchangeResult(2im*s,dd,σ(c,A.inds)))
+            end
         end
     end
 
@@ -323,11 +338,8 @@ function _contract(A::BaseOperator,B::BaseOperator)::Tuple{Bool,ComplexInt,Union
         if A.a == B.a
             return (true,one(ComplexInt),nothing)
         else
-            a = Int(A.a)
-            b = Int(B.a)
-            c = 6 - a - b
-            s = levicivita_lut[a,b]
-            return (true, ComplexInt(im*s), σ(c,A.inds))
+            c, s = ϵ_ab(A,B)
+            return (true, ComplexInt(0,s), σ(c,A.inds))
         end
     else
         return (false,zero(ComplexInt),nothing)
@@ -351,6 +363,7 @@ function normal_order!(ops::BaseOpProduct,term_collector::OpSum)
             # Merge two runs: A[i:i+width-1] and A[i+width:i+2*width-1] to B[]
             # or copy A[i:n-1] to B[] ( if(i+width >= n) )
             prefactor = _merge_runs!(B, A, i, min(i+width, n+1), min(i+2width-1, n), term_collector, prefactor)
+            iszero(prefactor) && return prefactor
         end
         # Now work array B is full of runs of length 2*width.
         # swap A and B for next iteration.
@@ -405,7 +418,7 @@ function _merge_runs!(B, A, iLeft, iRight, iEnd, term_collector, prefactor)
         else
             # need to commute A[j] through A[i:iRight-1]
             # since A[iLeft:iRight-1] is already ordered, we have that A[j] < A[i:iRight-1]
-            for kk = i:iRight-1
+            for kk = iRight-1:-1:i
                 pp, exc_res = _exchange(A[j],A[kk])
                 #println("exchanging A[$j] = $(A[j]) and A[$kk] = $(A[kk]) gave result: $pp, $exc_res.")
                 if exc_res !== nothing
@@ -422,19 +435,21 @@ function _merge_runs!(B, A, iLeft, iRight, iEnd, term_collector, prefactor)
                         onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; A[kk+1:iRight-1]; A[j+1:end]])
                     else
                         # new product needs _full_ array (B[1:k-1] is already ordered)
-                        onew = BaseOpProduct([B[1:k-1]; A[i+1:kk-1]; exc_res.op; A[kk+1:iRight-1]; A[j+1:end]])
+                        onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; exc_res.op; A[kk+1:iRight-1]; A[j+1:end]])
                     end
                     t = OpTerm(exc_res.δs, onew)
-                    #println("term = $t, δs = $(exc_res.δs), s = $s")
                     _add_sum_term!(term_collector,t,exc_res.pref*prefactor)
+                    #println("adding term = $(exc_res.pref*prefactor) * $t, term_collector = $(term_collector)")
                 end
                 # only modify prefactor after the exchange
                 prefactor *= pp
+                iszero(prefactor) && return prefactor
             end
             #println("taking B[$k] from right, A[$j] = $(A[j])")
             B[k] = A[j]
             j += 1
         end
+        #println("k = $k, current expression is B[1:k]: $(BaseOpProduct(B[1:k]))")
     end
     prefactor
 end
