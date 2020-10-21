@@ -9,11 +9,16 @@ abstract type IndexFunction end
 (f::IndexFunction)(A::OpTerm,nsuminds=A.nsuminds) = OpTerm(nsuminds,f.(A.δs),f.(A.params),f.(A.expvals),f.(A.corrs),f(A.bares))
 (f::IndexFunction)(A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
 
+function _canon_ind(n)
+    i,c = divrem(n,15)
+    i == 0 ? OpIndex('h'+c) : OpIndex('h'+c,i+1)
+end
+
 mutable struct canon_inds <: IndexFunction
     icurr::IndexInt
     canon_inds() = new(0)
 end
-(f::canon_inds)(ind::OpIndex) = isnoindex(ind) ? ind : OpIndex('c',f.icurr+=one(f.icurr))
+(f::canon_inds)(ind::OpIndex) = isnoindex(ind) ? ind : _canon_ind(f.icurr+=one(f.icurr))
 
 mutable struct canon_inds_remember <: IndexFunction
     icurr::IndexInt
@@ -22,7 +27,7 @@ mutable struct canon_inds_remember <: IndexFunction
 end
 function (f::canon_inds_remember)(ind::OpIndex)
     isnoindex(ind) && return ind
-    i = OpIndex('c',f.icurr+=one(f.icurr))
+    i = _canon_ind(f.icurr+=one(f.icurr))
     f.replacements[i] = ind
     i
 end
@@ -34,6 +39,7 @@ end
 
 struct replace_inds <: IndexFunction
     replacements::Dict{OpIndex,OpIndex}
+    replace_inds(args...) = new(Dict{OpIndex,OpIndex}(args...))
 end
 (f::replace_inds)(ind::OpIndex) = get(f.replacements,ind,ind)
 
@@ -56,9 +62,8 @@ function (f::popped_out_suminds)(ind::OpIndex)
     elseif ind==f.conserved_ind
         sumindex(1)
     else
-        i = OpIndex('c',f.icurr+=one(f.icurr))
         push!(f.suminds,ind)
-        i
+        _canon_ind(f.icurr+=one(f.icurr))
     end
 end
 
@@ -68,3 +73,28 @@ hasind(ind::OpIndex,ev::Union{ExpVal,Corr}) = hasind(ind,ev.ops)
 hasind(ind::OpIndex,A::BaseOpProduct) = any(hasind.((ind,),A.v))
 
 split_by_ind(ind::OpIndex,v) = (iwiths = hasind.((ind,),v); (v[.!iwiths], v[iwiths]))
+
+indices(d::δ) = [d.iA,d.iB]
+indices(A::Union{BaseOperator,Param}) = collect(assignedinds(A.inds))
+indices(v::AbstractVector) = vcat(indices.(v)...)
+indices(A::BaseOpProduct) = indices(A.v)
+indices(A::Union{ExpVal,Corr}) = indices(A.ops)
+indices(A::OpTerm) = vcat(indices.((A.δs,A.params,A.expvals,A.corrs,A.bares))...)
+
+"`extindices(A::Operator)` return externally visible indices of an expression"
+extindices(A) = filter(!issumindex,indices(A))
+
+"`symmetric_index_nums(A::OpTerm)` return sequence of numbers of exchange-symmetric indices"
+function symmetric_index_nums(A)
+    inds = extindices(A)
+    Nsyms = [1]
+    for ii=2:length(inds)
+        i1,i2 = inds[ii-1], inds[ii]
+        if A == replace_inds(i1=>i2,i2=>i1)(A)
+            Nsyms[end] += 1
+        else
+            push!(Nsyms,1)
+        end
+    end
+    Nsyms
+end
