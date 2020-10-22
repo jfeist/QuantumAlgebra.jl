@@ -7,7 +7,6 @@ function myδ(i,j)
     OpSum(OpTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
 end
 scal(x) = OpSum(((OpTerm(),x),))
-comm(A,B) = A*B - B*A
 
 @testset "QuantumAlgebra.jl" begin
     @test isbitstype(QuantumAlgebra.OpIndex)

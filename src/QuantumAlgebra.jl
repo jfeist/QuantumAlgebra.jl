@@ -8,7 +8,7 @@ include("output.jl")
 include("correlations.jl")
 include("vacuum_expvals.jl")
 
-# include("precompile.jl")
-# _precompile_()
+include("precompile.jl")
+_precompile_()
 
 end # module
