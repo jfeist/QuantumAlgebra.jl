@@ -346,7 +346,12 @@ function _contract(A::BaseOperator,B::BaseOperator)::Tuple{Bool,ComplexInt,Union
     end
 end
 
-function normal_order!(ops::BaseOpProduct,term_collector::OpSum)
+struct NotASum end
+_add_sum_term!(::NotASum) = error("Normal ordering in Corr or ExpVal producing new terms is not yet implemented!")
+
+normal_order!(A::Union{Corr,ExpVal}) = normal_order!(A.ops,NotASum())
+
+function normal_order!(ops::BaseOpProduct,term_collector)
     # do a mergesort to get to normal ordering
     # in the merge phase, every time we take from the right array, we have to commute through all left operators in the way
     # inspiration: https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation
@@ -459,6 +464,13 @@ function _add_with_normal_order!(A::OpSum,t::OpTerm,s)
     t = _normalize_without_commutation(t)
     t === nothing && return
     pref = normal_order!(t.bares,commterms)
+    for E in t.expvals
+        pref *= normal_order!(E)
+    end
+    for C in t.corrs
+        pref *= normal_order!(C)
+    end
+
     #println("in _add_with_normal_order, main term becomes $t, with scalar $s. commterms: $commterms")
     iszero(pref) || _add_sum_term!(A,t,s*pref)
     for (nt,ns) in commterms.terms

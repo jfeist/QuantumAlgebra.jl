@@ -161,7 +161,9 @@ OpTerm() = OpTerm(BaseOpProduct())
 OpTerm(op::BaseOperator) = OpTerm(BaseOpProduct([op]))
 OpTerm(ops::BaseOpProduct) = OpTerm(0,δ[],Param[],ExpVal[],Corr[],ops)
 OpTerm(δs::Vector{δ},ops::BaseOpProduct) = OpTerm(0,δs,Param[],ExpVal[],Corr[],ops)
-OpTerm(p::Param) = OpTerm(0,δ[],Param[p],ExpVal[],Corr[],BaseOpProduct())
+OpTerm(p::Param)  = OpTerm(0,δ[],Param[p],ExpVal[],Corr[],BaseOpProduct())
+OpTerm(E::ExpVal) = OpTerm(0,δ[],Param[],ExpVal[E],Corr[],BaseOpProduct())
+OpTerm(C::Corr)   = OpTerm(0,δ[],Param[],ExpVal[],Corr[C],BaseOpProduct())
 
 Base.isempty(A::OpTerm) = A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs) && isempty(A.bares)
 
@@ -178,7 +180,7 @@ function OpSum(itr)
     end
     A
 end
-OpSum(A::Union{BaseOperator,Param}) = OpSum(OpTerm(A))
+OpSum(A::Union{BaseOperator,Param,Corr,ExpVal}) = OpSum(OpTerm(A))
 OpSum(A::OpTerm) = OpSum(((A,1),))
 
 function _add_sum_term!(A::OpSum,oB::OpTerm,sB)

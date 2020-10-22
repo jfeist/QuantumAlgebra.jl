@@ -86,7 +86,8 @@ indices(A::OpSum) = vcat(indices.(sort!(collect(keys(A.terms))))...)
 extindices(A) = filter(!issumindex,indices(A))
 
 "`symmetric_index_nums(A)` return sequence of numbers of exchange-symmetric indices"
-function symmetric_index_nums(A)
+symmetric_index_nums(A) = symmetric_index_nums(OpSum(A))
+function symmetric_index_nums(A::OpSum)
     inds = extindices(A)
     Nsyms = [1]
     for ii=2:length(inds)
