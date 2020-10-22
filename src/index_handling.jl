@@ -80,17 +80,18 @@ indices(v::AbstractVector) = vcat(indices.(v)...)
 indices(A::BaseOpProduct) = indices(A.v)
 indices(A::Union{ExpVal,Corr}) = indices(A.ops)
 indices(A::OpTerm) = vcat(indices.((A.δs,A.params,A.expvals,A.corrs,A.bares))...)
+indices(A::OpSum) = vcat(indices.(sort!(collect(keys(A.terms))))...)
 
-"`extindices(A::Operator)` return externally visible indices of an expression"
+"`extindices(A)` return externally visible indices of an expression"
 extindices(A) = filter(!issumindex,indices(A))
 
-"`symmetric_index_nums(A::OpTerm)` return sequence of numbers of exchange-symmetric indices"
+"`symmetric_index_nums(A)` return sequence of numbers of exchange-symmetric indices"
 function symmetric_index_nums(A)
     inds = extindices(A)
     Nsyms = [1]
     for ii=2:length(inds)
         i1,i2 = inds[ii-1], inds[ii]
-        if A == replace_inds(i1=>i2,i2=>i1)(A)
+        if A == normal_form(replace_inds(i1=>i2,i2=>i1)(A))
             Nsyms[end] += 1
         else
             push!(Nsyms,1)

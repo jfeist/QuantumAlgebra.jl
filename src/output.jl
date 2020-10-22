@@ -76,11 +76,15 @@ function print_term_scalar(io::IO,t::OpTerm,s::Number, print_connector::Bool)
     elseif s == 1
         str = ""
     else
-        str = string(s)
+        str = numstring(s)*" "
     end
     print_as_connector(io,str,print_connector)
-    print(io," ",t)
+    print(io,t)
 end
+
+numstring(x::Number) = @sprintf "%g" x
+numstring(x::Rational) = denominator(x)==1 ? string(numerator(x)) : string(x)
+numstring(x::Complex) = ((r,i) = reim(x); iszero(i) ? numstring(r) : (iszero(r) ? numstring(i)*"i" : "($(numstring(r))$(i<0 ? '-' : '+')$(numstring(abs(i)))i)"))
 
 function Base.print(io::IO,A::OpSum)
     if isempty(A.terms)
@@ -92,11 +96,6 @@ function Base.print(io::IO,A::OpSum)
         end
     end
 end
-
-mystring(x::Number) = @sprintf "%g" x
-mystring(x::Rational) = denominator(x)==1 ? "$(numerator(x))" : "\\frac{$(numerator(x))}{$(denominator(x))}"
-mystring(x::Complex) = @sprintf "(%g%+gi)" real(x) imag(x)
-mystring(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" mystring(real(x)) (imag(x)>=0 ? "+" : "-") mystring(abs(imag(x)))
 
 Base.show(io::IO, ::MIME"text/latex", A::Union{BaseOperator,BaseOpProduct,ExpVal,Corr,OpSum,OpTerm}) = print(io,"\$",latex(A),"\$")
 
@@ -127,7 +126,12 @@ latexjoin(args...) = join(latex.(args...))
 latexindstr(inds::OpIndex...) = latexindstr(inds)
 latexindstr(inds) = isempty(inds) ? "" : "_{$(latexjoin(inds))}"
 
-latex(x::Number) = imag(x)==0 ? mystring(real(x)) : (real(x)==0 ? mystring(imag(x))*"i" : mystring(x))
+numlatex(x::Number) = @sprintf "%g" x
+numlatex(x::Rational) = denominator(x)==1 ? "$(numerator(x))" : "\\frac{$(numerator(x))}{$(denominator(x))}"
+numlatex(x::Complex) = @sprintf "(%g%+gi)" real(x) imag(x)
+numlatex(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" numlatex(real(x)) (imag(x)>=0 ? "+" : "-") numlatex(abs(imag(x)))
+
+latex(x::Number) = imag(x)==0 ? numlatex(real(x)) : (real(x)==0 ? numlatex(imag(x))*"i" : numlatex(x))
 latex(A::δ) = string("\\delta", latexindstr(A.iA,A.iB))
 latex(A::ExpVal) = "\\langle $(latex(A.ops)) \\rangle"
 latex(A::Corr) = "\\langle $(latex(A.ops)) \\rangle_{c}"
