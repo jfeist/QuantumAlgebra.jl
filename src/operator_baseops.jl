@@ -478,12 +478,14 @@ function *(A::OpTerm,B::OpTerm)
     OpTerm(nsuminds,δs,params,expvals,corrs,BaseOpProduct(barevec))
 end
 
+*(A::Union{OpSum,OpTerm}) = A
 function *(A::OpSum,B::OpSum)
     OpSum((tA*tB,sA*sB) for ((tA,sA),(tB,sB)) in Iterators.product(A.terms,B.terms))
 end
 *(A::Number,B::OpSum) = OpSum((tB,A*sB) for (tB,sB) in B.terms)
 *(B::OpSum,A::Number) = A*B
 
++(A::OpSum) = A
 function +(A::OpSum,B::OpSum)
     S = deepcopy(A)
     for (t,s) in B.terms

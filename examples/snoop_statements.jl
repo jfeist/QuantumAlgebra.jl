@@ -108,3 +108,21 @@ for i2 = (:n,:m)
         latex(A),latex(vacExpVal(A,stateop))
     end
 end
+
+function dotest(H,A,n=5)
+    for _ = 1:n
+        A = normal_form(comm(H,A))
+    end
+    A
+end
+
+H = ∑(:n,∑(:m,∑(:k,Pr"ω_n,m"*adag(:n,:k)*a(:m,:k)))) + ∑(:i,1//2*Pr"ν_i"*σz(:i)) + ∑(:n,∑(:k,∑(:i,Pr"g_i,n,k"*σx(:i)*(adag(:n,:k)+a(:n,:k)))))
+dotest(H,σz(:j))
+
+
+allops = (a(1),f(:α),σz(:i),a(2),f(:β),σz(:j),a(3),f(:γ),σz(:k))
+for N = 1:9
+    ops = allops[1:N]
+    A = normal_form(8*Pr"g_i"*prod(ops))
+    ascorr(A)
+end
