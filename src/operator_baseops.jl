@@ -300,7 +300,7 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         else
             # σ-_i σ+_j = σ+_j σ-_i - δij σz_i = σ+_j σ-_i + δij (1 - 2 σ+_i σ-_i)
             # note that we return a σz to "fit" in ExchangeResult, but need to undo that later on
-            # note that we pass "+σz" instead of "-σz" so we do not have to flip the sign of the "1" term in _merge_runs
+            # note that we pass "+σz" instead of "-σz" so we do not have to flip the sign of the "1" term in the sort algorithm
             return (1, ExchangeResult(1, dd, σ(z,A.inds)))
         end
     end
@@ -352,32 +352,44 @@ _add_sum_term!(::NotASum) = error("Normal ordering in Corr or ExpVal producing n
 normal_order!(A::Union{Corr,ExpVal}) = normal_order!(A.ops,NotASum())
 
 function normal_order!(ops::BaseOpProduct,term_collector)
-    # do a mergesort to get to normal ordering
-    # in the merge phase, every time we take from the right array, we have to commute through all left operators in the way
-    # inspiration: https://en.wikipedia.org/wiki/Merge_sort#Bottom-up_implementation
-    # Each 1-element run in A is already "sorted".
-    # Make successively longer sorted runs of length 2, 4, 8, 16... until whole array is sorted.
+    # do an insertion sort to get to normal ordering
+    # reference: https://en.wikipedia.org/wiki/Insertion_sort
     A = ops.v
-    B = similar(A)
-    n = length(A)
-    width = 1
     prefactor::ComplexInt = one(ComplexInt)
-    while width < n
-        # Array A is full of runs of length width.
-        for i = 1:2width:n
-            # Merge two runs: A[i:i+width-1] and A[i+width:i+2*width-1] to B[]
-            # or copy A[i:n-1] to B[] ( if(i+width >= n) )
-            prefactor = _merge_runs!(B, A, i, min(i+width, n+1), min(i+2width-1, n), term_collector, prefactor)
+    for i = 2:length(A)
+        j = i
+        while j>1 && A[j]<A[j-1]
+            # need to commute A[j-1] and A[j]
+            pp, exc_res = _exchange(A[j],A[j-1])
+            #println("exchanging A[$j] = $(A[j]) and A[$kk] = $(A[kk]) gave result: $pp, $exc_res.")
+            if exc_res !== nothing
+                if exc_res.op === nothing
+                    onew = BaseOpProduct([A[1:j-2]; A[j+1:end]])
+                elseif A[j].t == σplus_
+                    @assert exc_res.op.t == σ_
+                    # we got σz_i, have to replace it by (1 - 2 σ+_i σ-_i) (which is really -σz, see explanation in _exchange)
+                    onew = BaseOpProduct([A[1:j-2]; σplus(exc_res.op.inds); σminus(exc_res.op.inds); A[j+1:end]])
+                    t = OpTerm(exc_res.δs, onew)
+                    _add_sum_term!(term_collector,t,-2exc_res.pref*prefactor)
+                    # this one gives the "1" term that is used below
+                    onew = BaseOpProduct([A[1:j-2]; A[j+1:end]])
+                else
+                    # new product needs _full_ array (B[1:k-1] is already ordered)
+                    onew = BaseOpProduct([A[1:j-2]; exc_res.op; A[j+1:end]])
+                end
+                t = OpTerm(exc_res.δs, onew)
+                _add_sum_term!(term_collector,t,exc_res.pref*prefactor)
+                #println("adding term = $(exc_res.pref*prefactor) * $t, term_collector = $(term_collector)")
+            end
+            # only modify prefactor after the exchange
+            prefactor *= pp
             iszero(prefactor) && return prefactor
+
+            # now finally exchange the two
+            A[j-1], A[j] = A[j], A[j-1]
+            j -= 1
         end
-        # Now work array B is full of runs of length 2*width.
-        # swap A and B for next iteration.
-        A, B = B, A
-        # Now array A is full of runs of length 2*width.
-        width *= 2
     end
-    # if swapping ended up with A, B = original_B, ops.v, copy back to ops.v
-    A === ops.v || (ops.v .= A; A = ops.v)
     # check if we have any products that simplify (only happens for identical operators)
     k = 2
     while k<=length(A)
@@ -403,58 +415,6 @@ function normal_order!(ops::BaseOpProduct,term_collector)
         else
             k += 1
         end
-    end
-    prefactor
-end
-
-# Left  run is A[iLeft :iRight-1].
-# Right run is A[iRight:iEnd].
-# both are already ordered!
-function _merge_runs!(B, A, iLeft, iRight, iEnd, term_collector, prefactor)
-    i = iLeft
-    j = iRight
-    # While there are elements in the left or right runs...
-    @inbounds for k = iLeft:iEnd
-        # If left run head exists and is <= existing right run head.
-        if (i < iRight && (j > iEnd || A[i] <= A[j]))
-            #println("taking B[$k] from left, A[$i] = $(A[i])")
-            B[k] = A[i]
-            i += 1
-        else
-            # need to commute A[j] through A[i:iRight-1]
-            # since A[iLeft:iRight-1] is already ordered, we have that A[j] < A[i:iRight-1]
-            for kk = iRight-1:-1:i
-                pp, exc_res = _exchange(A[j],A[kk])
-                #println("exchanging A[$j] = $(A[j]) and A[$kk] = $(A[kk]) gave result: $pp, $exc_res.")
-                if exc_res !== nothing
-                    if exc_res.op === nothing
-                        # new product needs _full_ array (B[1:k-1] is already ordered)
-                        onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; A[kk+1:iRight-1]; A[j+1:end]])
-                    elseif A[j].t == σplus_
-                        @assert exc_res.op.t == σ_
-                        # we got σz_i, have to replace it by (1 - 2 σ+_i σ-_i) (which is really -σz, see explanation in _exchange)
-                        onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; σplus(exc_res.op.inds); σminus(exc_res.op.inds); A[kk+1:iRight-1]; A[j+1:end]])
-                        t = OpTerm(exc_res.δs, onew)
-                        _add_sum_term!(term_collector,t,-2exc_res.pref*prefactor)
-                        # this one gives the "1" term that is used below
-                        onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; A[kk+1:iRight-1]; A[j+1:end]])
-                    else
-                        # new product needs _full_ array (B[1:k-1] is already ordered)
-                        onew = BaseOpProduct([B[1:k-1]; A[i:kk-1]; exc_res.op; A[kk+1:iRight-1]; A[j+1:end]])
-                    end
-                    t = OpTerm(exc_res.δs, onew)
-                    _add_sum_term!(term_collector,t,exc_res.pref*prefactor)
-                    #println("adding term = $(exc_res.pref*prefactor) * $t, term_collector = $(term_collector)")
-                end
-                # only modify prefactor after the exchange
-                prefactor *= pp
-                iszero(prefactor) && return prefactor
-            end
-            #println("taking B[$k] from right, A[$j] = $(A[j])")
-            B[k] = A[j]
-            j += 1
-        end
-        #println("k = $k, current expression is B[1:k]: $(BaseOpProduct(B[1:k]))")
     end
     prefactor
 end
