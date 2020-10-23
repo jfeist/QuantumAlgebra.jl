@@ -116,6 +116,9 @@ scal(x) = OpSum(((OpTerm(),x),))
 
         @test normal_form(a(1) * (σy(1) * a(1))') == normal_form(a(1) * (adag(1) * σy(1))) == normal_form(adag(1)*a(1)*σy(1) + σy(1))
 
+        @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:i)) == σx(:i)
+        @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:j)) == σx(:j)
+
         tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*adag(5)*a(5))
         if QuantumAlgebra.using_σpm()
             @test length(tmp1.terms) == 1
