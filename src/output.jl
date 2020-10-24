@@ -102,7 +102,7 @@ Base.show(io::IO, ::MIME"text/latex", A::Union{BaseOperator,BaseOpProduct,ExpVal
 function latex(A::BaseOperator)
     A.t in (BosonDestroy_,FermionDestroy_) && return "{$(A.name)}$(latexindstr(A.inds))"
     A.t in (BosonCreate_,FermionCreate_) && return "{$(A.name)}$(latexindstr(A.inds))^\\dagger"
-    A.t == σ_ && return string("\\sigma_{$(A.a)",isempty(indices(A)) ? "}" : ",$(A.inds...)}")
+    A.t == σ_ && return string("\\sigma_{$(A.a)",isempty(indices(A)) ? "}" : ",$(latexjoin(A.inds))}")
     A.t == σminus_ && return "\\sigma^-" * latexindstr(A.inds)
     A.t == σplus_ && return "\\sigma^+" * latexindstr(A.inds)
     error("latex should not reach this!)")
