@@ -97,7 +97,9 @@ function Base.print(io::IO,A::OpSum)
     end
 end
 
-Base.show(io::IO, ::MIME"text/latex", A::Union{BaseOperator,BaseOpProduct,ExpVal,Corr,OpSum,OpTerm}) = print(io,"\$",latex(A),"\$")
+const QuantumObject = Union{OpIndex,NameIndex,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,OpTerm,OpSum}
+Base.show(io::IO, A::QuantumObject) = print(io,A)
+Base.show(io::IO, ::MIME"text/latex", A::QuantumObject) = print(io,"\$",latex(A),"\$")
 
 function latex(A::BaseOperator)
     A.t in (BosonDestroy_,FermionDestroy_) && return "{$(A.name)}$(latexindstr(A.inds))"
