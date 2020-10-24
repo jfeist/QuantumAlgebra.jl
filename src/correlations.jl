@@ -33,32 +33,43 @@ See also: [`ExpVal`](@ref), [`Corr`](@ref)"""
 function ascorr(A::OpSum)
     newA = OpSum()
     for (t,s) in A.terms
-        lt = length(t.bares)
-        if lt==0
-            _add_sum_term!(newA,t,s)
-        else
-            for C in prodcorr_inds(lt)
-                _add_sum_term!(newA,term2corr(t,C),s)
+        # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
+        # is assumed to be distinct from the indices of the expressions
+        # then, calculate the correction expression for the term where the sum index is the same as any of the non-summed indices,
+        # and add the correction between that and the "incorrect" term where index identity is not taken into account
+        _add_corrs!(newA,t,s)
+
+        if t.nsuminds>0 && !isempty(t.bares)
+            extinds = unique(extindices(t.bares))
+            for ii in 1:t.nsuminds
+                sumind = sumindex(ii)
+                for ind in extinds
+                    f = replace_inds((sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...))
+                    tb = f(t.bares)
+                    tbc = deepcopy(tb)
+                    normal_order!(tb,NotASum())
+                    if tb != tbc
+                        tright = OpTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb)
+                        _add_corrs!(newA,tright,s)
+                        twrong = OpTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
+                        _add_corrs!(newA,twrong,-s,_add_with_normal_order!)
+                    end
+                end
             end
         end
     end
     newA
 end
 
-##################################################################################################################################
-#### MISSING: ####################################################################################################################
-##################################################################################################################################
-#     # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
-#     # is assumed to be distinct from the indices of the expressions
-#     # then, calculate the correction expression for the term where the sum index is the same as any of the non-summed indices,
-#     # and add the correction between that and the "incorrect" term where index identity is not taken into account
-#     tmp = ascorr(A.A)
-#     res = OpSumAnalytic(A.ind,tmp)
-#     for ii in setdiff(indexset(A),sumindexset(A))
-#         res += ascorr(replace_index(A.A,A.ind,ii)) - replace_index(tmp,A.ind,ii)
-#     end
-#     res
-# end
+function _add_corrs!(A,t,s,addfun! = _add_sum_term!)
+    if isempty(t.bares)
+        addfun!(A,t,s)
+    else
+        for C in prodcorr_inds(length(t.bares))
+            addfun!(A,term2corr(t,C),s)
+        end
+    end
+end
 
 """
     CorrExpTup_isless(a,b)

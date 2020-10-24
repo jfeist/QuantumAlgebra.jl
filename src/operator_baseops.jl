@@ -346,11 +346,6 @@ function _contract(A::BaseOperator,B::BaseOperator)::Tuple{Bool,ComplexInt,Union
     end
 end
 
-struct NotASum end
-_add_sum_term!(::NotASum) = error("Normal ordering in Corr or ExpVal producing new terms is not yet implemented!")
-
-normal_order!(A::Union{Corr,ExpVal}) = normal_order!(A.ops,NotASum())
-
 function normal_order!(ops::BaseOpProduct,term_collector)
     # do an insertion sort to get to normal ordering
     # reference: https://en.wikipedia.org/wiki/Insertion_sort
@@ -419,17 +414,25 @@ function normal_order!(ops::BaseOpProduct,term_collector)
     prefactor
 end
 
+struct NotASum end
+_add_sum_term!(::NotASum) = error("Normal ordering in Corr or ExpVal producing new terms is not yet implemented!")
+
+normal_order!(A::Union{Corr,ExpVal}) = normal_order!(A.ops,NotASum())
+function normal_order!(v::Vector{T},pref=1) where {T<:Union{Corr,ExpVal}}
+    for EC in v
+        pref *= normal_order!(EC)
+    end
+    filter!(EC -> !isempty(EC.ops), v)
+    pref
+end
+
 function _add_with_normal_order!(A::OpSum,t::OpTerm,s)
     commterms = OpSum()
     t = _normalize_without_commutation(t)
     t === nothing && return
     pref = normal_order!(t.bares,commterms)
-    for E in t.expvals
-        pref *= normal_order!(E)
-    end
-    for C in t.corrs
-        pref *= normal_order!(C)
-    end
+    pref = normal_order!(t.expvals,pref)
+    pref = normal_order!(t.corrs,pref)
 
     #println("in _add_with_normal_order, main term becomes $t, with scalar $s. commterms: $commterms")
     iszero(pref) || _add_sum_term!(A,t,s*pref)

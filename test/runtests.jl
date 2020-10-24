@@ -185,7 +185,7 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test ascorr(∑(:i,σp(:i)*σm(:n))) == ∑(:i,corr(σp(:i)*σm(:n))) + ∑(:i,corr(σp(:i))*corr(σm(:n)))
         else
             @test ascorr(-param(:g,'r',1)*σz(1)) == -param(:g,'r',1)*corr(σz(1))
-            @test_broken ascorr(∑(:i,σy(:i)*σy(:n))) == ∑(:i,corr(σy(:i)*σy(:n))) + ∑(:i,corr(σy(:i))*corr(σy(:n))) - corr(σy(:n))*corr(σy(:n))
+            @test ascorr(∑(:i,σy(:i)*σy(:n))) == ∑(:i,corr(σy(:i)*σy(:n))) + ∑(:i,corr(σy(:i))*corr(σy(:n))) - corr(σy(:n))*corr(σy(:n))
         end
 
         H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
