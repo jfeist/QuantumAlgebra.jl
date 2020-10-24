@@ -300,7 +300,7 @@ corr(A::OpSum) = _map_opsum_ops(corr,A)
 function ∑(ind::OpIndex,A::OpTerm)
     (issumindex(ind) || isintindex(ind)) && error("Index $ind to be summed over needs to be symbolic!")
     sumind = sumindex(A.nsuminds+one(A.nsuminds))
-    f = replace_inds(Dict(ind=>sumind))
+    f = replace_inds(ind=>sumind)
     g = reorder_suminds()
     # use the form that also sets nsuminds
     g(f(A,sumind.num))

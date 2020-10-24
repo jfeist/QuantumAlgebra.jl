@@ -423,6 +423,7 @@ function normal_order!(v::Vector{T},pref=1) where {T<:Union{Corr,ExpVal}}
         pref *= normal_order!(EC)
     end
     filter!(EC -> !isempty(EC.ops), v)
+    sort!(v)
     pref
 end
 

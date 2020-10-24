@@ -44,12 +44,12 @@ function ascorr(A::OpSum)
             for ii in 1:t.nsuminds
                 sumind = sumindex(ii)
                 for ind in extinds
-                    f = replace_inds((sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...))
+                    f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
                     tb = f(t.bares)
                     tbc = deepcopy(tb)
                     normal_order!(tb,NotASum())
                     if tb != tbc
-                        tright = OpTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb)
+                        tright = _normalize_without_commutation(OpTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
                         _add_corrs!(newA,tright,s)
                         twrong = OpTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
                         _add_corrs!(newA,twrong,-s,_add_with_normal_order!)
