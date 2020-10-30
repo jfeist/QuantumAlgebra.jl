@@ -169,25 +169,25 @@ scal(x) = OpSum(((OpTerm(),x),))
         @test corr(scal(3)) == scal(3)
         @test corr(3+adag(2)) == 3 + corr(adag(2))
 
-        @test ascorr(scal(3)) == scal(3)
-        @test ascorr(a(2)) == corr(a(2))
-        @test ascorr(3Pc"g") == 3Pc"g"
-        @test ascorr(3a(2)) == 3corr(a(2))
-        @test ascorr(3+adag(2)) == 3 + corr(adag(2))
+        @test expval_as_corrs(scal(3)) == scal(3)
+        @test expval_as_corrs(a(2)) == corr(a(2))
+        @test expval_as_corrs(3Pc"g") == 3Pc"g"
+        @test expval_as_corrs(3a(2)) == 3corr(a(2))
+        @test expval_as_corrs(3+adag(2)) == 3 + corr(adag(2))
 
-        @test ascorr(a(2)*a(2)) == corr(a(2)*a(2)) + corr(a(2))*corr(a(2))
-        @test ascorr(a(2)*a(:m)) == corr(a(2)*a(:m)) + corr(a(2))*corr(a(:m))
+        @test expval_as_corrs(a(2)*a(2)) == corr(a(2)*a(2)) + corr(a(2))*corr(a(2))
+        @test expval_as_corrs(a(2)*a(:m)) == corr(a(2)*a(:m)) + corr(a(2))*corr(a(:m))
         tmpas = a.(1:3)
         @test *(tmpas...) == a(1)*a(2)*a(3)
         tmpEVs = corr.(tmpas)
-        @test ascorr(*(8,Pr"g",tmpas...)) == 8*Pr"g" * (corr(*(tmpas...)) + *(tmpEVs...) + tmpEVs[1]*corr(tmpas[2]*tmpas[3]) + tmpEVs[2]*corr(tmpas[1]*tmpas[3]) + tmpEVs[3]*corr(tmpas[1]*tmpas[2]))
+        @test expval_as_corrs(*(8,Pr"g",tmpas...)) == 8*Pr"g" * (corr(*(tmpas...)) + *(tmpEVs...) + tmpEVs[1]*corr(tmpas[2]*tmpas[3]) + tmpEVs[2]*corr(tmpas[1]*tmpas[3]) + tmpEVs[3]*corr(tmpas[1]*tmpas[2]))
 
         if QuantumAlgebra.using_σpm()
-            @test ascorr(-param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*corr(σp(1))
-            @test ascorr(∑(:i,σp(:i)*σm(:n))) == ∑(:i,corr(σp(:i)*σm(:n))) + ∑(:i,corr(σp(:i))*corr(σm(:n)))
+            @test expval_as_corrs(-param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*corr(σp(1))
+            @test expval_as_corrs(∑(:i,σp(:i)*σm(:n))) == ∑(:i,corr(σp(:i)*σm(:n))) + ∑(:i,corr(σp(:i))*corr(σm(:n)))
         else
-            @test ascorr(-param(:g,'r',1)*σz(1)) == -param(:g,'r',1)*corr(σz(1))
-            @test ascorr(∑(:i,σy(:i)*σy(:n))) == ∑(:i,corr(σy(:i)*σy(:n))) + ∑(:i,corr(σy(:i))*corr(σy(:n))) - corr(σy(:n))*corr(σy(:n))
+            @test expval_as_corrs(-param(:g,'r',1)*σz(1)) == -param(:g,'r',1)*corr(σz(1))
+            @test expval_as_corrs(∑(:i,σy(:i)*σy(:n))) == ∑(:i,corr(σy(:i)*σy(:n))) + ∑(:i,corr(σy(:i))*corr(σy(:n))) - corr(σy(:n))*corr(σy(:n))
         end
 
         H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
@@ -235,14 +235,14 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test vacExpVal(A,S) ≈ val
         end
 
-        # tmp = scal(1+2im)*∑(:i,a(:i)*adag(:i)*ascorr(adag(:n)*a(:m)))
+        # tmp = scal(1+2im)*∑(:i,a(:i)*adag(:i)*expval_as_corrs(adag(:n)*a(:m)))
         # @test latex(scal(1+2im)) == "(1+2i)"
         # @test latex(scal(1+2im//5)) == "\\left(1+\\frac{2}{5}i\\right)"
 
-        tmp = ∑(:i,ascorr(adag(:n)*a(:i)))
+        tmp = ∑(:i,expval_as_corrs(adag(:n)*a(:i)))
         tmplatex = raw"\sum_{ \#_{1} }  \langle {a}_{n}^\dagger \rangle_{c} \langle {a}_{\#_{1}} \rangle_{c}  + \sum_{ \#_{1} }  \langle {a}_{n}^\dagger{a}_{\#_{1}} \rangle_{c} "
         @test latex(tmp) == tmplatex
-        @test ascorr(tmp) == tmp
+        @test expval_as_corrs(tmp) == tmp
         @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
         # if QuantumAlgebra.using_σpm()
         #     @test latex(σp()) == "\\sigma^+"
@@ -273,9 +273,9 @@ scal(x) = OpSum(((OpTerm(),x),))
         @test string(5a(:i) + 3adag(:j) - 3f(1)) == "3 a†(j) - 3 f(1) + 5 a(i)"
         @test string(5im*a(:i) + (3+2im)*adag(:j) - 3//2*f(1)) == "(3+2i) a†(j) - 3//2 f(1) + 5i a(i)"
         if QuantumAlgebra.using_σpm()
-            @test string(normal_form(a(5)*adag(5)*σp(3)*ascorr(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) + ⟨a†(5i) a(5)⟩c σ⁺(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
+            @test string(normal_form(a(5)*adag(5)*σp(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) + ⟨a†(5i) a(5)⟩c σ⁺(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
         else
-            @test string(normal_form(a(5)*adag(5)*σz(3)*ascorr(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σz(3) + ⟨a†(5i) a(5)⟩c σz(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σz(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σz(3) a(5)"
+            @test string(normal_form(a(5)*adag(5)*σz(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σz(3) + ⟨a†(5i) a(5)⟩c σz(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σz(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σz(3) a(5)"
         end
     end
 end
