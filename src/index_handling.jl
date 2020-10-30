@@ -10,9 +10,10 @@ abstract type IndexFunction end
 (f::IndexFunction)(A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
 
 function _canon_ind(n)
-    i,c = divrem(n,15)
-    i == 0 ? OpIndex('h'+c) : OpIndex('h'+c,i+1)
+    i,c = divrem(n-1,15)
+    i == 0 ? OpIndex('i'+c) : OpIndex('i'+c,i+1)
 end
+_canon_ind_to_num(ind::OpIndex) = ind.sym-'i'+1 + (ind.num==typemin(ind.num) ? 0 : (ind.num-1)*15)
 
 mutable struct canon_inds <: IndexFunction
     icurr::IndexInt
