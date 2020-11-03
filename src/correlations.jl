@@ -65,7 +65,7 @@ function _add_corrs!(A,t,s,addfun! = _add_sum_term!)
     if isempty(t.bares)
         addfun!(A,t,s)
     else
-        for C in prodcorr_inds(length(t.bares))
+        for C in expval2corrs_inds(length(t.bares))
             addfun!(A,term2corr(t,C),s)
         end
     end
@@ -94,7 +94,7 @@ function CorrPerm_isless(a::Tuple,b::Tuple)
 end
 
 """
-    prodcorr_inds(N::Int)
+    expval2corrs_inds(N::Int)
 
 for N operators, create an array of tuples of tuples that represents the terms
 in a sum of products of correlators. Each tuple corresponds to a sum term, see
@@ -103,9 +103,9 @@ format. The returned array and terms are sorted such that if the N operators are
 sorted, the represented expression is also sorted with the conventions of the
 QuantumAlgebra package. This allows to directly return a normal-ordered form.
 """
-function prodcorr_inds(N::Int)
+function expval2corrs_inds(N::Int)
     # get return value for N from cache if present, otherwise calculate and cache it
-    get!(_PRODCORR_INDS_CACHE,N) do
+    get!(_EXPVAL2CORRS_CACHE,N) do
         terms = Any[Tuple(tuple.(1:N))]
         for n = 2:N-1
             append!(terms,ncomb_inds(n,1:N))
@@ -114,7 +114,7 @@ function prodcorr_inds(N::Int)
     end
 end
 # preload the cache for N=0 and N=1 so we do not have to special-case those above
-const _PRODCORR_INDS_CACHE = Dict{Int,Vector{Any}}(0 => [((),)], 1 => [((1,),)])
+const _EXPVAL2CORRS_CACHE = Dict{Int,Vector{Any}}(0 => [((),)], 1 => [((1,),)])
 
 function ncomb_inds(n,inds,used_combs=Set())
     terms = []
@@ -133,4 +133,41 @@ function ncomb_inds(n,inds,used_combs=Set())
         end
     end
     terms
+end
+
+function term2expvals(A::OpTerm,C::Tuple)
+    expvals = deepcopy(A.expvals)
+    sizehint!(expvals,length(expvals)+length(C))
+    for grp in C
+        cc = ExpVal(BaseOpProduct(collect(map(i -> A.bares.v[i], grp))))
+        push!(expvals,cc)
+    end
+    sort!(expvals)
+    OpTerm(A.nsuminds,A.δs,A.params,expvals,A.corrs,BaseOpProduct())
+end
+
+_canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(A.inds))
+_expval2tuple(A::ExpVal) = Tuple(_canon_op_to_num.(A.ops.v))
+const _CORR2EXPVALS_CACHE = Dict{Int,Vector{Any}}()
+function corr2expvals_inds(N)
+    get!(_CORR2EXPVALS_CACHE,N) do
+        A = OpSum(OpTerm(BaseOpProduct(BosonDestroy.(:a,_canon_ind.(1:N)))))
+        # expval_as_corrs(As...) = <As...> in terms of correlators <A1 A2...>c
+        # <As...>c = <As...> - <As...> + <As...>c, where RHS expression only contains <As...> and lower-order correlators
+        cA = expval(A) - expval_as_corrs(A) + corr(A)
+        # rewrite the lower-order correlators in terms of expectation values
+        ncA = OpSum()
+        for (t,s) in cA.terms
+            nt = deepcopy(t)
+            empty!(nt.corrs)
+            nts = OpSum(nt)
+            for co in t.corrs
+                nts *= OpSum((term2expvals(OpTerm(co.ops),C)=>sC for (C,sC) in corr2expvals_inds(length(co))))
+            end
+            for (ntt,ns) in nts.terms
+                _add_with_normal_order!(ncA,ntt,ns*s)
+            end
+        end
+        [Tuple(_expval2tuple.(t.expvals))=>s for (t,s) in sort!(collect(ncA.terms),by=x->x[1])]
+    end
 end
