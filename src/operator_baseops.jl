@@ -415,7 +415,7 @@ function normal_order!(ops::BaseOpProduct,term_collector)
 end
 
 struct NotASum end
-_add_sum_term!(::NotASum) = error("Normal ordering in Corr or ExpVal producing new terms is not yet implemented!")
+_add_sum_term!(::NotASum,args...) = error("Normal ordering in Corr or ExpVal producing new terms is not yet implemented!")
 
 normal_order!(A::Union{Corr,ExpVal}) = normal_order!(A.ops,NotASum())
 function normal_order!(v::Vector{T},pref=1) where {T<:Union{Corr,ExpVal}}

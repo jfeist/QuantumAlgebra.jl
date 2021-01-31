@@ -29,7 +29,7 @@ a_{n} \\rangle_{c} + \\langle a_{n}^\\dagger \\rangle_{c} \\langle a_{m}
 a_{n}^\\dagger a_{n} \\rangle_{c} + \\langle a_{n} \\rangle_{c} \\langle
 a_{n}^\\dagger a_{m} \\rangle_{c}``.
 
-See also: [`ExpVal`](@ref), [`Corr`](@ref)"""
+See also: [`expval`](@ref), [`corr`](@ref)"""
 function expval_as_corrs(A::OpSum)
     newA = OpSum()
     for (t,s) in A.terms

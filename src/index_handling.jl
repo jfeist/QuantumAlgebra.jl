@@ -93,7 +93,8 @@ function symmetric_index_nums(A::OpSum)
     Nsyms = [1]
     for ii=2:length(inds)
         i1,i2 = inds[ii-1], inds[ii]
-        if A == normal_form(replace_inds(i1=>i2,i2=>i1)(A))
+        Aexc = try normal_form(replace_inds(i1=>i2,i2=>i1)(A)) catch; OpSum() end
+        if A == Aexc
             Nsyms[end] += 1
         else
             push!(Nsyms,1)
