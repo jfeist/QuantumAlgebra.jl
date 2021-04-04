@@ -244,29 +244,17 @@ scal(x) = OpSum(((OpTerm(),x),))
         @test latex(tmp) == tmplatex
         @test expval_as_corrs(tmp) == tmp
         @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
-        # if QuantumAlgebra.using_σpm()
-        #     @test latex(σp()) == "\\sigma^+"
-        # else
-        #     @test latex(σz()) == "\\sigma_{z}"
-        # end
 
-        # inds = [:a,:b,:c,:d,:e,:f,:g,:h,:i,:j,:k,:l,:m,:n]
-        # tmp1 = param(:ω,:y)*a(1)*adag(1)*a(3)*adag(4)*expval(a(5))*corr(adag(5)*a(9))
-        # tmp2 = param(:ω,:a)*expval(a(:b))*corr(adag(:c)*a(:d))*adag(:e)*a(:f) + param(:ω,:g)*expval(a(:h))*corr(adag(:i)*a(:j))*adag(:k)*adag(:l)*a(:m)*a(:n)
-        # @test distribute_indices!(copy(inds),tmp1) == tmp2
-        # if QuantumAlgebra.using_σpm()
-        #     tmp1 = a(1,:n)*adag()*σm(1,:n)*σp()
-        #     @test distribute_indices!(copy(inds),tmp1) == adag()*a(:a,:b)*σp()*σm(:c,:d)
-        # else
-        #     tmp1 = a(1,:n)*adag()*σz(1,:n)*σy()
-        #     @test distribute_indices!(copy(inds),tmp1) == adag()*a(:a,:b)*σy()*σz(:c,:d)
-        # end
+        lσp = latex(σp())
+        lσz = latex(σz())
+        if QuantumAlgebra.using_σpm()
+            @test lσp == "\\sigma^+"
+            @test lσz == "-1 + 2\\sigma^+\\sigma^-"
+        else
+            @test lσp == "\\frac{1}{2}\\sigma_{x} + \\frac{1}{2}i\\sigma_{y}"
+            @test lσz == "\\sigma_{z}"
+        end
 
-        # @test_throws MethodError distribute_indices!(copy(inds),∑(:i,a(:i)))
-        # @test_throws ArgumentError distribute_indices!([:a,:b],tmp1)
-
-        # @test QuantumAlgebra.exchange_inds(adag(:j)*a(:k),:k,:j) == adag(:k)*a(:j)
-        # @test QuantumAlgebra.extindices(∑(:i,adag(:i)*a(:k))) == [:k]
         @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
 
         @test string(normal_form(∑(:i,a(:i)) * adag(:n))) == "1 + ∑₁ a†(n) a(#₁)"
@@ -276,6 +264,16 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test string(normal_form(a(5)*adag(5)*σp(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) + ⟨a†(5i) a(5)⟩c σ⁺(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
         else
             @test string(normal_form(a(5)*adag(5)*σz(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σz(3) + ⟨a†(5i) a(5)⟩c σz(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σz(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σz(3) a(5)"
+        end
+
+        x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*adag(:i_1,:J,:k)*σp(:i))
+        ex = :($(julia_expression(expval(normal_form(x)))))
+        if QuantumAlgebra.using_σpm()
+            @test ex == :(I[J, j₂] * I[K, k] * g[i₁, K] * σ⁺[i₁] + g[s̄₁, k] * aᴴσ⁺a[i₁, J, k, s̄₁, s̄₁, j₂, K])
+        else
+            # julia_expression interpolates complex numbers directly as complex, not as expressions. so make sure to do the same here
+            halfim = 0.5im
+            @test ex == :(0.5 * I[J, j₂] * I[K, k] * g[i₁, K] * σˣ[i₁] + $halfim * I[J, j₂] * I[K, k] * g[i₁, K] * σʸ[i₁] + 0.5 * g[s̄₁, k] * aᴴσˣa[i₁, J, k, s̄₁, s̄₁, j₂, K] + $halfim * g[s̄₁, k] * aᴴσʸa[i₁, J, k, s̄₁, s̄₁, j₂, K])
         end
     end
 end
