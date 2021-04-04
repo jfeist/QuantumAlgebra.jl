@@ -24,7 +24,8 @@ varname(A::Union{ExpVal,Corr}) = varname(A.ops)
 indexpr(ind::OpIndex) = issumindex(ind) ? Symbol(:s̄,subscript(ind.num)) : Symbol(ind)
 indexpr(A) = indexpr.(indices(A))
 
-julia_expression(A::Param) = begin
+# the varnames optional (and ignored) argument allows to define a closure getexpr(A) = julia_expression(A,my_names)
+function julia_expression(A::Param,varnames=nothing)
     # the parsing here allows "parameters" that are functions
     # e.g., with names such as "f(t)"
     x = Meta.parse(string(A.name))
@@ -36,7 +37,7 @@ julia_expression(A::Param) = begin
     end
     A.state == 'c' ? :( conj($x) ) : x
 end
-julia_expression(A::δ) = :( I[$(indexpr(A)...)] )
+julia_expression(A::δ,varnames=nothing) = :( I[$(indexpr(A)...)] )
 function julia_expression(A::Union{ExpVal,Corr},varnames=nothing)
     x = varname(A)
     if varnames === nothing || x ∈ varnames
