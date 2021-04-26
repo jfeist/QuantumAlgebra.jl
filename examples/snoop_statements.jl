@@ -63,17 +63,17 @@ comm(a(1),adag(1)*a(1))
 comm(a(1),adag(1)*a(2)*a(1))
 comm(a(1),a(2)*adag(1)*a(1)*adag(2))
 
-ascorr(a(2))
-ascorr(3*a(2))
+expval_as_corrs(a(2))
+expval_as_corrs(3*a(2))
 
-ascorr(a(2)*a(2))
-ascorr(2*a(1)*a(2)*a(3))
-ascorr(a(1)*a(2)*a(3)*a(4))
-ascorr(adag(2)*a(1)*σz(1))
+expval_as_corrs(a(2)*a(2))
+expval_as_corrs(2*a(1)*a(2)*a(3))
+expval_as_corrs(a(1)*a(2)*a(3)*a(4))
+expval_as_corrs(adag(2)*a(1)*σz(1))
 
-ascorr(param(:g,'r')*adag(3)*a(2)*a(2))
-ascorr(-1*param(:g,'r',1)*σz(1))
-ascorr(adag(:n)*σy(:k)*a(:m)*adag(:m))
+expval_as_corrs(param(:g,'r')*adag(3)*a(2)*a(2))
+expval_as_corrs(-1*param(:g,'r',1)*σz(1))
+expval_as_corrs(adag(:n)*σy(:k)*a(:m)*adag(:m))
 
 let
     H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i)) + ∑(:j,(1//2)*param(:ωe,'r',:j)*σz(:j)) +
@@ -94,7 +94,7 @@ let
     end
 
     expval(H)
-    #ascorr(H)
+    #expval_as_corrs(H)
 end
 
 vacA(Avac(σp(1)*σm(1)))
@@ -124,5 +124,5 @@ allops = (a(1),f(:α),σz(:i),a(2),f(:β),σz(:j),a(3),f(:γ),σz(:k))
 for N = 1:9
     ops = allops[1:N]
     A = normal_form(8*Pr"g_i"*prod(ops))
-    ascorr(A)
+    expval_as_corrs(A)
 end
