@@ -29,9 +29,11 @@ end
 function Base.print(io::IO,A::BaseOperator)
     A.t in (BosonDestroy_,FermionDestroy_) && return print(io,"$(A.name)($(A.inds...))")
     A.t in (BosonCreate_,FermionCreate_) && return print(io,"$(A.name)†($(A.inds...))")
-    A.t == σ_ && return print(io,"σ$(A.a)($(A.inds...))")
-    A.t == σminus_ && return print(io,"σ⁻($(A.inds...))")
-    A.t == σplus_ && return print(io,"σ⁺($(A.inds...))")
+    A.t == TLSx_ && return print(io,"$(A.name)ˣ($(A.inds...))")
+    A.t == TLSy_ && return print(io,"$(A.name)ʸ($(A.inds...))")
+    A.t == TLSz_ && return print(io,"$(A.name)ᶻ($(A.inds...))")
+    A.t == TLSDestroy_ && return print(io,"$(A.name)⁻($(A.inds...))")
+    A.t == TLSCreate_ && return print(io,"$(A.name)⁺($(A.inds...))")
     error("print should never reach this!")
 end
 
@@ -104,9 +106,11 @@ Base.show(io::IO, ::MIME"text/latex", A::QuantumObject) = print(io,"\$",latex(A)
 function latex(A::BaseOperator)
     A.t in (BosonDestroy_,FermionDestroy_) && return "{$(A.name)}$(latexindstr(A.inds))"
     A.t in (BosonCreate_,FermionCreate_) && return "{$(A.name)}$(latexindstr(A.inds))^\\dagger"
-    A.t == σ_ && return string("\\sigma_{$(A.a)",isempty(indices(A)) ? "}" : ",$(latexjoin(A.inds))}")
-    A.t == σminus_ && return "\\sigma^-" * latexindstr(A.inds)
-    A.t == σplus_ && return "\\sigma^+" * latexindstr(A.inds)
+    A.t == TLSx_ && return "\\sigma^x" * latexindstr(A.inds)
+    A.t == TLSy_ && return "\\sigma^y" * latexindstr(A.inds)
+    A.t == TLSz_ && return "\\sigma^z" * latexindstr(A.inds)
+    A.t == TLSDestroy_ && return "\\sigma^-" * latexindstr(A.inds)
+    A.t == TLSCreate_ && return "\\sigma^+" * latexindstr(A.inds)
     error("latex should not reach this!)")
 end
 

@@ -6,12 +6,16 @@ function varname(A::BaseOperator)
         string(A.name)
     elseif A.t in (BosonCreate_,FermionCreate_)
         string(A.name)*"ᴴ"
-    elseif A.t == σ_ 
-        "σ"*('ˣ','ʸ','ᶻ')[Int(A.a)]
-    elseif A.t == σminus_
-        "σ⁻"
-    elseif A.t == σplus_
-        "σ⁺"
+    elseif A.t == TLSx_
+        string(A.name)*"ˣ"
+    elseif A.t == TLSy_
+        string(A.name)*"ʸ"
+    elseif A.t == TLSz_
+        string(A.name)*"ᶻ"
+    elseif A.t == TLSDestroy_
+        string(A.name)*"⁻"
+    elseif A.t == TLSCreate_
+        string(A.name)*"⁺"
     else
         error("should never be reached")
     end

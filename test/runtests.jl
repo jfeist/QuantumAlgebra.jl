@@ -30,8 +30,6 @@ scal(x) = OpSum(((OpTerm(),x),))
     @test a() + 1 == a() + (1//1 + 0im)
     @test scal(1.5) == scal(3//2)
 
-    @test QuantumAlgebra.SpatialIndex(QuantumAlgebra.x) == QuantumAlgebra.x
-
     # test params and their complex conjugation
     @test Pc"ω" == param(:ω,'n')
     @test Pc"ω_i" == param(:ω,'n',:i)
@@ -224,8 +222,14 @@ scal(x) = OpSum(((OpTerm(),x),))
         @test vacExpVal(σx(1)) == scal(0)
         @test vacExpVal(σp(1)) == scal(0)
         @test vacExpVal(∑(:i,σp(:i))) == scal(0)
-        @test vacExpVal(σp(:i)*σm(:k)) == scal(0)
-
+        if QuantumAlgebra.using_σpm()
+            @test vacExpVal(σp(:i)*σm(:k)) == scal(0)
+        else
+            @test_throws ArgumentError vacExpVal(σp(:i)*σm(:k)) == scal(0)
+        end
+        if QuantumAlgebra.using_σpm()
+            @test normal_form(σp(:i)*σm(:k)) == σp(:i)*σm(:k)
+        end
         @test normal_form(a(:n)*adag(:n)*a(:n)*adag(:n)) == scal(1) + 3adag(:n)*a(:n) + adag(:n)*adag(:n)*a(:n)*a(:n)
 
         S = (1/√(2*6))*adag(:n)*adag(:n)*adag(:n) + (1/√2)*adag(:m)
@@ -251,8 +255,8 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test lσp == "\\sigma^+"
             @test lσz == "-1 + 2\\sigma^+\\sigma^-"
         else
-            @test lσp == "\\frac{1}{2}\\sigma_{x} + \\frac{1}{2}i\\sigma_{y}"
-            @test lσz == "\\sigma_{z}"
+            @test lσp == "\\frac{1}{2}\\sigma^x + \\frac{1}{2}i\\sigma^y"
+            @test lσz == "\\sigma^z"
         end
 
         @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
@@ -263,7 +267,7 @@ scal(x) = OpSum(((OpTerm(),x),))
         if QuantumAlgebra.using_σpm()
             @test string(normal_form(a(5)*adag(5)*σp(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) + ⟨a†(5i) a(5)⟩c σ⁺(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
         else
-            @test string(normal_form(a(5)*adag(5)*σz(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σz(3) + ⟨a†(5i) a(5)⟩c σz(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σz(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σz(3) a(5)"
+            @test string(normal_form(a(5)*adag(5)*σz(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σᶻ(3) + ⟨a†(5i) a(5)⟩c σᶻ(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σᶻ(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σᶻ(3) a(5)"
         end
 
         x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*adag(:i_1,:J,:k)*σp(:i))

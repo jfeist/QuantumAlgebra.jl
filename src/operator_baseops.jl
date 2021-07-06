@@ -8,7 +8,7 @@ Base.length(A::ExpVal) = length(A.ops)
 Base.length(A::Corr) = length(A.ops)
 Base.length(A::OpTerm) = length(A.bares) + mapreduce(length,+,A.expvals;init=0) + mapreduce(length,+,A.corrs;init=0)
 
-==(A::BaseOperator,B::BaseOperator) = A.t == B.t && A.a == B.a && A.name == B.name && A.inds == B.inds
+==(A::BaseOperator,B::BaseOperator) = A.t == B.t && A.name == B.name && A.inds == B.inds
 ==(A::BaseOpProduct,B::BaseOpProduct) = A.v == B.v
 ==(A::Param,B::Param) = A.name == B.name && A.state == B.state && A.inds == B.inds
 ==(A::ExpVal,B::ExpVal) = A.ops == B.ops
@@ -30,7 +30,6 @@ end
 
 function Base.hash(A::BaseOperator,h::UInt)
     h = hash(A.t,h)
-    h = hash(A.a,h)
     h = hash(A.name,h)
     h = hash(A.inds,h)
     h
@@ -97,7 +96,6 @@ end
     @_cmpAB t false
     @_cmpAB name false
     @_cmpAB inds false
-    @_cmpAB a false
     # they are equal
     return 0
 end
@@ -143,26 +141,7 @@ end
 
 comm(A,B) = A*B - B*A
 
-function Base.adjoint(A::BaseOperator)::BaseOperator
-    if A.t == BosonDestroy_
-        BosonCreate(A.name,A.inds)
-    elseif A.t == BosonCreate_
-        BosonDestroy(A.name,A.inds)
-    elseif A.t == FermionDestroy_
-        FermionCreate(A.name,A.inds)
-    elseif A.t == FermionCreate_
-        FermionDestroy(A.name,A.inds)
-    elseif A.t == σplus_
-        σminus(A.inds)
-    elseif A.t == σminus_
-        σplus(A.inds)
-    elseif A.t == σ_
-        A
-    else
-        error("adjoint called with unknown operator type $(A.t)")
-    end
-end
-
+Base.adjoint(A::BaseOperator) = BaseOperator(OpType_adj[Int(A.t)],A.name,A.inds)
 Base.adjoint(A::BaseOpProduct) = BaseOpProduct(adjoint.(view(A.v, lastindex(A.v):-1:1)))
 Base.adjoint(A::T) where {T<:Union{ExpVal,Corr}} = T(adjoint(A.ops))
 Base.adjoint(A::Param) = A.state=='r' ? A : Param(A.name,A.state=='n' ? 'c' : 'n',A.inds)
@@ -240,9 +219,9 @@ end
 const levicivita_lut = [0 1 -1; -1 0 1; 1 -1 0]
 function ϵ_ab(A::BaseOperator,B::BaseOperator)
     # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
-    a = Int(A.a)
-    b = Int(B.a)
-    c = 6 - a - b
+    a = Int(A.t) - Int(TLSx_) + 1
+    b = Int(B.t) - Int(TLSx_) + 1
+    c = OpType(Int(TLSx_) - 1 + (6 - a - b))
     s = @inbounds levicivita_lut[a,b]
     c, s
 end
@@ -258,17 +237,17 @@ end
 function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeResult,Nothing}}
     if A.t == B.t
         # these operators always commute with the same type
-        A.t in (BosonDestroy_,BosonCreate_,σplus_,σminus_) && return (1,nothing)
+        A.t in (BosonDestroy_,BosonCreate_,TLSCreate_,TLSDestroy_,TLSx_,TLSy_,TLSz_) && return (1,nothing)
         # these operators anticommute if they refer to the same species (name), and commute otherwise
         A.t in (FermionDestroy_,FermionCreate_) && return (A.name == B.name ? -1 : 1,nothing)
     end
 
     # different types of operators commute
-    if A.t in (BosonDestroy_,BosonCreate_) && B.t in (FermionDestroy_,FermionCreate_,σ_,σminus_,σplus_)
+    if A.t in (BosonDestroy_,BosonCreate_) && B.t in (FermionDestroy_,FermionCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
         return (1,nothing)
-    elseif A.t in (FermionDestroy_,FermionCreate_) && B.t in (BosonDestroy_,BosonCreate_,σ_,σminus_,σplus_)
+    elseif A.t in (FermionDestroy_,FermionCreate_) && B.t in (BosonDestroy_,BosonCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
         return (1,nothing)
-    elseif A.t in (σ_,σminus_,σplus_) && B.t in (BosonDestroy_,BosonCreate_,FermionDestroy_,FermionCreate_)
+    elseif A.t in (TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_) && B.t in (BosonDestroy_,BosonCreate_,FermionDestroy_,FermionCreate_)
         return (1,nothing)
     end
 
@@ -291,8 +270,8 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         end
     end
 
-    if A.t == σplus_ && B.t == σminus_
-        if (dd = δ(A.inds,B.inds)) === nothing
+    if A.t == TLSCreate_ && B.t == TLSDestroy_
+        if A.name != B.name || (dd = δ(A.inds,B.inds)) === nothing
             return (1,nothing)
         elseif isempty(dd)
             # indices were all the same, σ- σ+ = 1 - σ+ σ-
@@ -301,13 +280,13 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
             # σ-_i σ+_j = σ+_j σ-_i - δij σz_i = σ+_j σ-_i + δij (1 - 2 σ+_i σ-_i)
             # note that we return a σz to "fit" in ExchangeResult, but need to undo that later on
             # note that we pass "+σz" instead of "-σz" so we do not have to flip the sign of the "1" term in the sort algorithm
-            return (1, ExchangeResult(1, dd, σ(z,A.inds)))
+            return (1, ExchangeResult(1, dd, TLSz(A.name,A.inds)))
         end
     end
 
     # B A as x A B + y, with A < B
-    if A.t == σ_ && B.t == σ_
-        if A.a == B.a || (dd = δ(A.inds,B.inds)) === nothing
+    if A.t in (TLSx_,TLSy_,TLSz_) && B.t in (TLSx_,TLSy_,TLSz_)
+        if A.name != B.name || (dd = δ(A.inds,B.inds)) === nothing
             return (1,nothing)
         else
             # we need ϵbac
@@ -316,11 +295,11 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
                 # indices were all the same,
                 # σb σa = δab + i ϵbac σc
                 # since A < B, we know that a != b
-                return (0, ExchangeResult(im*s,dd,σ(c,A.inds)))
+                return (0, ExchangeResult(im*s,dd,BaseOperator(c,A.name,A.inds)))
             else
                 # [σb_i,σa_j] = 2i εbac δij σc_i =>
                 # σb_j σa_i = σa_i σb_j + 2i εbac δij σc_i
-                return (1, ExchangeResult(2im*s,dd,σ(c,A.inds)))
+                return (1, ExchangeResult(2im*s,dd,BaseOperator(c,A.name,A.inds)))
             end
         end
     end
@@ -331,15 +310,15 @@ end
 const ComplexInt = Complex{Int}
 
 function _contract(A::BaseOperator,B::BaseOperator)::Tuple{Bool,ComplexInt,Union{BaseOperator,Nothing}}
-    if A.t in (σplus_,σminus_,FermionDestroy_,FermionCreate_) && A == B
+    if A.t in (TLSCreate_,TLSDestroy_,FermionDestroy_,FermionCreate_) && A == B
         return (true,zero(ComplexInt),nothing)
-    elseif A.t == σ_ && B.t == σ_ && A.inds == B.inds
+    elseif A.t in (TLSx_,TLSy_,TLSz_) && B.t in (TLSx_,TLSy_,TLSz_) && A.name == B.name && A.inds == B.inds
         # σa σb = δab + i ϵabc σc
-        if A.a == B.a
+        if B.t == A.t
             return (true,one(ComplexInt),nothing)
         else
             c, s = ϵ_ab(A,B)
-            return (true, ComplexInt(0,s), σ(c,A.inds))
+            return (true, ComplexInt(0,s), BaseOperator(c,A.name,A.inds))
         end
     else
         return (false,zero(ComplexInt),nothing)
@@ -360,10 +339,10 @@ function normal_order!(ops::BaseOpProduct,term_collector)
             if exc_res !== nothing
                 if exc_res.op === nothing
                     onew = BaseOpProduct([A[1:j-2]; A[j+1:end]])
-                elseif A[j].t == σplus_
-                    @assert exc_res.op.t == σ_
+                elseif A[j].t == TLSCreate_
+                    @assert exc_res.op.t == TLSz_
                     # we got σz_i, have to replace it by (1 - 2 σ+_i σ-_i) (which is really -σz, see explanation in _exchange)
-                    onew = BaseOpProduct([A[1:j-2]; σplus(exc_res.op.inds); σminus(exc_res.op.inds); A[j+1:end]])
+                    onew = BaseOpProduct([A[1:j-2]; TLSCreate(exc_res.op.name,exc_res.op.inds); TLSDestroy(exc_res.op.name,exc_res.op.inds); A[j+1:end]])
                     t = OpTerm(exc_res.δs, onew)
                     _add_sum_term!(term_collector,t,-2exc_res.pref*prefactor)
                     # this one gives the "1" term that is used below

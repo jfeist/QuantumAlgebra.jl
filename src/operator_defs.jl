@@ -5,10 +5,6 @@ export @Pr_str, @Pc_str, ∑
 export a, adag, f, fdag
 export param, expval, corr
 
-# define for σx, σy, σz
-@enum SpatialIndex x=1 y=2 z=3
-SpatialIndex(a::SpatialIndex) = a
-
 const IndexInt = Int32
 
 @concrete struct OpIndex
@@ -46,13 +42,18 @@ isnoindex(ii::OpIndex) = ii == NoIndex
 
 const OpIndices = Vector{OpIndex}
 assignedinds(inds::OpIndices) = inds
+# const OpIndices = NTuple{5,OpIndex}
+# assignedinds(inds::OpIndices) = filter(!isnoindex,inds)
 
 make_indices(inds::OpIndices) = inds
 make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
 make_indices(inds...)::OpIndices = [OpIndex(i) for i in inds]
+#make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::OpIndices = (OpIndex(i1),OpIndex(i2),OpIndex(i3),OpIndex(i4),OpIndex(i5))
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
-@enum OpType BosonCreate_ FermionCreate_ σplus_ σ_ σminus_ FermionDestroy_ BosonDestroy_
+# start the counting at 1 so we can index into OpType_adj with Int(OpType)
+@enum OpType  BosonCreate_=1 FermionCreate_   TLSCreate_   TLSx_  TLSy_  TLSz_  TLSDestroy_ FermionDestroy_ BosonDestroy_
+OpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
 
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]
@@ -66,46 +67,34 @@ const _NameTableInv = Symbol[]
         end
         new(i)
     end
+    NameIndex(name::NameIndex) = name
 end
 sym(ind::NameIndex) = _NameTableInv[ind.i]
 Base.print(io::IO, ind::NameIndex) = print(io, sym(ind))
 Base.isless(i1::NameIndex,i2::NameIndex) = isless(sym(i1),sym(i2))
-const NoName = NameIndex(Symbol())
 
 @concrete struct BaseOperator
     t::OpType
-    a::SpatialIndex
     name::NameIndex
     inds::OpIndices
+    BaseOperator(t,name,inds...) = new(t,NameIndex(name),make_indices(inds...))
 end
-# provide outer constructors useful for the specific operators
-BaseOperator(t,inds::OpIndices) = BaseOperator(t,x,NoName,inds)
-BaseOperator(t,a::SpatialIndex,inds::OpIndices) = BaseOperator(t,a,NoName,inds)
-BaseOperator(t,name::NameIndex,inds::OpIndices) = BaseOperator(t,x,name,inds)
-BaseOperator(t,name::Symbol,inds::OpIndices) = BaseOperator(t,x,NameIndex(name),inds)
 
 for (op,desc) in (
     (:BosonDestroy,"bosonic annihilation"),
     (:BosonCreate,"bosonic creation"),
     (:FermionDestroy,"fermionic annihilation"),
-    (:FermionCreate,"fermionic creation"))
+    (:FermionCreate,"fermionic creation"),
+    (:TLSDestroy,"TLS annihilation"),
+    (:TLSCreate,"TLS creation"),
+    (:TLSx,"TLS x"),
+    (:TLSy,"TLS y"),
+    (:TLSz,"TLS z"))
     @eval begin
         "`$($op)(name,inds)`: represent $($desc) operator ``name_{inds}``"
-        $op(name::Union{Symbol,NameIndex},inds...) = BaseOperator($(Symbol(op,:_)),name,make_indices(inds...))
+        $op(name,inds...) = BaseOperator($(Symbol(op,:_)),name,make_indices(inds...))
     end
 end
-
-for (op,desc,sym) in (
-    (:σminus,"TLS annihilation","σ^-"),
-    (:σplus,"TLS creation","σ^+"))
-    @eval begin
-        "`$($op)(inds)`: represent $($desc) operator ``$($sym)_{inds}``"
-        $op(inds...) = BaseOperator($(Symbol(op,:_)),make_indices(inds...))
-    end
-end
-
-"`σ(a,inds)`: represent Pauli matrix ``σ_{a,inds}`` for two-level system (TLS), where ``a ∈ \\{x,y,z\\}``."
-σ(a,inds...) = BaseOperator(σ_,SpatialIndex(a),make_indices(inds...))
 
 @concrete struct BaseOpProduct
     v::Vector{BaseOperator}
@@ -149,7 +138,7 @@ end
     inds::OpIndices
 end
 
-struct OpTerm
+@concrete struct OpTerm
     nsuminds::IndexInt # have a sum over n indices, represented by OpIndex with issumindex(ind)==true
     δs::Vector{δ}
     params::Vector{Param}
@@ -242,15 +231,15 @@ use_σxyz() = use_σpm(false)
 using_σpm() = _using_σpm[]
 
 "`σp(n)`: construct ``σ^+_n = \\frac12 σ_{x,n} + \\frac{i}{2} σ_{y,n}``"
-σp(n...) = using_σpm() ? OpSum(σplus(n...)) : OpSum((OpTerm(σ(x,n...))=>1//2, OpTerm(σ(y,n...))=>1im//2))
+σp(n...) = using_σpm() ? OpSum(TLSCreate(:σ,n...)) : OpSum((OpTerm(TLSx(:σ,n...))=>1//2, OpTerm(TLSy(:σ,n...))=>1im//2))
 "`σm(n)`: construct ``σ^-_n = \\frac12 σ_{x,n} - \\frac{i}{2} σ_{y,n}``"
-σm(n...) = using_σpm() ? OpSum(σminus(n...)) : OpSum((OpTerm(σ(x,n...))=>1//2, OpTerm(σ(y,n...))=>-1im//2))
+σm(n...) = using_σpm() ? OpSum(TLSDestroy(:σ,n...)) : OpSum((OpTerm(TLSx(:σ,n...))=>1//2, OpTerm(TLSy(:σ,n...))=>-1im//2))
 "`σx(n)`: construct ``σ_{x,n}``"
-σx(n...) = using_σpm() ? OpSum((OpTerm(σminus(n...))=>1, OpTerm(σplus(n...))=>1)) : OpSum(σ(x,n...))
+σx(n...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(:σ,n...))=>1, OpTerm(TLSCreate(:σ,n...))=>1)) : OpSum(TLSx(:σ,n...))
 "`σy(n)`: construct ``σ_{y,n}``"
-σy(n...) = using_σpm() ? OpSum((OpTerm(σminus(n...))=>1im, OpTerm(σplus(n...))=>-1im)) : OpSum(σ(y,n...))
+σy(n...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(:σ,n...))=>1im, OpTerm(TLSCreate(:σ,n...))=>-1im)) : OpSum(TLSy(:σ,n...))
 "`σz(n)`: construct ``σ_{z,n}``"
-σz(n...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([σplus(n...),σminus(n...)]))=>2, OpTerm()=>-1)) : OpSum(σ(z,n...))
+σz(n...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([TLSCreate(:σ,n...),TLSDestroy(:σ,n...)]))=>2, OpTerm()=>-1)) : OpSum(TLSz(:σ,n...))
 
 ## functions for constructing `param`s with string macros,
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)

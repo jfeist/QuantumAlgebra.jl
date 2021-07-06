@@ -4,18 +4,16 @@ function Avac(A::OpTerm,fac)
     ii = length(A.bares.v)
     while ii >= 1
         O = A.bares.v[ii]
-        if O.t in (BosonCreate_,FermionCreate_,σplus_)
+        if O.t in (BosonCreate_,FermionCreate_,TLSCreate_)
             ii==length(A.bares.v) && return (A,fac)
             break
-        elseif O.t in (BosonDestroy_,FermionDestroy_,σminus_)
+        elseif O.t in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
             return (A,zero(fac))
-        elseif O.t == σ_
+        elseif O.t == TLSz_
             # vacuum is eigenvalue of σz
-            if O.a == z
-                fac = -fac
-            else
-                break
-            end
+            fac = -fac
+        elseif O.t in (TLSx_,TLSy_)
+            break
         else
             error("should not be reached")
         end
@@ -29,18 +27,16 @@ function vacA(A::OpTerm,fac)
     ii = 1
     while ii <= length(A.bares.v)
         O = A.bares.v[ii]
-        if O.t in (BosonDestroy_,FermionDestroy_,σminus_)
+        if O.t in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
             ii==1 && return (A,fac)
             break
-        elseif O.t in (BosonCreate_,FermionCreate_,σplus_)
+        elseif O.t in (BosonCreate_,FermionCreate_,TLSCreate_)
             return (A,zero(fac))
-        elseif O.t == σ_
+        elseif O.t == TLSz_
             # vacuum is eigenvalue of σz
-            if O.a == z
-                fac = -fac
-            else
-                break
-            end
+            fac = -fac
+        elseif O.t in (TLSx_,TLSy_)
+            break
         else
             error("should not be reached")
         end
@@ -79,7 +75,10 @@ function _vacExpVal(A::OpTerm,fac)
     # so it does not matter if we are inside a product
     isempty(A.bares) && return (A,fac)
     for O in A.bares.v
-        @assert O.t == σ_ && O.a != z
+        @assert O.t in (TLSx_,TLSy_)
+    end
+    if length(A.bares) > 1
+        throw(ArgumentError("vacExpVal implementation currently wrong if more than one σˣ or σʸ survives. Got $(A.bares)"))
     end
     return (A,zero(fac))
 end

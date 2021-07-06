@@ -1,6 +1,6 @@
 abstract type IndexFunction end
 
-(f::IndexFunction)(A::BaseOperator) = BaseOperator(A.t,A.a,A.name,f.(A.inds))
+(f::IndexFunction)(A::BaseOperator) = BaseOperator(A.t,A.name,f.(A.inds))
 (f::IndexFunction)(d::δ) = δ(f(d.iA),f(d.iB))
 (f::IndexFunction)(par::Param) = Param(par.name,par.state,f.(par.inds))
 (f::IndexFunction)(ops::BaseOpProduct) = BaseOpProduct(f.(ops.v))
