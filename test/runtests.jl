@@ -222,11 +222,8 @@ scal(x) = OpSum(((OpTerm(),x),))
         @test vacExpVal(σx(1)) == scal(0)
         @test vacExpVal(σp(1)) == scal(0)
         @test vacExpVal(∑(:i,σp(:i))) == scal(0)
-        if QuantumAlgebra.using_σpm()
-            @test vacExpVal(σp(:i)*σm(:k)) == scal(0)
-        else
-            @test_throws ArgumentError vacExpVal(σp(:i)*σm(:k)) == scal(0)
-        end
+        @test vacExpVal(σp(:i)*σm(:k)) == scal(0)
+        @test vacExpVal(σm(:j)*σp(:l)) == myδ(:j,:l)
         if QuantumAlgebra.using_σpm()
             @test normal_form(σp(:i)*σm(:k)) == σp(:i)*σm(:k)
         end
