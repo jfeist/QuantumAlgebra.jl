@@ -58,26 +58,26 @@ OpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, 
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]
 
-@concrete struct NameIndex
+@concrete struct OpName
     i::IndexInt
-    function NameIndex(name::Symbol)
+    function OpName(name::Symbol)
         i = get!(_NameTable,name) do
             push!(_NameTableInv,name)
             length(_NameTableInv)
         end
         new(i)
     end
-    NameIndex(name::NameIndex) = name
+    OpName(name::OpName) = name
 end
-sym(ind::NameIndex) = _NameTableInv[ind.i]
-Base.print(io::IO, ind::NameIndex) = print(io, sym(ind))
-Base.isless(i1::NameIndex,i2::NameIndex) = isless(sym(i1),sym(i2))
+sym(ind::OpName) = _NameTableInv[ind.i]
+Base.print(io::IO, ind::OpName) = print(io, sym(ind))
+Base.isless(i1::OpName,i2::OpName) = isless(sym(i1),sym(i2))
 
 @concrete struct BaseOperator
     t::OpType
-    name::NameIndex
+    name::OpName
     inds::OpIndices
-    BaseOperator(t,name,inds...) = new(t,NameIndex(name),make_indices(inds...))
+    BaseOperator(t,name,inds...) = new(t,OpName(name),make_indices(inds...))
 end
 
 for (op,desc) in (
@@ -133,7 +133,7 @@ end
 end
 
 @concrete struct Param
-    name::NameIndex
+    name::OpName
     state::Char
     inds::OpIndices
 end
@@ -196,9 +196,9 @@ _map_opsum_ops(f,A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
 
 "`boson_ops(name::Symbol)`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
 function boson_ops(name::Symbol)
-    op_ind = NameIndex(name)
-    ann(args...) = OpSum(BosonDestroy(op_ind,args...))
-    cre(args...) = OpSum(BosonCreate(op_ind,args...))
+    op_name = OpName(name)
+    ann(args...) = OpSum(BosonDestroy(op_name,args...))
+    cre(args...) = OpSum(BosonCreate(op_name,args...))
     ann,cre
 end
 
@@ -209,9 +209,9 @@ end
 
 "`fermion_ops(name::Symbol)`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
 function fermion_ops(name::Symbol)
-    op_ind = NameIndex(name)
-    ann(args...) = OpSum(FermionDestroy(op_ind,args...))
-    cre(args...) = OpSum(FermionCreate(op_ind,args...))
+    op_name = OpName(name)
+    ann(args...) = OpSum(FermionDestroy(op_name,args...))
+    cre(args...) = OpSum(FermionCreate(op_name,args...))
     ann,cre
 end
 
@@ -245,8 +245,8 @@ using_σpm() = _using_σpm[]
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
 # Pr"ω_i,j" = param(:ω,'r',:i,:j) (real parameter)
 
-param(name::Symbol,args...) = param(NameIndex(name),args...)
-function param(name::NameIndex,state::Char,inds...)
+param(name::Symbol,args...) = param(OpName(name),args...)
+function param(name::OpName,state::Char,inds...)
     state ∈ ('r','n','c') || throw(ArgumentError("state has to be one of n,r,c"))
     OpSum(Param(name,state,make_indices(inds...)))
 end

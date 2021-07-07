@@ -278,8 +278,8 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
             return (-1, ExchangeResult(1, dd, nothing))
         else
             # σ-_i σ+_j = σ+_j σ-_i - δij σz_i = σ+_j σ-_i + δij (1 - 2 σ+_i σ-_i)
-            # note that we return a σz to "fit" in ExchangeResult, but need to undo that later on
-            # note that we pass "+σz" instead of "-σz" so we do not have to flip the sign of the "1" term in the sort algorithm
+            # note that we return a TLSz to "fit" in ExchangeResult, but need to undo that later on
+            # note that we pass "+TLSz" instead of "-TLSz" so we do not have to flip the sign of the "1" term in the sort algorithm
             return (1, ExchangeResult(1, dd, TLSz(A.name,A.inds)))
         end
     end

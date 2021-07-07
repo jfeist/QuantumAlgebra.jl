@@ -10,7 +10,7 @@ scal(x) = OpSum(((OpTerm(),x),))
 
 @testset "QuantumAlgebra.jl" begin
     @test isbitstype(QuantumAlgebra.OpIndex)
-    @test isbitstype(QuantumAlgebra.NameIndex)
+    @test isbitstype(QuantumAlgebra.OpName)
     if isbitstype(QuantumAlgebra.OpIndices)
         @test isbitstype(QuantumAlgebra.BaseOperator)
         @test isbitstype(QuantumAlgebra.Param)
