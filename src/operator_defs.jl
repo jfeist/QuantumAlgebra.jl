@@ -72,6 +72,7 @@ end
 sym(ind::OpName) = _NameTableInv[ind.i]
 Base.print(io::IO, ind::OpName) = print(io, sym(ind))
 Base.isless(i1::OpName,i2::OpName) = isless(sym(i1),sym(i2))
+const NoName = OpName(Symbol())
 
 @concrete struct BaseOperator
     t::OpType
