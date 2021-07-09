@@ -172,6 +172,7 @@ function OpSum(itr)
 end
 OpSum(A::Union{BaseOperator,Param,Corr,ExpVal}) = OpSum(OpTerm(A))
 OpSum(A::OpTerm) = OpSum(((A,1),))
+Base.isempty(A::OpSum) = isempty(A.terms)
 
 function _add_sum_term!(A::OpSum,oB::OpTerm,sB)
     iszero(sB) && return A

@@ -267,8 +267,11 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test string(normal_form(a(5)*adag(5)*σz(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σᶻ(3) + ⟨a†(5i) a(5)⟩c σᶻ(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σᶻ(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σᶻ(3) a(5)"
         end
 
+        @test julia_expression(OpSum()) == 0
+        @test julia_expression(OpTerm()) == 0
+
         x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*adag(:i_1,:J,:k)*σp(:i))
-        ex = :($(julia_expression(expval(normal_form(x)))))
+        ex = julia_expression(expval(normal_form(x)))
         if QuantumAlgebra.using_σpm()
             @test ex == :(I[J, j₂] * I[K, k] * g[i₁, K] * σ⁺[i₁] + g[s̄₁, k] * aᴴσ⁺a[i₁, J, k, s̄₁, s̄₁, j₂, K])
         else
