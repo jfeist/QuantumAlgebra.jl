@@ -1,5 +1,6 @@
 export latex
 
+using REPL
 using Printf
 
 function printspaced(io::IO,v,trailing_space=false)
@@ -26,21 +27,11 @@ function Base.print(io::IO,ii::OpIndex)
     end
 end
 
-function Base.print(io::IO,A::BaseOperator)
-    A.t in (BosonDestroy_,FermionDestroy_) && return print(io,"$(A.name)($(A.inds...))")
-    A.t in (BosonCreate_,FermionCreate_) && return print(io,"$(A.name)†($(A.inds...))")
-    A.t == TLSx_ && return print(io,"$(A.name)ˣ($(A.inds...))")
-    A.t == TLSy_ && return print(io,"$(A.name)ʸ($(A.inds...))")
-    A.t == TLSz_ && return print(io,"$(A.name)ᶻ($(A.inds...))")
-    A.t == TLSDestroy_ && return print(io,"$(A.name)⁻($(A.inds...))")
-    A.t == TLSCreate_ && return print(io,"$(A.name)⁺($(A.inds...))")
-    error("print should never reach this!")
-end
-
+Base.print(io::IO,A::BaseOperator) = print(io,A.name,OpType_sym[Int(A.t)],"(",A.inds...,")")
 Base.print(io::IO,A::δ) = print(io,"δ($(A.iA)$(A.iB))")
+Base.print(io::IO,A::Param) = print(io,string(A.name, A.state=='c' ? "*" : "",length(A.inds)==0 ? "" : "($(A.inds...))"))
 Base.print(io::IO,A::ExpVal) = print(io,"⟨$(A.ops)⟩")
 Base.print(io::IO,A::Corr) = print(io,"⟨$(A.ops)⟩c")
-Base.print(io::IO,A::Param) = print(io,string(A.name, A.state=='c' ? "*" : "",length(A.inds)==0 ? "" : "($(A.inds...))"))
 
 function Base.print(io::IO,A::OpTerm)
     if A.nsuminds > 0
@@ -103,17 +94,6 @@ const QuantumObject = Union{OpIndex,OpName,BaseOperator,Param,BaseOpProduct,ExpV
 Base.show(io::IO, A::QuantumObject) = print(io,A)
 Base.show(io::IO, ::MIME"text/latex", A::QuantumObject) = print(io,"\$",latex(A),"\$")
 
-function latex(A::BaseOperator)
-    A.t in (BosonDestroy_,FermionDestroy_) && return "{$(A.name)}$(latexindstr(A.inds))"
-    A.t in (BosonCreate_,FermionCreate_) && return "{$(A.name)}$(latexindstr(A.inds))^\\dagger"
-    A.t == TLSx_ && return "\\sigma^x" * latexindstr(A.inds)
-    A.t == TLSy_ && return "\\sigma^y" * latexindstr(A.inds)
-    A.t == TLSz_ && return "\\sigma^z" * latexindstr(A.inds)
-    A.t == TLSDestroy_ && return "\\sigma^-" * latexindstr(A.inds)
-    A.t == TLSCreate_ && return "\\sigma^+" * latexindstr(A.inds)
-    error("latex should not reach this!)")
-end
-
 function latex(ii::OpIndex)
     if isnoindex(ii)
         ""
@@ -137,12 +117,17 @@ numlatex(x::Rational) = denominator(x)==1 ? "$(numerator(x))" : "\\frac{$(numera
 numlatex(x::Complex) = @sprintf "(%g%+gi)" real(x) imag(x)
 numlatex(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" numlatex(real(x)) (imag(x)>=0 ? "+" : "-") numlatex(abs(imag(x)))
 
+const _unicode_to_latex = Dict(v[1]=>"{$k}" for (k,v) in REPL.REPLCompletions.latex_symbols if length(v)==1)
+unicode_to_latex(s::AbstractString) = join(map(c -> get(_unicode_to_latex,c,string(c)), collect(s)))
+unicode_to_latex(s::OpName) = unicode_to_latex(string(s))
+
 latex(x::Number) = imag(x)==0 ? numlatex(real(x)) : (real(x)==0 ? numlatex(imag(x))*"i" : numlatex(x))
+latex(A::BaseOperator) = string("{", unicode_to_latex(A.name), "}", latexindstr(A.inds), OpType_latex[Int(A.t)])
 latex(A::δ) = string("\\delta", latexindstr(A.iA,A.iB))
-latex(A::ExpVal) = "\\langle $(latex(A.ops)) \\rangle"
-latex(A::Corr) = "\\langle $(latex(A.ops)) \\rangle_{c}"
-latex(A::Param) = string(A.name, latexindstr(A.inds), A.state=='c' ? "^{*}" : "")
+latex(A::Param) = string(unicode_to_latex(A.name), latexindstr(A.inds), A.state=='c' ? "^{*}" : "")
 latex(A::BaseOpProduct) = join(latex.(A.v))
+latex(A::ExpVal) = string("\\langle ", latex(A.ops), " \\rangle")
+latex(A::Corr) = string("\\langle ", latex(A.ops), " \\rangle_{c}")
 
 function latex(A::OpTerm)
     strings = String[]
@@ -160,22 +145,20 @@ function latex(A::OpTerm)
 end
 
 function latex(A::OpSum)
-    if isempty(A.terms)
-        "0"
-    else
-        strings = String[]
-        # convert to tuples so sorting ignores the numbers if terms are different (which they are)
-        for (ii,(t,s)) in enumerate(sort!(Tuple.(collect(A.terms))))
-            if isempty(t)
-                push!(strings,latex(s))
-            else
-                ls = s==one(s) ? "" : (s==-one(s) ? "-" : latex(s))
-                if ii>1 && (ls=="" || (ls[1] ∉ ('-','+')))
-                    push!(strings," + ")
-                end
-                push!(strings,ls,latex(t))
+    isempty(A) && return "0"
+
+    strings = String[]
+    # convert to tuples so sorting ignores the numbers if terms are different (which they are)
+    for (t,s) in sort!(Tuple.(collect(A.terms)))
+        if isempty(t)
+            push!(strings,latex(s))
+        else
+            ls = s==one(s) ? "" : (s==-one(s) ? "-" : latex(s))
+            if !isempty(strings) && (ls=="" || (ls[1] ∉ ('-','+')))
+                push!(strings," + ")
             end
+            push!(strings,ls,latex(t))
         end
-        join(strings)
     end
+    join(strings)
 end

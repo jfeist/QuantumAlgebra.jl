@@ -50,11 +50,6 @@ make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
 make_indices(inds...)::OpIndices = [OpIndex(i) for i in inds]
 #make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::OpIndices = (OpIndex(i1),OpIndex(i2),OpIndex(i3),OpIndex(i4),OpIndex(i5))
 
-# the enum also directly defines a natural ordering,so choose this directly how we later want it
-# start the counting at 1 so we can index into OpType_adj with Int(OpType)
-@enum OpType  BosonCreate_=1 FermionCreate_   TLSCreate_   TLSx_  TLSy_  TLSz_  TLSDestroy_ FermionDestroy_ BosonDestroy_
-OpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
-
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]
 
@@ -73,6 +68,13 @@ sym(ind::OpName) = _NameTableInv[ind.i]
 Base.print(io::IO, ind::OpName) = print(io, sym(ind))
 Base.isless(i1::OpName,i2::OpName) = isless(sym(i1),sym(i2))
 const NoName = OpName(Symbol())
+
+# the enum also directly defines a natural ordering,so choose this directly how we later want it
+# start the counting at 1 so we can index into the tuples defined below with Int(OpType)
+@enum OpType        BosonCreate_=1 FermionCreate_   TLSCreate_   TLSx_  TLSy_  TLSz_  TLSDestroy_ FermionDestroy_ BosonDestroy_
+const OpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
+const OpType_sym = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
+const OpType_latex = ("^\\dagger", "^\\dagger", "^+", "^x", "^y", "^z", "^-", "", "")
 
 @concrete struct BaseOperator
     t::OpType
