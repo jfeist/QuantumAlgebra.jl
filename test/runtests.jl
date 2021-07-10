@@ -1,5 +1,5 @@
 using QuantumAlgebra
-using QuantumAlgebra: δ, OpSum, OpTerm, BaseOpProduct, BaseOperator, Param, OpIndex, _map_opsum_ops
+using QuantumAlgebra: δ, OpSum, OpTerm, BaseOpProduct, BaseOperator, Param, OpIndex, _map_opsum_ops, TLSx, TLSCreate
 using Test
 
 function myδ(i,j)
@@ -118,6 +118,8 @@ scal(x) = OpSum(((OpTerm(),x),))
 
         @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:i)) == σx(:i)
         @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:j)) == σx(:j)
+
+        @test_throws ArgumentError normal_form(OpSum(TLSx(:σ)) * OpSum(TLSCreate(:σ)))
 
         tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*adag(5)*a(5))
         if QuantumAlgebra.using_σpm()

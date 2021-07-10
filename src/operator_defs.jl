@@ -1,9 +1,12 @@
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops
-export σx,σy,σz,σp,σm
+export tlspm_ops, tlsxyz_ops
+export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
-export a, adag, f, fdag
 export param, expval, corr
+
+export σx, σy, σz, σp, σm
+export a, adag, f, fdag
 
 const IndexInt = Int32
 
@@ -224,9 +227,6 @@ macro fermion_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = fermion_ops($(Meta.quot(name))) )
 end
 
-@boson_ops a
-@fermion_ops f
-
 # functions for constructing Pauli operators depending on whether we use (σ+,σ-) or (σx,σy,σz) as the "basic" operators
 
 const _using_σpm = Ref(false)
@@ -234,16 +234,42 @@ use_σpm(t::Bool=true) = (_using_σpm[] = t; nothing)
 use_σxyz() = use_σpm(false)
 using_σpm() = _using_σpm[]
 
-"`σp(n)`: construct ``σ^+_n = \\frac12 σ_{x,n} + \\frac{i}{2} σ_{y,n}``"
-σp(n...) = using_σpm() ? OpSum(TLSCreate(:σ,n...)) : OpSum((OpTerm(TLSx(:σ,n...))=>1//2, OpTerm(TLSy(:σ,n...))=>1im//2))
-"`σm(n)`: construct ``σ^-_n = \\frac12 σ_{x,n} - \\frac{i}{2} σ_{y,n}``"
-σm(n...) = using_σpm() ? OpSum(TLSDestroy(:σ,n...)) : OpSum((OpTerm(TLSx(:σ,n...))=>1//2, OpTerm(TLSy(:σ,n...))=>-1im//2))
-"`σx(n)`: construct ``σ_{x,n}``"
-σx(n...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(:σ,n...))=>1, OpTerm(TLSCreate(:σ,n...))=>1)) : OpSum(TLSx(:σ,n...))
-"`σy(n)`: construct ``σ_{y,n}``"
-σy(n...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(:σ,n...))=>1im, OpTerm(TLSCreate(:σ,n...))=>-1im)) : OpSum(TLSy(:σ,n...))
-"`σz(n)`: construct ``σ_{z,n}``"
-σz(n...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([TLSCreate(:σ,n...),TLSDestroy(:σ,n...)]))=>2, OpTerm()=>-1)) : OpSum(TLSz(:σ,n...))
+"`tlspm_ops(name::Symbol)`: return functions for creating jump operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
+function tlspm_ops(name::Symbol)
+    op_name = OpName(name)
+    tlsm(args...) = using_σpm() ? OpSum(TLSDestroy(op_name,args...)) : OpSum((OpTerm(TLSx(op_name,args...))=>1//2, OpTerm(TLSy(op_name,args...))=>-1im//2))
+    tlsp(args...) = using_σpm() ? OpSum(TLSCreate( op_name,args...)) : OpSum((OpTerm(TLSx(op_name,args...))=>1//2, OpTerm(TLSy(op_name,args...))=>1im//2))
+    tlsm,tlsp
+end
+
+"`@tlspm_ops name`: define functions `\$(name)m` and `\$(name)p` creating jump operators for a two-level system with name `name`."
+macro tlspm_ops(name)
+    :( ($(esc(Symbol(name,:m))), $(esc(Symbol(name,:p)))) = tlspm_ops($(Meta.quot(name))) )
+end
+
+"`tlsxyz_ops(name::Symbol)`: return functions for creating Pauli operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
+function tlsxyz_ops(name::Symbol)
+    op_name = OpName(name)
+    tlsx(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(op_name,args...))=>1, OpTerm(TLSCreate(op_name,args...))=>1)) : OpSum(TLSx(op_name,args...))
+    tlsy(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(op_name,args...))=>1im, OpTerm(TLSCreate(op_name,args...))=>-1im)) : OpSum(TLSy(op_name,args...))
+    tlsz(args...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([TLSCreate(op_name,args...),TLSDestroy(op_name,args...)]))=>2, OpTerm()=>-1)) : OpSum(TLSz(op_name,args...))
+    tlsx,tlsy,tlsz
+end
+
+"`@tlsxyz_ops name`: define functions `\$(name)x`, `\$(name)y`, and `\$(name)z` creating Pauli operators for a two-level system with name `name`."
+macro tlsxyz_ops(name)
+    :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
+end
+
+module DefaultOps
+    using ..QuantumAlgebra
+    export a, adag, f, fdag, σm, σp, σx, σy, σz
+    @boson_ops a
+    @fermion_ops f
+    @tlspm_ops σ
+    @tlsxyz_ops σ
+end
+using .DefaultOps
 
 ## functions for constructing `param`s with string macros,
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)

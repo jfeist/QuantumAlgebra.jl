@@ -279,7 +279,7 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         else
             # σ-_i σ+_j = σ+_j σ-_i - δij σz_i = σ+_j σ-_i + δij (1 - 2 σ+_i σ-_i)
             # note that we return a TLSz to "fit" in ExchangeResult, but need to undo that later on
-            # note that we pass "+TLSz" instead of "-TLSz" so we do not have to flip the sign of the "1" term in the sort algorithm
+            # also note that we pass "+TLSz" instead of "-TLSz" so we do not have to flip the sign of the "1" term in the sort algorithm
             return (1, ExchangeResult(1, dd, TLSz(A.name,A.inds)))
         end
     end
@@ -302,6 +302,10 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
                 return (1, ExchangeResult(2im*s,dd,BaseOperator(c,A.name,A.inds)))
             end
         end
+    end
+
+    if (A.t == TLSCreate_ && B.t in (TLSx_,TLSy_,TLSz_)) || (A.t in (TLSx_,TLSy_,TLSz_) && B.t == TLSDestroy_)
+        throw(ArgumentError("QuantumAlgebra currently does not support mixing 'normal' (x,y,z) Pauli matrices with jump operators (+,-)."))
     end
 
     error("_exchange should never reach this! A=$A, B=$B.")
