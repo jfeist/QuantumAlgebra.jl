@@ -1,7 +1,7 @@
 name = "QuantumAlgebra"
 uuid = "1b9008d5-2a9d-4901-8cfb-44bb87795b64"
 authors = ["Johannes Feist"]
-version = "0.3.1"
+version = "0.4.0"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
