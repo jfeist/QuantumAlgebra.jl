@@ -3,19 +3,32 @@ export latex
 using REPL
 using Printf
 
+const _SUPERSCRIPTNUMS = collect("⁰¹²³⁴⁵⁶⁷⁸⁹")
+subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digits(abs(i))))
+superscript(i::Integer) = (i<0 ? "⁻" : "") * join(_SUPERSCRIPTNUMS[d+1] for d in reverse(digits(abs(i))))
+
 function printspaced(io::IO,v,trailing_space=false)
     print(io,v[1])
+    iprinted = 1
+    exponent = 1
     for i = 2:length(v)
-        print(io," ")
-        print(io,v[i])
+        if v[i]==v[iprinted]
+            exponent += 1
+            # if the last element is repeated, print the exponent
+            i == length(v) && print(io,superscript(exponent))
+        else
+            # print exponent for previous object
+            exponent>1 && print(io,superscript(exponent))
+            exponent = 1
+            print(io," ")
+            print(io,v[i])
+            iprinted = i
+        end
     end
     trailing_space && print(io," ")
 end
 
 Base.print(io::IO,A::BaseOpProduct) = printspaced(io,A.v)
-const _SUPERSCRIPTNUMS = collect("⁰¹²³⁴⁵⁶⁷⁸⁹")
-subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digits(abs(i))))
-superscript(i::Integer) = (i<0 ? "⁻" : "") * join(_SUPERSCRIPTNUMS[d+1] for d in reverse(digits(abs(i))))
 function Base.print(io::IO,ii::OpIndex)
     if isnoindex(ii)
         return
