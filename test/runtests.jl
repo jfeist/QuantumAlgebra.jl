@@ -52,6 +52,10 @@ using Test
         @test σx(:i,:b) == σx((:i,:b))
         @test σx(:i,:j) != σx(:i,:b)
 
+        α = param(:α)
+        tmp = α' * a(1) + α * a(1)
+        @test tmp - tmp == scal(0)
+
         @test σx() == σp() + σm()
         @test σx(:i) == σp(:i) + σm(:i)
         @test σx(:i,:j) == σp((:i,:j)) + σm((:i,:j))

@@ -31,10 +31,11 @@ for (ii,op1) in enumerate(OpOrder)
 end
 isless(A::scal,B::scal) = (real(A.v),imag(A.v)) < (real(B.v),imag(B.v))
 
-# do not order parameters by whether they are purely real, or conjugated or not
-for op in (param,BosonCreate,BosonDestroy,FermionCreate,FermionDestroy)
+for op in (BosonCreate,BosonDestroy,FermionCreate,FermionDestroy)
     @eval isless(A::$op,B::$op) = (A.name,sortsentinel.(A.inds)) < (B.name,sortsentinel.(B.inds))
 end
+# use conjugation state as last order parameter
+isless(A::param,B::param) = (A.name,sortsentinel.(A.inds),A.state) < (B.name,sortsentinel.(B.inds),B.state)
 isless(A::σ,B::σ) = (sortsentinel.(A.inds),A.a) < (sortsentinel.(B.inds),B.a)
 for op in (δ,σminus,σplus)
     @eval isless(A::$op,B::$op) = sortsentinel.(A.inds) < sortsentinel.(B.inds)
@@ -156,15 +157,6 @@ end
 
 separate_prefac(A::Operator) = (1,A)
 separate_prefac(A::OpProd) = A.A isa scal ? (A.A.v,A.B) : (1,A)
-function combinable(A::Operator,B::Operator)
-    sA, oA = separate_prefac(A)
-    sB, oB = separate_prefac(B)
-    if oA==oB
-        true, scal(sA+sB)*oA
-    else
-        false, scal(0)
-    end
-end
 
 +(A::OpSum,B::Operator) = A.A + (A.B + B)
 function +(A::Operator,B::Operator)::Operator
@@ -176,19 +168,21 @@ function +(A::Operator,B::Operator)::Operator
     sA, oA = separate_prefac(A)
     if B isa OpSum
         sB, oB = separate_prefac(B.A)
-        oA>oB && return B.A + (A + B.B)
+        if oA > oB
+            return B.A + (A + B.B)
+        elseif oA == oB
+            return scal(sA+sB)*oA + B.B
+        end
     else
         sB, oB = separate_prefac(B)
-        oA>oB && return B + A
+        if oA > oB
+            return B + A
+        elseif oA == oB
+            return scal(sA+sB)*oA 
+        end
     end
+    oA < oB || error("invariant oA < oB violated! oA: $oA, oB: $oB, oA<oB: $(oA<oB), oA==oB: $(oA==oB), oA>oB: $(oA>oB)")
 
-    flag, S = combinable(A,B)
-    flag && return S
-
-    if B isa OpSum
-        flag, S = combinable(A,B.A)
-        flag && return S + B.B
-    end
     return OpSum(A,B)
 end
 
