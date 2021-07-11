@@ -41,10 +41,10 @@ function Base.print(io::IO,ii::OpIndex)
 end
 
 Base.print(io::IO,A::BaseOperator) = print(io,A.name,OpType_sym[Int(A.t)],"(",A.inds...,")")
-Base.print(io::IO,A::δ) = print(io,"δ($(A.iA)$(A.iB))")
-Base.print(io::IO,A::Param) = print(io,string(A.name, A.state=='c' ? "*" : "",length(A.inds)==0 ? "" : "($(A.inds...))"))
-Base.print(io::IO,A::ExpVal) = print(io,"⟨$(A.ops)⟩")
-Base.print(io::IO,A::Corr) = print(io,"⟨$(A.ops)⟩c")
+Base.print(io::IO,A::δ) = print(io,"δ(",A.iA,A.iB,")")
+Base.print(io::IO,A::Param) = print(io, A.name, A.state=='c' ? "*" : "", length(A.inds)==0 ? "" : "($(A.inds...))")
+Base.print(io::IO,A::ExpVal) = print(io,"⟨", A.ops, "⟩")
+Base.print(io::IO,A::Corr) = print(io,"⟨", A.ops, "⟩c")
 
 function Base.print(io::IO,A::OpTerm)
     if A.nsuminds > 0
@@ -105,20 +105,48 @@ end
 
 const QuantumObject = Union{OpIndex,OpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,OpTerm,OpSum}
 Base.show(io::IO, A::QuantumObject) = print(io,A)
-Base.show(io::IO, ::MIME"text/latex", A::QuantumObject) = print(io,"\$",latex(A),"\$")
+Base.show(io::IO, ::MIME"text/latex", A::QuantumObject) = (print(io,"\$"); printlatex(io,A); print(io,"\$"))
 
-function latex(ii::OpIndex)
+function latex(A::Union{QuantumObject,Number})
+    io = IOBuffer()
+    printlatex(io, A)
+    String(take!(io))
+end
+
+function printlatex(io::IO,ii::OpIndex)
     if isnoindex(ii)
-        ""
+        return
     elseif isintindex(ii)
-        "$(ii.num)"
+        print(io,ii.num)
     elseif issumindex(ii)
-        "\\#_{$(ii.num)}"
-    elseif ii.num == typemin(ii.num)
-        "$(ii.sym)"
+        print(io,"\\#_{",ii.num,"}")
     else
-        "$(ii.sym)_{$(ii.num)}"
+        print(io,ii.sym)
+        ii.num != typemin(ii.num) && print(io,"{",ii.num,"}")
     end
+end
+
+function printlatex(io::IO,v::Vector)
+    isempty(v) && return
+    prevA = v[1]
+    exponent = 1
+    for i = 2:length(v)
+        if v[i]==prevA
+            exponent += 1
+        else
+            # print previous object
+            exponent > 1 && print(io,"{")
+            printlatex(io,prevA)
+            exponent > 1 && print(io,"}^{",exponent,"}")
+            exponent = 1
+            prevA = v[i]
+            print(io," ")
+        end
+    end
+    # print last object
+    exponent > 1 && print(io,"{")
+    printlatex(io,prevA)
+    exponent > 1 && print(io,"}^{",exponent,"}")
 end
 
 latexjoin(args...) = join(latex.(args...))
@@ -134,44 +162,41 @@ const _unicode_to_latex = Dict(v[1]=>"{$k}" for (k,v) in REPL.REPLCompletions.la
 unicode_to_latex(s::AbstractString) = join(map(c -> get(_unicode_to_latex,c,string(c)), collect(s)))
 unicode_to_latex(s::OpName) = unicode_to_latex(string(s))
 
-latex(x::Number) = imag(x)==0 ? numlatex(real(x)) : (real(x)==0 ? numlatex(imag(x))*"i" : numlatex(x))
-latex(A::BaseOperator) = string("{", unicode_to_latex(A.name), "}", latexindstr(A.inds), OpType_latex[Int(A.t)])
-latex(A::δ) = string("\\delta", latexindstr(A.iA,A.iB))
-latex(A::Param) = string(unicode_to_latex(A.name), latexindstr(A.inds), A.state=='c' ? "^{*}" : "")
-latex(A::BaseOpProduct) = join(latex.(A.v))
-latex(A::ExpVal) = string("\\langle ", latex(A.ops), " \\rangle")
-latex(A::Corr) = string("\\langle ", latex(A.ops), " \\rangle_{c}")
+printlatex(io::IO,x::Number) = print(io, imag(x)==0 ? numlatex(real(x)) : (real(x)==0 ? numlatex(imag(x))*"i" : numlatex(x)))
+printlatex(io::IO,A::BaseOperator) = print(io,"{", unicode_to_latex(A.name), "}", latexindstr(A.inds), OpType_latex[Int(A.t)])
+printlatex(io::IO,A::δ) = print(io, "\\delta", latexindstr(A.iA,A.iB))
+printlatex(io::IO,A::Param) = print(io, unicode_to_latex(A.name), latexindstr(A.inds), A.state=='c' ? "^{*}" : "")
+printlatex(io::IO,A::BaseOpProduct) = printlatex(io,A.v)
+printlatex(io::IO,A::ExpVal) = (print(io, "\\langle "); printlatex(io, A.ops); print(io," \\rangle"))
+printlatex(io::IO,A::Corr)   = (print(io, "\\langle "); printlatex(io, A.ops); print(io," \\rangle_{c}"))
 
-function latex(A::OpTerm)
-    strings = String[]
+function printlatex(io::IO,A::OpTerm)
     if A.nsuminds > 0
-        push!(strings,"\\sum_{")
-        append!(strings,latex.(sumindex.(1:A.nsuminds)))
-        push!(strings,"} ")
+        print(io,"\\sum",latexindstr(sumindex.(1:A.nsuminds)))
     end
-    append!(strings,latex.(A.δs))
-    append!(strings,latex.(A.params))
-    append!(strings,latex.(A.expvals))
-    append!(strings,latex.(A.corrs))
-    push!(strings,latex(A.bares))
-    join(strings," ")
+    printlatex(io,A.δs)
+    printlatex(io,A.params)
+    printlatex(io,A.expvals)
+    printlatex(io,A.corrs)
+    printlatex(io,A.bares)
 end
 
-function latex(A::OpSum)
-    isempty(A) && return "0"
-
-    strings = String[]
-    # convert to tuples so sorting ignores the numbers if terms are different (which they are)
-    for (t,s) in sort!(Tuple.(collect(A.terms)))
-        if isempty(t)
-            push!(strings,latex(s))
-        else
-            ls = s==one(s) ? "" : (s==-one(s) ? "-" : latex(s))
-            if !isempty(strings) && (ls=="" || (ls[1] ∉ ('-','+')))
-                push!(strings," + ")
+function printlatex(io::IO,A::OpSum)
+    if isempty(A)
+        print(io,0)
+    else
+        # convert to tuples so sorting ignores the numbers if terms are different (which they are)
+        for (ii,(t,s)) in enumerate(sort!(Tuple.(collect(A.terms))))
+            if isempty(t)
+                printlatex(io,s)
+            else
+                ls = s==one(s) ? "" : (s==-one(s) ? "-" : latex(s))
+                if ii > 1 && (ls=="" || (ls[1] ∉ ('-','+')))
+                    print(io," + ")
+                end
+                print(io,ls)
+                printlatex(io,t)
             end
-            push!(strings,ls,latex(t))
         end
     end
-    join(strings)
 end

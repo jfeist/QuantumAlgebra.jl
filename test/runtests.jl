@@ -243,7 +243,7 @@ scal(x) = OpSum(((OpTerm(),x),))
         # @test latex(scal(1+2im//5)) == "\\left(1+\\frac{2}{5}i\\right)"
 
         tmp = ∑(:i,expval_as_corrs(adag(:n)*a(:i)))
-        tmplatex = raw"\sum_{ \#_{1} }  \langle {a}_{n}^\dagger \rangle_{c} \langle {a}_{\#_{1}} \rangle_{c}  + \sum_{ \#_{1} }  \langle {a}_{n}^\dagger{a}_{\#_{1}} \rangle_{c} "
+        tmplatex = raw"\sum_{\#_{1}}\langle {a}_{n}^\dagger \rangle_{c} \langle {a}_{\#_{1}} \rangle_{c} + \sum_{\#_{1}}\langle {a}_{n}^\dagger {a}_{\#_{1}} \rangle_{c}"
         @test latex(tmp) == tmplatex
         @test expval_as_corrs(tmp) == tmp
         @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
@@ -252,7 +252,7 @@ scal(x) = OpSum(((OpTerm(),x),))
         lσz = latex(σz())
         if QuantumAlgebra.using_σpm()
             @test lσp == "{{\\sigma}}^+"
-            @test lσz == "-1 + 2{{\\sigma}}^+{{\\sigma}}^-"
+            @test lσz == "-1 + 2{{\\sigma}}^+ {{\\sigma}}^-"
         else
             @test lσp == "\\frac{1}{2}{{\\sigma}}^x + \\frac{1}{2}i{{\\sigma}}^y"
             @test lσz == "{{\\sigma}}^z"
