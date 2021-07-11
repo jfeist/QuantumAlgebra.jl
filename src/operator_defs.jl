@@ -29,7 +29,12 @@ function OpIndex(ii::String)
     # we do not allow the ascii control characters as symbolic indices to ensure ordering
     sym > '#' || throw(ArgumentError("Symbolic index name cannot be character less than '#' (codepoint 35), passed Int(sym) = $(Int(sym))."))
     if length(s)==2
-        OpIndex(sym,parse(IndexInt,s[2]))
+        num = try
+            parse(IndexInt,s[2])
+        catch
+            throw(ArgumentError("Only integer literals are supported as index subscripts. Got \"$(s[2])\"."))
+        end
+        OpIndex(sym,num)
     else
         OpIndex(sym)
     end
