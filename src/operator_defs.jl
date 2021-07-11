@@ -276,6 +276,7 @@ using .DefaultOps
 # Pr"ω_i,j" = param(:ω,'r',:i,:j) (real parameter)
 
 param(name::Symbol,args...) = param(OpName(name),args...)
+param(name::OpName,args...) = param(name,'n',args...)
 function param(name::OpName,state::Char,inds...)
     state ∈ ('r','n','c') || throw(ArgumentError("state has to be one of n,r,c"))
     OpSum(Param(name,state,make_indices(inds...)))
