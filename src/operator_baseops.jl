@@ -380,7 +380,7 @@ function normal_order!(ops::BaseOpProduct,term_collector)
             j -= 1
         end
     end
-    # check if we have any products that simplify (only happens for identical operators)
+    # check if we have any products that simplify
     k = 2
     while k<=length(A)
         dosimplify, fac, op = _contract(A[k-1],A[k])
@@ -403,6 +403,30 @@ function normal_order!(ops::BaseOpProduct,term_collector)
             # with A[k+1] or Anew if it didn't contract with A[k-1], but let's be safe)
             k > 2 && (k -= 1)
         else
+            if A[k-1].t in (TLSx_,TLSy_,TLSz_)
+                # lookahead while we can commute through
+                for kp = k+1:length(A)
+                    A[kp].t in (TLSx_,TLSy_,TLSz_) || break
+                    pp, exc_res = _exchange(A[kp-1],A[kp])
+                    exc_res === nothing || break
+                    dosimplify, fac, op = _contract(A[k-1],A[kp])
+                    if dosimplify
+                        prefactor *= fac
+                        iszero(prefactor) && return prefactor
+                        if op === nothing
+                            deleteat!(A,(k-1,kp))
+                            #println("deleted indices $(k-1) and $k, A is now: $A, prefactor is now: $prefactor")
+                        else
+                            A[k-1] = op
+                            deleteat!(A,kp)
+                            #println("deleted index $k and replaced $(k-1) by $op. A is now: $A, prefactor is now: $prefactor")
+                        end
+                        # k -= 2 here because we have k += 1 just below
+                        k > 2 && (k -= 2)
+                        break
+                    end
+                end
+            end
             k += 1
         end
     end

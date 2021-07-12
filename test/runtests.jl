@@ -144,13 +144,15 @@ scal(x) = OpSum(((OpTerm(),x),))
                 xsqn = normal_form(x*x)
                 @test xsqn == normal_form(xn*xn)
 
-                # do normal_form already on the first partial product, otherwise
-                # computation time explodes. this is broken not because of an
-                # error as far as we can tell, but because depending on the
-                # order of computation it produces equivalent terms that we
-                # cannot identify as equal yet, such as:
+                # do normal_form already on the first partial product, otherwise computation time explodes.
+                # NOTE: this test is broken not because of an error as far as I can tell, but because
+                # depending on the order of computation it produces equivalent terms that we cannot
+                # identify as equal yet, such as:
                 # ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₁) and
                 # ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₂)
+                #
+                # For use_σxyz, this is even worse, since even though non-adjacent operators are contracted,
+                # there are ambiguities in sums that even lead to different numbers of terms
                 @test_broken normal_form(xsqn*x) == normal_form(xn*xn*xn)
             end
         end
