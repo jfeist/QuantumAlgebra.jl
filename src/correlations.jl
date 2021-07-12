@@ -32,6 +32,7 @@ a_{n}^\\dagger a_{m} \\rangle_{c}``.
 See also: [`expval`](@ref), [`corr`](@ref)"""
 function expval_as_corrs(A::OpSum)
     newA = OpSum()
+    corrterms = OpSum()
     for (t,s) in A.terms
         # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
         # is assumed to be distinct from the indices of the expressions
@@ -47,7 +48,8 @@ function expval_as_corrs(A::OpSum)
                     f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
                     tb = f(t.bares)
                     tbc = deepcopy(tb)
-                    normal_order!(tb,NotASum())
+                    normal_order!(tb,corrterms)
+                    @assert isempty(corrterms)
                     if tb != tbc
                         tright = _normalize_without_commutation(OpTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
                         _add_corrs!(newA,tright,s)

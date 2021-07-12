@@ -164,6 +164,10 @@ OpTerm(δs::Vector{δ},ops::BaseOpProduct) = OpTerm(0,δs,Param[],ExpVal[],Corr[
 OpTerm(p::Param)  = OpTerm(0,δ[],Param[p],ExpVal[],Corr[],BaseOpProduct())
 OpTerm(E::ExpVal) = OpTerm(0,δ[],Param[],ExpVal[E],Corr[],BaseOpProduct())
 OpTerm(C::Corr)   = OpTerm(0,δ[],Param[],ExpVal[],Corr[C],BaseOpProduct())
+OpTerm(Es::Vector{ExpVal}) = OpTerm(0,δ[],Param[],Es,Corr[],BaseOpProduct())
+OpTerm(Cs::Vector{Corr}) = OpTerm(0,δ[],Param[],ExpVal[],Cs,BaseOpProduct())
+OpTerm(δs::Vector{δ},Es::Vector{ExpVal}) = OpTerm(0,δs,Param[],Es,Corr[],BaseOpProduct())
+OpTerm(δs::Vector{δ},Cs::Vector{Corr})   = OpTerm(0,δs,Param[],ExpVal[],Cs,BaseOpProduct())
 
 Base.isempty(A::OpTerm) = A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs) && isempty(A.bares)
 

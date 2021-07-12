@@ -397,46 +397,104 @@ function normal_order!(ops::BaseOpProduct,term_collector)
     prefactor
 end
 
-struct NotASum end
-_add_sum_term!(::NotASum,args...) = error("Normal ordering in Corr or ExpVal producing new terms is not yet implemented!")
-
-normal_order!(A::Union{Corr,ExpVal}) = normal_order!(A.ops,NotASum())
-function normal_order!(v::Vector{T},pref=1) where {T<:Union{Corr,ExpVal}}
-    for EC in v
-        pref *= normal_order!(EC)
+normal_order!(A::Union{Corr,ExpVal},term_collector) = normal_order!(A.ops,term_collector)
+function normal_order!(v::Vector{T},commterms,pref=1) where {T<:Union{Corr,ExpVal}}
+    evcfun = T == ExpVal ? expval : corr
+    for (ii,EC) in enumerate(v)
+        newterms = OpSum()
+        pref *= normal_order!(EC,newterms)
+        for (t,s) in newterms.terms
+            @assert iszero(t.nsuminds) && isempty(t.params) && isempty(t.expvals) && isempty(t.corrs)
+            #_add_sum_term!(commterms,OpTerm(t.δs,[v[1:ii-1]; T(t.bares); v[ii+1:end]]),s)
+            nv = [isempty(t.bares) ? T[] : T(t.bares); v[1:ii-1]; v[ii+1:end]]
+            nt = OpTerm(t.δs, deepcopy(nv))
+            nt2 = evcfun(t)*OpTerm([v[1:ii-1]; v[ii+1:end]])
+            nt == nt2 || error("nt: $nt,  nt2: $nt2")
+            _add_sum_term!(commterms,nt2,s)
+        end
     end
     filter!(EC -> !isempty(EC.ops), v)
     sort!(v)
     pref
 end
 
+# iterate over a single term t with prefactor s and a sum as if they were in the same sum
+termsumiter(t::OpTerm,s,sum::OpSum) = Base.Iterators.flatten((((t,s),), sum.terms))
+termsumiter(t,s,sum::OpSum) = termsumiter(OpTerm(t),s,sum)
+
+#_add_level = -1
 function _add_with_normal_order!(A::OpSum,t::OpTerm,s)
-    commterms = OpSum()
+    #global _add_level += 1
+    # println(" "^(_add_level*4),"_add_with_normal_order!($A,$t,$s)")
     t = _normalize_without_commutation(t)
     t === nothing && return
-    pref = normal_order!(t.bares,commterms)
-    pref = normal_order!(t.expvals,pref)
-    pref = normal_order!(t.corrs,pref)
+    # println(" "^(_add_level*4),"t = $t")
+    newbareterms = OpSum()
+    newexpvterms = OpSum()
+    newcorrterms = OpSum()
+    prefbare = normal_order!(t.bares,   newbareterms)
+    prefexpv = normal_order!(t.expvals, newexpvterms)
+    prefcorr = normal_order!(t.corrs,   newcorrterms)
 
-    #println("in _add_with_normal_order, main term becomes $t, with scalar $s. commterms: $commterms")
-    iszero(pref) || _add_sum_term!(A,t,s*pref)
-    for (nt,ns) in commterms.terms
-        #println("nt = $nt, ns = $ns.")
-        nt = _combine_commuted(t,nt)
-        #println("nt_new = $nt.")
-        _add_with_normal_order!(A,nt,s*ns)
+    # println(" "^(_add_level*4),"newexpvterms: ",newexpvterms)
+
+    # normal_form(t) = t.prefs * (prefexpv*tN.ev + ev_new) * (prefcorr*tN.co + co_new) * (prefbare*tN.bare + bare_new)
+    for (tev,sev) in termsumiter(t.expvals, prefexpv, newexpvterms)
+        # println(" "^(_add_level*4),"tev: $tev, sev: $sev")
+        iszero(sev) && continue
+        @assert iszero(tev.nsuminds) && isempty(tev.params) && isempty(tev.corrs) && isempty(tev.bares)
+
+        for (tco,sco) in termsumiter(t.corrs, prefcorr, newcorrterms)
+            # println(" "^(_add_level*4),"tco: $tco, sco: $sco")
+            iszero(sco) && continue
+            @assert iszero(tco.nsuminds) && isempty(tco.params) && isempty(tco.expvals) && isempty(tco.bares)
+
+            for (tba,sba) in termsumiter(t.bares, prefbare, newbareterms)
+                # println(" "^(_add_level*4),"tba: $tba, sba: $sba")
+                iszero(sba) && continue
+                @assert iszero(tba.nsuminds) && isempty(tba.params) && isempty(tba.expvals) && isempty(tba.corrs)
+
+                pref = sev*sco*sba
+                if tev.expvals===t.expvals && tco.corrs===t.corrs && tba.bares===t.bares
+                    # this term has been modified in place in t and is guaranteed to be in normal order
+                    # println(" "^(_add_level*4),"t': $t, s*pref: $(s*pref)")
+                    _add_sum_term!(A,t,s*pref)
+                else
+                    # IMPTE: nt is cleaned afterwards with _normalize_without_commutation,
+                    # which creates copies of everything, so we can reuse arrays here
+                    nt = OpTerm(t.nsuminds,[t.δs;tev.δs;tco.δs;tba.δs],t.params,tev.expvals,tco.corrs,tba.bares)
+                    # println(" "^(_add_level*4),"nt: $nt, s*pref: $(s*pref)")
+                    _add_with_normal_order!(A,nt,s*pref)
+                end
+            end
+        end
     end
+    #_add_level -= 1
+    # for (newterms,_combine,pref) in ((newbareterms,_combine_commuted_bares,   prefexpv*prefcorr),
+    #                                  (newexpvterms,_combine_commuted_expvals, prefcorr*prefbare),
+    #                                  (newcorrterms,_combine_commuted_corrs,   prefexpv*prefbare))
+    #     iszero(pref) && continue
+    #     for (nt,ns) in newterms.terms
+    #         #println("nt = $nt, ns = $ns.")
+    #         nt = _combine(t,nt)
+    #         #println("nt_new = $nt.")
+    #         _add_with_normal_order!(A,nt,s*ns)
+    #     end
+    # end
 end
 
-function _combine_commuted(A::OpTerm,B::OpTerm)
-    # IMPTE: output of this is cleaned afterwards with _normalize_without_commutation,
-    # which creates copies of everything, so we can reuse arrays here
-    @assert iszero(B.nsuminds)
-    @assert isempty(B.params)
-    @assert isempty(B.expvals)
-    @assert isempty(B.corrs)
-    OpTerm(A.nsuminds,[A.δs;B.δs],A.params,A.expvals,A.corrs,B.bares)
-end
+# function _combine_commuted_bares(A::OpTerm,B::OpTerm)
+#     @assert iszero(B.nsuminds) && isempty(B.params) && isempty(B.expvals) && isempty(B.corrs)
+#     OpTerm(A.nsuminds,[A.δs;B.δs],A.params,A.expvals,A.corrs,B.bares)
+# end
+# function _combine_commuted_expvals(A::OpTerm,B::OpTerm)
+#     @assert iszero(B.nsuminds) && isempty(B.params) && isempty(B.corrs) && isempty(B.bares)
+#     OpTerm(A.nsuminds,[A.δs;B.δs],A.params,B.expvals,A.corrs,A.bares)
+# end
+# function _combine_commuted_corrs(A::OpTerm,B::OpTerm)
+#     @assert iszero(B.nsuminds) && isempty(B.params) && isempty(B.expvals) && isempty(B.bares)
+#     OpTerm(A.nsuminds,[A.δs;B.δs],A.params,A.expvals,B.corrs,A.bares)
+# end
 
 function normal_form(A::OpSum)
     An = OpSum()
