@@ -196,7 +196,7 @@ function _normalize_without_commutation(A::OpTerm)::Union{OpTerm,Nothing}
         if !isempty(delsuminds)
             sort!(delsuminds)
             for (shift,startind) in enumerate(delsuminds)
-                endind = shift == length(delsuminds) ? A.nsuminds : delsuminds[shift]-1
+                endind = shift == length(delsuminds) ? A.nsuminds : delsuminds[shift+1]-1
                 for num = startind+1:endind
                     replacements[sumindex(num)] = sumindex(num-shift)
                 end
