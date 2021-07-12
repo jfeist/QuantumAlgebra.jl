@@ -129,6 +129,28 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test length(tmp1.terms) == 4
         end
 
+        @testset "Commutation inside ExpVal/Corr" begin
+            x1 = a(:d)*adag(:c)
+            x2 = a(:i)*adag(:j)*σz(:α)*σy(:β)
+            x = ∑(:c,∑(:i,3*expval(x1)*x2))
+            @test normal_form(expval(x1)) == myδ(:c,:d) + expval(adag(:c)*a(:d))
+            @test normal_form(3*expval(x1)) == expval(normal_form(3*x1))
+            @test normal_form(3*expval(x2)) == expval(normal_form(3*x2))
+            @test normal_form(3*expval(x1)*x2) == expval(3*normal_form(x1))*normal_form(x2)
+            @test normal_form(3*expval(x1)*corr(x2)) == normal_form(expval(3*normal_form(x1))*corr(normal_form(x2)))
+            @test normal_form(x) == normal_form(∑(:c,∑(:i,3*expval(normal_form(x1))*normal_form(x2))))
+
+            x1 = f(:d)*fdag(:c)
+            x2 = f(:i)*fdag(:j)*σz(:α)*σy(:β)
+            x = ∑(:c,∑(:i,3*expval(x1)*x2))
+            @test normal_form(expval(x1)) == myδ(:c,:d) - expval(fdag(:c)*f(:d))
+            @test normal_form(3*expval(x1)) == expval(normal_form(3*x1))
+            @test normal_form(3*expval(x2)) == expval(normal_form(3*x2))
+            @test normal_form(3*expval(x1)*x2) == expval(3*normal_form(x1))*normal_form(x2)
+            @test normal_form(3*expval(x1)*corr(x2)) == normal_form(expval(3*normal_form(x1))*corr(normal_form(x2)))
+            @test normal_form(x) == normal_form(∑(:c,∑(:i,3*expval(normal_form(x1))*normal_form(x2))))
+        end
+
         @test normal_form(myδ(:i,:k)*a(:k)) == normal_form(a(:i)*myδ(:k,:i))
         @test normal_form(myδ(:i,:k)*a(:k,:i)) == normal_form(a(:i,:i)*myδ(:k,:i))
         @test normal_form(myδ(:i,:k)*myδ(:i,:j)) == normal_form(myδ(:k,:i)*myδ(:j,:k))
