@@ -194,11 +194,23 @@ function _normalize_without_commutation(A::OpTerm)::Union{OpTerm,Nothing}
         # after replacements, δs can be out of order
         sort!(δs)
         if !isempty(delsuminds)
+            sumrepls = Dict{OpIndex,OpIndex}()
             sort!(delsuminds)
             for (shift,startind) in enumerate(delsuminds)
                 endind = shift == length(delsuminds) ? A.nsuminds : delsuminds[shift+1]-1
                 for num = startind+1:endind
-                    replacements[sumindex(num)] = sumindex(num-shift)
+                    sumrepls[sumindex(num)] = sumindex(num-shift)
+                end
+            end
+            # we want to first apply replacements and then sumrepls
+            # this is the same as replacing results from replacements with sumrepls,
+            # and then applying sumrepls on indices that have not been replaced yet
+            for (iold,inew) in replacements
+                replacements[iold] = get(sumrepls,inew,inew)
+            end
+            for (iold,inew) in sumrepls
+                if iold ∉ keys(replacements)
+                    replacements[iold] = inew
                 end
             end
         end
@@ -434,7 +446,8 @@ function _add_with_normal_order!(A::OpSum,t::OpTerm,s)
     # normal_form(t) = t.prefs * (prefexpv*tN.ev + ev_new) * (prefcorr*tN.co + co_new) * (prefbare*tN.bare + bare_new)
     # t has already been transformed to tN in-place and is guaranteed to be in normal order
     pref = prefbare*prefexpv*prefcorr
-    iszero(pref) || _add_sum_term!(A,reorder_suminds()(t),s*pref)
+    iszero(t.nsuminds) || (t = reorder_suminds()(t))
+    iszero(pref) || _add_sum_term!(A,t,s*pref)
     isempty(newexpvterms) && isempty(newcorrterms) && isempty(newbareterms) && return
 
     firstterm = true
