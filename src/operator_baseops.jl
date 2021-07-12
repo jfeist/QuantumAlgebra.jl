@@ -40,9 +40,10 @@ isless(A::σ,B::σ) = (sortsentinel.(A.inds),A.a) < (sortsentinel.(B.inds),B.a)
 for op in (δ,σminus,σplus)
     @eval isless(A::$op,B::$op) = sortsentinel.(A.inds) < sortsentinel.(B.inds)
 end
-for op in (ExpVal,Corr,OpSumAnalytic)
+for op in (ExpVal,Corr)
     @eval isless(A::$op,B::$op) = A.A < B.A
 end
+isless(A::OpSumAnalytic,B::OpSumAnalytic) = (A.A,A.ind) < (B.A,B.ind)
 
 # return -1 if A<B, 0 if A==B, 1 if B<A
 function iterlesseq(A,B)::Int
