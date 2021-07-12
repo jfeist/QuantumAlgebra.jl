@@ -8,6 +8,7 @@ subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digit
 superscript(i::Integer) = (i<0 ? "⁻" : "") * join(_SUPERSCRIPTNUMS[d+1] for d in reverse(digits(abs(i))))
 
 function printspaced(io::IO,v,trailing_space=false)
+    isempty(v) && return
     print(io,v[1])
     iprinted = 1
     exponent = 1
