@@ -123,7 +123,7 @@ function printlatex(io::IO,ii::OpIndex)
         print(io,"\\#_{",ii.num,"}")
     else
         print(io,ii.sym)
-        ii.num != typemin(ii.num) && print(io,"{",ii.num,"}")
+        ii.num != typemin(ii.num) && print(io,"_{",ii.num,"}")
     end
 end
 

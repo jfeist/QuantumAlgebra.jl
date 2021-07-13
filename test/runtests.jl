@@ -266,15 +266,13 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test vacExpVal(A,S) ≈ val
         end
 
-        # tmp = scal(1+2im)*∑(:i,a(:i)*adag(:i)*expval_as_corrs(adag(:n)*a(:m)))
-        # @test latex(scal(1+2im)) == "(1+2i)"
-        # @test latex(scal(1+2im//5)) == "\\left(1+\\frac{2}{5}i\\right)"
-
         tmp = ∑(:i,expval_as_corrs(adag(:n)*a(:i)))
         tmplatex = raw"\sum_{\#_{1}}\langle {a}_{n}^\dagger \rangle_{c} \langle {a}_{\#_{1}} \rangle_{c} + \sum_{\#_{1}}\langle {a}_{n}^\dagger {a}_{\#_{1}} \rangle_{c}"
         @test latex(tmp) == tmplatex
         @test expval_as_corrs(tmp) == tmp
         @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
+
+        @test latex(a(:i_1,:i_2)) == raw"{a}_{i_{1}i_{2}}"
 
         lσp = latex(σp())
         lσz = latex(σz())
