@@ -2,10 +2,22 @@
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://jfeist.github.io/QuantumAlgebra.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://jfeist.github.io/QuantumAlgebra.jl/dev)
-[![Build Status](https://travis-ci.com/jfeist/QuantumAlgebra.jl.svg?branch=master)](https://travis-ci.com/jfeist/QuantumAlgebra.jl)
+[![Build Status](https://github.com/jfeist/QuantumAlgebra.jl/actions/workflows/Test.yml/badge.svg)](https://github.com/jfeist/QuantumAlgebra.jl/actions?query=workflow%3Arun-tests)
 [![Codecov](https://codecov.io/gh/jfeist/QuantumAlgebra.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/QuantumAlgebra.jl)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/master?filepath=examples)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/full_rewrite?filepath=examples)
 [![DOI](https://zenodo.org/badge/211471154.svg)](https://zenodo.org/badge/latestdoi/211471154)
+
+# NOTE: This package is currently undergoing a major rewrite
+The current branch
+([full_rewrite](https://github.com/jfeist/QuantumAlgebra.jl/tree/full_rewrite))
+corresponds to a major revision and apart from updated examples and
+documentation is mostly stable and well-tested by now. New users are encouraged
+to use this branch (install with `]add QuantumAlgebra#full_rewrite`). The
+biggest user-facing change compared to the main branch is that normal/canonical
+form is not enforced automatically, but has to be explicitly calculated (with
+`normal_form(x)`).
+
+# Old README:
 
 This package does quantum operator algebra (i.e., algebra with non-commuting
 operators) in Julia. It defines an opinionated canonical form (normal ordering
