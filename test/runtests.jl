@@ -298,7 +298,8 @@ scal(x) = OpSum(((OpTerm(),x),))
         end
 
         @test julia_expression(OpSum()) == 0
-        @test julia_expression(OpTerm()) == 0
+        # an empty OpTerm is the identity operator!
+        @test julia_expression(OpTerm()) == 1
 
         x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*adag(:i_1,:J,:k)*σp(:i))
         ex = julia_expression(expval(normal_form(x)))

@@ -55,10 +55,11 @@ function julia_expression(A::Union{ExpVal,Corr},varnames=nothing)
         :( conj($x[$(indexpr(Ap)...)]) )
     end
 end
+num_expr(s::Number) = :( $(isreal(s) ? Float64(s) : ComplexF64(s)) )
 function julia_expression(A::OpTerm,varnames=nothing,s=1)
-    isempty(A) && return 0
+    isempty(A) && return num_expr(s)
     isempty(A.bares) || throw(ArgumentError("Cannot convert term $A with bare operators to a julia expression."))
-    sexpr = isone(s) ? [] : :( $(isreal(s) ? Float64(s) : ComplexF64(s)) )
+    sexpr = isone(s) ? [] : num_expr(s)
     exprs = [sexpr; julia_expression.(A.δs); julia_expression.(A.params);
              julia_expression.(A.expvals,(varnames,)); julia_expression.(A.corrs,(varnames,))]
     length(exprs)==1 ? exprs[1] : :( *($(exprs...)) )
