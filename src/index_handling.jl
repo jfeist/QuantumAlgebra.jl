@@ -4,8 +4,7 @@ abstract type IndexFunction end
 (f::IndexFunction)(d::δ) = δ(f(d.iA),f(d.iB))
 (f::IndexFunction)(par::Param) = Param(par.name,par.state,f.(par.inds))
 (f::IndexFunction)(ops::BaseOpProduct) = BaseOpProduct(f.(ops.v))
-(f::IndexFunction)(ev::ExpVal) = ExpVal(f(ev.ops))
-(f::IndexFunction)(ev::Corr) = Corr(f(ev.ops))
+(f::IndexFunction)(ev::T) where T<:Union{ExpVal,Corr} = T(f(ev.ops))
 (f::IndexFunction)(A::OpTerm,nsuminds=A.nsuminds) = OpTerm(nsuminds,f.(A.δs),f.(A.params),f.(A.expvals),f.(A.corrs),f(A.bares))
 (f::IndexFunction)(A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
 

@@ -4,15 +4,13 @@ import Base: ==, ≈, *, +, -
 export normal_form, comm
 
 Base.length(A::BaseOpProduct) = length(A.v)
-Base.length(A::ExpVal) = length(A.ops)
-Base.length(A::Corr) = length(A.ops)
+Base.length(A::Union{ExpVal,Corr}) = length(A.ops)
 Base.length(A::OpTerm) = length(A.bares) + mapreduce(length,+,A.expvals;init=0) + mapreduce(length,+,A.corrs;init=0)
 
 ==(A::BaseOperator,B::BaseOperator) = A.t == B.t && A.name == B.name && A.inds == B.inds
 ==(A::BaseOpProduct,B::BaseOpProduct) = A.v == B.v
 ==(A::Param,B::Param) = A.name == B.name && A.state == B.state && A.inds == B.inds
-==(A::ExpVal,B::ExpVal) = A.ops == B.ops
-==(A::Corr,B::Corr) = A.ops == B.ops
+==(A::T,B::T) where T<:Union{ExpVal,Corr} = A.ops == B.ops
 ==(A::OpTerm,B::OpTerm) = (A.nsuminds == B.nsuminds && A.δs == B.δs && A.params == B.params &&
                            A.expvals == B.expvals && A.corrs == B.corrs && A.bares == B.bares)
 ==(A::OpSum,B::OpSum) = A.terms == B.terms
@@ -44,13 +42,8 @@ function Base.hash(A::BaseOpProduct,h::UInt)
     h = hash(A.v,h)
     h
 end
-function Base.hash(A::ExpVal,h::UInt)
-    h = hash(ExpVal,h)
-    h = hash(A.ops,h)
-    h
-end
-function Base.hash(A::Corr,h::UInt)
-    h = hash(Corr,h)
+function Base.hash(A::T,h::UInt) where T<:Union{ExpVal,Corr}
+    h = hash(T,h)
     h = hash(A.ops,h)
     h
 end
@@ -81,8 +74,7 @@ end
 @inline recursive_cmp(A::Param,B::Param) = cmp(A,B)
 @inline recursive_cmp(A::δ,B::δ) = cmp(A,B)
 @inline recursive_cmp(A::BaseOpProduct,B::BaseOpProduct) = (cc = cmp(length(A),length(B)); cc == 0 ? recursive_cmp(A.v,B.v) : cc)
-@inline recursive_cmp(A::ExpVal,B::ExpVal) = recursive_cmp(A.ops,B.ops)
-@inline recursive_cmp(A::Corr,B::Corr) = recursive_cmp(A.ops,B.ops)
+@inline recursive_cmp(A::T,B::T) where T<:Union{ExpVal,Corr}  = recursive_cmp(A.ops,B.ops)
 
 macro _cmpAB(member,rec=true)
     fun = rec ? :recursive_cmp : :cmp
@@ -135,8 +127,7 @@ end
 @inline Base.isless(A::Param,B::Param) = cmp(A,B) < 0
 @inline Base.isless(A::δ,B::δ) = cmp(A,B) < 0
 @inline Base.isless(A::BaseOpProduct,B::BaseOpProduct) = recursive_cmp(A,B) < 0
-@inline Base.isless(A::ExpVal,B::ExpVal) = recursive_cmp(A,B) < 0
-@inline Base.isless(A::Corr,B::Corr) = recursive_cmp(A,B) < 0
+@inline Base.isless(A::T,B::T) where T<:Union{ExpVal,Corr} = recursive_cmp(A,B) < 0
 @inline Base.isless(A::OpTerm,B::OpTerm) = cmp(A,B) < 0
 
 comm(A,B) = A*B - B*A
