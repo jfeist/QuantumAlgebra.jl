@@ -151,6 +151,57 @@ function Base.adjoint(A::OpTerm)
 end
 Base.adjoint(A::OpSum) = OpSum((adjoint(t),adjoint(s)) for (t,s) in A.terms)
 
+is_normal_form(A::Union{ExpVal,Corr}) = is_normal_form(A.ops)
+is_normal_form(ops::BaseOpProduct) = is_normal_form(ops.v)
+function is_normal_form(v::Vector{BaseOperator})
+    issorted(v) || return false
+    # now check that no contractions occur
+    for k in 1:length(v)-1
+        O = v[k]
+        dosimplify, fac, op = _contract(O,v[k+1])
+        dosimplify && return false
+        if O.t in (TLSx_,TLSy_,TLSz_)
+            # lookahead while we can commute through
+            for kp = k+2:length(v)
+                v[kp].t in (TLSx_,TLSy_,TLSz_) || break
+                _exchange(v[kp-1],v[kp]) == (1,nothing) || break
+                dosimplify, fac, op = _contract(O,v[kp])
+                dosimplify && return false
+            end
+        end
+    end
+    return true
+end
+function is_normal_form(t::OpTerm)
+    (issorted(t.params) && issorted(t.expvals) && issorted(t.corrs)) || return false
+    is_normal_form(t.bares) || return false
+    for EV in t.expvals
+        is_normal_form(EV) || return false
+    end
+    for CO in t.corrs
+        is_normal_form(CO) || return false
+    end
+    isempty(t.δs) && return true
+    for (iδ,dd) in enumerate(t.δs)
+        iA,iB = dd.iA, dd.iB
+        # δ is not ordered (or disappears if iA == iB)
+        iA ≥ iB && return false
+        # the whole term disappears in cleanup
+        isintindex(iA) && isintindex(iB) && return false
+        (issumindex(iA) || issumindex(iB)) && return false
+        if iδ > 1
+            (dd > @inbounds t.δs[iδ-1]) || return false
+        end
+    end
+    return true
+end
+function is_normal_form(A::OpSum)
+    for t in keys(A.terms)
+        is_normal_form(t) || return false
+    end
+    return true
+end
+
 function _normalize_without_commutation(A::OpTerm)::Union{OpTerm,Nothing}
     # first, clean up the δs
     if isempty(A.δs)
@@ -364,7 +415,6 @@ function normal_order!(ops::BaseOpProduct,term_collector)
                     # this one gives the "1" term that is used below
                     onew = BaseOpProduct([A[1:j-2]; A[j+1:end]])
                 else
-                    # new product needs _full_ array (B[1:k-1] is already ordered)
                     onew = BaseOpProduct([A[1:j-2]; exc_res.op; A[j+1:end]])
                 end
                 t = OpTerm(exc_res.δs, onew)
@@ -381,54 +431,61 @@ function normal_order!(ops::BaseOpProduct,term_collector)
         end
     end
     # check if we have any products that simplify
-    k = 2
-    while k<=length(A)
-        dosimplify, fac, op = _contract(A[k-1],A[k])
+    did_contractions = false
+    k = 1
+    while k < length(A)
+        dosimplify, fac, op = _contract(A[k],A[k+1])
         if dosimplify
+            did_contractions = true
             prefactor *= fac
             iszero(prefactor) && return prefactor
             if op === nothing
-                deleteat!(A,(k-1,k))
+                deleteat!(A,(k,k+1))
                 #println("deleted indices $(k-1) and $k, A is now: $A, prefactor is now: $prefactor")
             else
-                A[k-1] = op
-                deleteat!(A,k)
+                A[k] = op
+                deleteat!(A,k+1)
                 #println("deleted index $k and replaced $(k-1) by $op. A is now: $A, prefactor is now: $prefactor")
             end
-            # we replaced [...,A[k-2],A[k-1],A[k],A[k+1],...]
-            # with        [...,A[k-2],A[k+1],...]
-            # or with     [...,A[k-2],Anew,A[k],A[k+1]...]
-            # so reduce k by one to compare the new operator at k-1 with A[k-2] as well
-            # (with the ordering we have, it's probably impossible for A[k-2] to contract
-            # with A[k+1] or Anew if it didn't contract with A[k-1], but let's be safe)
-            k > 2 && (k -= 1)
+            # we replaced [...,A[k-1],A[k],A[k+1],A[k+2],...]
+            # with        [...,A[k-1],A[k+2],...]
+            # or with     [...,A[k-1],Anew,A[k+2]...]
+            # so reduce k by one to compare the new operator at k with A[k-1] as well
+            # (with the ordering we have, it's probably impossible for A[k-1] to contract
+            # with Anew if it didn't contract with A[k], but let's be safe)
+            k > 1 && (k -= 1)
         else
-            if A[k-1].t in (TLSx_,TLSy_,TLSz_)
+            if A[k].t in (TLSx_,TLSy_,TLSz_)
                 # lookahead while we can commute through
-                for kp = k+1:length(A)
+                # we already checked with k+1, so start at k+2
+                for kp = k+2:length(A)
                     A[kp].t in (TLSx_,TLSy_,TLSz_) || break
-                    pp, exc_res = _exchange(A[kp-1],A[kp])
-                    exc_res === nothing || break
-                    dosimplify, fac, op = _contract(A[k-1],A[kp])
+                    _exchange(A[kp-1],A[kp]) == (1,nothing) || break
+                    dosimplify, fac, op = _contract(A[k],A[kp])
                     if dosimplify
+                        did_contractions = true
                         prefactor *= fac
                         iszero(prefactor) && return prefactor
                         if op === nothing
-                            deleteat!(A,(k-1,kp))
+                            deleteat!(A,(k,kp))
                             #println("deleted indices $(k-1) and $k, A is now: $A, prefactor is now: $prefactor")
                         else
-                            A[k-1] = op
+                            A[k] = op
                             deleteat!(A,kp)
                             #println("deleted index $k and replaced $(k-1) by $op. A is now: $A, prefactor is now: $prefactor")
                         end
                         # k -= 2 here because we have k += 1 just below
-                        k > 2 && (k -= 2)
+                        k > 1 && (k -= 2)
                         break
                     end
                 end
             end
             k += 1
         end
+    end
+    if did_contractions
+        # do another round of normal ordering since this could have changed after contractions
+        prefactor *= normal_order!(ops,term_collector)
     end
     prefactor
 end

@@ -1,5 +1,5 @@
 using QuantumAlgebra
-using QuantumAlgebra: δ, OpSum, OpTerm, BaseOpProduct, BaseOperator, Param, OpIndex, _map_opsum_ops, TLSx, TLSCreate
+using QuantumAlgebra: δ, OpSum, OpTerm, BaseOpProduct, BaseOperator, Param, OpIndex, _map_opsum_ops, TLSx, TLSCreate, is_normal_form
 using Test
 
 function myδ(i,j)
@@ -7,6 +7,15 @@ function myδ(i,j)
     OpSum(OpTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
 end
 scal(x) = OpSum(((OpTerm(),x),))
+
+macro test_is_normal_form(x)
+    x = esc(x)
+    quote
+        xn = normal_form($x)
+        @test is_normal_form($x) == ($x == xn)
+        @test is_normal_form(xn)
+    end
+end
 
 @testset "QuantumAlgebra.jl" begin
     @test isbitstype(QuantumAlgebra.OpIndex)
@@ -129,7 +138,17 @@ scal(x) = OpSum(((OpTerm(),x),))
             @test length(tmp1.terms) == 4
         end
 
-        @testset "Commutation inside ExpVal/Corr" begin
+        @testset "is_normal_form, using_σpm() = $(QuantumAlgebra.using_σpm())" begin
+            y = scal(1)
+            for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α), expval(adag(:c)*a(:d)))
+                @test_is_normal_form x
+                y *= x
+                @test_is_normal_form y
+                @test_is_normal_form ∑(:c,∑(:i,∑(:α,y)))
+            end
+        end
+
+        @testset "Commutation inside ExpVal/Corr, using_σpm() = $(QuantumAlgebra.using_σpm())" begin
             for (x1,x2,s) in ((a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α),  expval(adag(:c)*a(:d))),
                               (f(:d)*fdag(:c), f(:i)*fdag(:j)*σz(:α)*σy(:β)*σx(:α), -expval(fdag(:c)*f(:d))))
                 x = ∑(:c,∑(:i,∑(:α,3*expval(x1)*x2)))
