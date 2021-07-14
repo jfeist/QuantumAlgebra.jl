@@ -177,16 +177,21 @@ struct OpSum
     terms::Dict{OpTerm,PREFAC_TYPES}
     OpSum() = new(Dict{OpTerm,PREFAC_TYPES}())
 end
+
 function OpSum(itr)
     A = OpSum()
     for (t,s) in itr
-        _add_sum_term!(A,t,simplify_number(s))
+        _add_with_auto_order!(A,t,simplify_number(s))
     end
     A
 end
 OpSum(A::Union{BaseOperator,Param,Corr,ExpVal}) = OpSum(OpTerm(A))
 OpSum(A::OpTerm) = OpSum(((A,1),))
 Base.isempty(A::OpSum) = isempty(A.terms)
+
+const _auto_normal_form = Ref(false)
+auto_normal_form(t::Bool=true) = (_auto_normal_form[] = t; nothing)
+_add_with_auto_order!(A::OpSum,B::OpTerm,sB) = _auto_normal_form[] ? _add_with_normal_order!(A,B,sB) : _add_sum_term!(A,B,sB)
 
 function _add_sum_term!(A::OpSum,oB::OpTerm,sB)
     iszero(sB) && return A

@@ -537,13 +537,13 @@ end
 function +(A::OpSum,B::OpSum)
     S = deepcopy(A)
     for (t,s) in B.terms
-        _add_sum_term!(S,t,s)
+        _add_with_auto_order!(S,t,s)
     end
     S
 end
 function +(A::OpSum,B::Number)
     S = deepcopy(A)
-    _add_sum_term!(S,OpTerm(),B)
+    _add_with_auto_order!(S,OpTerm(),B)
     S
 end
 +(B::Number,A::OpSum) = A+B
@@ -552,7 +552,7 @@ end
 function -(A::OpSum,B::OpSum)
     S = deepcopy(A)
     for (t,s) in B.terms
-        _add_sum_term!(S,t,-s)
+        _add_with_auto_order!(S,t,-s)
     end
     S
 end
