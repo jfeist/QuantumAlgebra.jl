@@ -138,6 +138,12 @@ end
             @test length(tmp1.terms) == 4
         end
 
+        x1 = ∑(:i,∑(:j,a(:i)*a(:j))) + f(:j,:k,:l)*fdag(:j,:i,:m) + a(3,8,:i)*expval(a(:i)*adag(:k))*adag(:α,:μ,:ν)
+        x2 = σp(:k) + σx(:m)
+        @test normal_form(x1 + x2) == normal_form(x1) + normal_form(x2)
+        @test normal_form(x1 * x2) == normal_form(normal_form(x1) * normal_form(x2))
+        @test normal_form(x1 * x2 + x2) == normal_form(normal_form(x1) * normal_form(x2)) + normal_form(x2)
+
         @testset "is_normal_form, using_σpm() = $(QuantumAlgebra.using_σpm())" begin
             y = scal(1)
             for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α), expval(adag(:c)*a(:d)))

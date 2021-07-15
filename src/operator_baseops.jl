@@ -16,13 +16,8 @@ noaliascopy(A::BaseOpProduct) = BaseOpProduct(noaliascopy(A.v))
 noaliascopy(v::Vector{T}) where T<:Union{δ,Param,BaseOperator,ExpVal,Corr} = noaliascopy.(v)
 noaliascopy(A::OpTerm) = OpTerm(A.nsuminds, noaliascopy(A.δs), noaliascopy(A.params),
                                 noaliascopy(A.expvals), noaliascopy(A.corrs), noaliascopy(A.bares))
-noaliascopy(A::OpSum) = begin
-    B = OpSum()
-    for (t,s) in A.terms
-        B.terms[noaliascopy(t)] = s
-    end
-    B
-end
+# IMPT: create a dictionary directly here, do not go through _add_sum_term
+noaliascopy(A::OpSum) = OpSum(Dict{OpTerm,PREFAC_TYPES}(noaliascopy(t) => s for (t,s) in A.terms))
 
 ==(A::BaseOperator,B::BaseOperator) = A.t == B.t && A.name == B.name && A.inds == B.inds
 ==(A::BaseOpProduct,B::BaseOpProduct) = A.v == B.v
@@ -631,14 +626,14 @@ end
 
 +(A::OpSum) = A
 function +(A::OpSum,B::OpSum)
-    S = noaliascopy(A)
+    S = copy(A)
     for (t,s) in B.terms
         _add_with_auto_order!(S,t,s)
     end
     S
 end
 function +(A::OpSum,B::Number)
-    S = noaliascopy(A)
+    S = copy(A)
     _add_with_auto_order!(S,OpTerm(),B)
     S
 end
@@ -646,7 +641,7 @@ end
 
 -(A::OpSum) = -1 * A
 function -(A::OpSum,B::OpSum)
-    S = noaliascopy(A)
+    S = copy(A)
     for (t,s) in B.terms
         _add_with_auto_order!(S,t,-s)
     end

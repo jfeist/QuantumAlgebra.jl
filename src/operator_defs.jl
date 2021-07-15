@@ -176,6 +176,7 @@ struct OpSum
     # sum of Operators is saved as Dictionary of operators with scalar prefactors
     terms::Dict{OpTerm,PREFAC_TYPES}
     OpSum() = new(Dict{OpTerm,PREFAC_TYPES}())
+    OpSum(terms::Dict{OpTerm,PREFAC_TYPES}) = new(terms)
 end
 
 function OpSum(itr)
@@ -188,6 +189,7 @@ end
 OpSum(A::Union{BaseOperator,Param,Corr,ExpVal}) = OpSum(OpTerm(A))
 OpSum(A::OpTerm) = OpSum(((A,1),))
 Base.isempty(A::OpSum) = isempty(A.terms)
+Base.copy(A::OpSum) = OpSum(copy(A.terms))
 
 const _auto_normal_form = Ref(false)
 auto_normal_form(t::Bool=true) = (_auto_normal_form[] = t; nothing)
