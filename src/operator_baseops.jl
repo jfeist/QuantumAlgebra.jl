@@ -172,7 +172,24 @@ function is_normal_form(t::OpTerm)
     for CO in t.corrs
         is_normal_form(CO) || return false
     end
+
+    # ensure that sum indices are ordered
+    changeable_indices = vcat(indices.((t.params,t.expvals,t.corrs,t.bares))...)
+    last_sumind = sumindex(0).num
+    for ind in changeable_indices
+        #@show ind, last_sumind
+        issumindex(ind) || continue
+        # sumindex have to be increasing without jumps
+        ind.num ≤ last_sumind + oneunit(last_sumind) || return false
+        last_sumind = max(ind.num,last_sumind)
+    end
+
     isempty(t.δs) && return true
+
+    # all indices that are not in δs
+    changeable_indices_set = Set{OpIndex}(changeable_indices)
+    # accumulate indices that δs want to change (to compare with later δs)
+    replace_inds = Set{OpIndex}()
     for (iδ,dd) in enumerate(t.δs)
         iA,iB = dd.iA, dd.iB
         # δ is not ordered (or disappears if iA == iB)
@@ -180,9 +197,12 @@ function is_normal_form(t::OpTerm)
         # the whole term disappears in cleanup
         isintindex(iA) && isintindex(iB) && return false
         (issumindex(iA) || issumindex(iB)) && return false
+        (iA in replace_inds || iB in replace_inds) && return false
         if iδ > 1
             (dd > @inbounds t.δs[iδ-1]) || return false
         end
+        iB in changeable_indices_set && return false
+        push!(replace_inds, iB)
     end
     return true
 end
