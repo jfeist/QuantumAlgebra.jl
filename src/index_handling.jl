@@ -6,7 +6,10 @@ abstract type IndexFunction end
 (f::IndexFunction)(ops::BaseOpProduct) = BaseOpProduct(f.(ops.v))
 (f::IndexFunction)(ev::T) where T<:Union{ExpVal,Corr} = T(f(ev.ops))
 (f::IndexFunction)(A::OpTerm,nsuminds=A.nsuminds) = OpTerm(nsuminds,f.(A.δs),f.(A.params),f.(A.expvals),f.(A.corrs),f(A.bares))
-(f::IndexFunction)(A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
+# some index functions have to be reset for each new term in a sum
+(f::IndexFunction)(A::OpSum) = _map_opsum_ops(x->(adapt_for_new_term!(f); f(x)),A)
+# by default, nothing to do
+adapt_for_new_term!(f::IndexFunction) = f
 
 function _canon_ind(n)
     i,c = divrem(n-1,15)
@@ -19,6 +22,7 @@ mutable struct canon_inds <: IndexFunction
     canon_inds() = new(0)
 end
 (f::canon_inds)(ind::OpIndex) = isnoindex(ind) ? ind : _canon_ind(f.icurr+=one(f.icurr))
+adapt_for_new_term!(f::canon_inds) = (f.icurr = 0; f)
 
 mutable struct canon_inds_remember <: IndexFunction
     icurr::IndexInt
@@ -31,6 +35,7 @@ function (f::canon_inds_remember)(ind::OpIndex)
     f.replacements[i] = ind
     i
 end
+adapt_for_new_term!(f::canon_inds_remember) = error("canon_inds_remember should not be applied on OpSum.")
 
 struct shift_sumind <: IndexFunction
     n::IndexInt
@@ -49,6 +54,7 @@ mutable struct reorder_suminds <: IndexFunction
     reorder_suminds() = new(0,Dict{OpIndex,OpIndex}())
 end
 (f::reorder_suminds)(ind::OpIndex) = issumindex(ind) ? get!(()->sumindex(f.icurr += one(f.icurr)), f.replacements, ind) : ind
+adapt_for_new_term!(f::reorder_suminds) = (f.icurr=0; empty!(f.replacements); f)
 
 mutable struct popped_out_suminds <: IndexFunction
     conserved_ind::OpIndex
@@ -66,6 +72,7 @@ function (f::popped_out_suminds)(ind::OpIndex)
         _canon_ind(f.icurr+=one(f.icurr))
     end
 end
+adapt_for_new_term!(f::popped_out_suminds) = error("popped_out_suminds should not be applied on OpSum.")
 
 hasind(ind::OpIndex,d::δ) = ind in (d.iA,d.iB)
 hasind(ind::OpIndex,A::Union{BaseOperator,Param}) = ind in A.inds
@@ -74,13 +81,13 @@ hasind(ind::OpIndex,A::BaseOpProduct) = any(hasind.((ind,),A.v))
 
 split_by_ind(ind::OpIndex,v) = (iwiths = hasind.((ind,),v); (v[.!iwiths], v[iwiths]))
 
-indices(d::δ) = [d.iA,d.iB]
-indices(A::Union{BaseOperator,Param}) = collect(assignedinds(A.inds))
-indices(v::AbstractVector) = vcat(indices.(v)...)
-indices(A::BaseOpProduct) = indices(A.v)
-indices(A::Union{ExpVal,Corr}) = indices(A.ops)
-indices(A::OpTerm) = vcat(indices.((A.δs,A.params,A.expvals,A.corrs,A.bares))...)
-indices(A::OpSum) = vcat(indices.(sort!(collect(keys(A.terms))))...)
+indices(d::δ)::Vector{OpIndex} = [d.iA,d.iB]
+indices(A::Union{BaseOperator,Param})::Vector{OpIndex} = collect(assignedinds(A.inds))
+indices(v::AbstractVector)::Vector{OpIndex} = vcat(indices.(v)...)
+indices(A::BaseOpProduct)::Vector{OpIndex} = indices(A.v)
+indices(A::Union{ExpVal,Corr})::Vector{OpIndex} = indices(A.ops)
+indices(A::OpTerm)::Vector{OpIndex} = vcat(indices.((A.δs,A.params,A.expvals,A.corrs,A.bares))...)
+indices(A::OpSum)::Vector{OpIndex} = vcat(indices.(sort!(collect(keys(A.terms))))...)
 
 "`extindices(A)` return externally visible indices of an expression"
 extindices(A) = filter(!issumindex,indices(A))
@@ -92,7 +99,7 @@ function symmetric_index_nums(A::OpSum)
     Nsyms = [1]
     for ii=2:length(inds)
         i1,i2 = inds[ii-1], inds[ii]
-        Aexc = try normal_form(replace_inds(i1=>i2,i2=>i1)(A)) catch; OpSum() end
+        Aexc = normal_form(replace_inds(i1=>i2,i2=>i1)(A))
         if A == Aexc
             Nsyms[end] += 1
         else
