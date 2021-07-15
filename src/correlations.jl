@@ -3,7 +3,7 @@ using Combinatorics
 export expval_as_corrs
 
 function term2corr(A::OpTerm,C::Tuple)
-    corrs = deepcopy(A.corrs)
+    corrs = noaliascopy(A.corrs)
     sizehint!(corrs,length(corrs)+length(C))
     for grp in C
         cc = Corr(BaseOpProduct(collect(map(i -> A.bares.v[i], grp))))
@@ -47,7 +47,7 @@ function expval_as_corrs(A::OpSum)
                 for ind in extinds
                     f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
                     tb = f(t.bares)
-                    tbc = deepcopy(tb)
+                    tbc = noaliascopy(tb)
                     normal_order!(tb,corrterms)
                     @assert isempty(corrterms)
                     if tb != tbc
@@ -138,7 +138,7 @@ function ncomb_inds(n,inds,used_combs=Set())
 end
 
 function term2expvals(A::OpTerm,C::Tuple)
-    expvals = deepcopy(A.expvals)
+    expvals = noaliascopy(A.expvals)
     sizehint!(expvals,length(expvals)+length(C))
     for grp in C
         cc = ExpVal(BaseOpProduct(collect(map(i -> A.bares.v[i], grp))))
@@ -160,7 +160,7 @@ function corr2expvals_inds(N)
         # rewrite the lower-order correlators in terms of expectation values
         ncA = OpSum()
         for (t,s) in cA.terms
-            nt = deepcopy(t)
+            nt = noaliascopy(t)
             empty!(nt.corrs)
             nts = OpSum(nt)
             for co in t.corrs

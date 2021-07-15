@@ -7,6 +7,23 @@ Base.length(A::BaseOpProduct) = length(A.v)
 Base.length(A::Union{ExpVal,Corr}) = length(A.ops)
 Base.length(A::OpTerm) = length(A.bares) + mapreduce(length,+,A.expvals;init=0) + mapreduce(length,+,A.corrs;init=0)
 
+noaliascopy(A::Param) = Param(A.name,A.state,copy(A.inds))
+# δ is isbitstype
+noaliascopy(A::δ) = A
+noaliascopy(A::BaseOperator) = BaseOperator(A.t,A.name,copy(A.inds))
+noaliascopy(A::T) where T<:Union{ExpVal,Corr} = T(noaliascopy(A.ops))
+noaliascopy(A::BaseOpProduct) = BaseOpProduct(noaliascopy(A.v))
+noaliascopy(v::Vector{T}) where T<:Union{δ,Param,BaseOperator,ExpVal,Corr} = noaliascopy.(v)
+noaliascopy(A::OpTerm) = OpTerm(A.nsuminds, noaliascopy(A.δs), noaliascopy(A.params),
+                                noaliascopy(A.expvals), noaliascopy(A.corrs), noaliascopy(A.bares))
+noaliascopy(A::OpSum) = begin
+    B = OpSum()
+    for (t,s) in A.terms
+        B.terms[noaliascopy(t)] = s
+    end
+    B
+end
+
 ==(A::BaseOperator,B::BaseOperator) = A.t == B.t && A.name == B.name && A.inds == B.inds
 ==(A::BaseOpProduct,B::BaseOpProduct) = A.v == B.v
 ==(A::Param,B::Param) = A.name == B.name && A.state == B.state && A.inds == B.inds
@@ -217,7 +234,7 @@ function _normalize_without_commutation(A::OpTerm)::Union{OpTerm,Nothing}
     # first, clean up the δs
     if isempty(A.δs)
         # we always want _normalize_without_commutation to return a new object so we can modify it later
-        A = deepcopy(A)
+        A = noaliascopy(A)
     else
         δs = sort(A.δs)
         #println("in _normalize_without_commutation for A = $A, starting with δs = $δs")
@@ -509,7 +526,7 @@ function normal_order!(v::Vector{T},commterms,pref=1) where {T<:Union{Corr,ExpVa
         for (t,s) in newterms.terms
             #@assert iszero(t.nsuminds) && isempty(t.params) && isempty(t.expvals) && isempty(t.corrs)
             nv = [isempty(t.bares) ? T[] : T(t.bares); v[1:ii-1]; v[ii+1:end]]
-            nt = OpTerm(t.δs, deepcopy(nv))
+            nt = OpTerm(t.δs, noaliascopy(nv))
             # include current prefactor here
             _add_sum_term!(commterms,nt,pref*s)
         end
@@ -526,6 +543,13 @@ termsumiter(t::OpTerm,s,sum::OpSum) = Base.Iterators.flatten((((t,s),), sum.term
 termsumiter(t,s,sum::OpSum) = termsumiter(OpTerm(t),s,sum)
 
 function _add_with_normal_order!(A::OpSum,t::OpTerm,s)
+    # no need to do anything since everything is in normal order
+    # in particular, no copy necessary!
+    if is_normal_form(t)
+       _add_sum_term!(A,t,s)
+       return
+    end
+
     t = _normalize_without_commutation(t)
     t === nothing && return
     newbareterms = OpSum()
@@ -584,8 +608,12 @@ function *(A::OpTerm,B::OpTerm)
             B = shift_sumind(A.nsuminds)(B)
         end
     end
-    f = reorder_suminds()
-    apflat = (args...) -> f.(Iterators.flatten(args))
+    if nsuminds > 0
+        f = reorder_suminds()
+        apflat = (args...) -> f.(Iterators.flatten(args))
+    else
+        apflat = (args...) -> vcat(args...)
+    end
     δs = apflat(A.δs, B.δs)
     params = apflat(A.params, B.params)
     expvals = apflat(A.expvals, B.expvals)
@@ -603,14 +631,14 @@ end
 
 +(A::OpSum) = A
 function +(A::OpSum,B::OpSum)
-    S = deepcopy(A)
+    S = noaliascopy(A)
     for (t,s) in B.terms
         _add_with_auto_order!(S,t,s)
     end
     S
 end
 function +(A::OpSum,B::Number)
-    S = deepcopy(A)
+    S = noaliascopy(A)
     _add_with_auto_order!(S,OpTerm(),B)
     S
 end
@@ -618,7 +646,7 @@ end
 
 -(A::OpSum) = -1 * A
 function -(A::OpSum,B::OpSum)
-    S = deepcopy(A)
+    S = noaliascopy(A)
     for (t,s) in B.terms
         _add_with_auto_order!(S,t,-s)
     end
