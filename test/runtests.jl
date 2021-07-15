@@ -17,7 +17,7 @@ macro test_is_normal_form(x)
     end
 end
 
-@testset "QuantumAlgebra.jl" begin
+@time @testset "QuantumAlgebra.jl" begin
     @test isbitstype(QuantumAlgebra.OpIndex)
     @test isbitstype(QuantumAlgebra.OpName)
     if isbitstype(QuantumAlgebra.OpIndices)
