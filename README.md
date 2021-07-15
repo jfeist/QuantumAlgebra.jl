@@ -1,10 +1,12 @@
 # NOTE: This package is currently undergoing a major rewrite
 The new version is in branch 
 [full_rewrite](https://github.com/jfeist/QuantumAlgebra.jl/tree/full_rewrite), 
-and apart from updated examples and documentation is mostly stable and 
-well-tested by now. New users are encouraged to try that out. The biggest user-facing 
+and apart from updating the documentation is mostly stable and 
+well-tested by now. New users are encouraged to use that branch (`]add QuantumAlgebra#full_rewrite`). The biggest user-facing 
 change is that normal/canonical form is not enforced automatically, but has to be
-explicitly calculated (with `normal_form(x)`). 
+explicitly calculated (with `normal_form(x)`).
+
+**Update (July 15, 2021)**: The branch just gained the option to automatically transform to normal form by setting `QuantumAlgebra.auto_normal_form(true)`.
 
 # QuantumAlgebra.jl - quantum operator algebra in Julia
 
