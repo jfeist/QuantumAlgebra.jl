@@ -10,14 +10,30 @@
 # NOTE: This package is currently undergoing a major rewrite
 The current branch
 ([full_rewrite](https://github.com/jfeist/QuantumAlgebra.jl/tree/full_rewrite))
-corresponds to a major revision and apart from updated documentation is mostly stable and well-tested by now. New users are encouraged
-to use this branch (install with `]add QuantumAlgebra#full_rewrite`). The
-biggest user-facing change compared to the main branch is that normal/canonical
-form is not enforced automatically, but has to be explicitly calculated (with
-`normal_form(x)`).
+corresponds to a major revision and apart from updated documentation is mostly
+stable and well-tested by now. New users are encouraged to use this branch
+(install with `]add QuantumAlgebra#full_rewrite`). The biggest user-facing
+change compared to the main branch is that normal/canonical form is not enforced
+automatically, but has to be explicitly calculated (with `normal_form(x)`).
 
-**Update (July 15, 2021)**: The branch just gained the option to automatically transform to normal form by setting `QuantumAlgebra.auto_normal_form(true)`. This is quite convenient for interactive work.
+**Update (July 15, 2021)**: The branch just gained the option to automatically
+transform to normal form by setting `QuantumAlgebra.auto_normal_form(true)`.
+This can also be controlled by setting the environment variable
+`QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any value that
+`parse(Bool,value)` parses as `true`). The environment variable has to be set
+before doing `using QuantumAlgebra`.
 
+It also just gained the option to **NOT** define and export the default
+operators `a, adag, f, fdag, σm, σp, σx, σy, σz`, by setting the environment
+variable `QUANTUMALGEBRA_DEFAULT_OPS` to any value that parses as `false`. This
+also has to be set before doing `using QuantumAlgebra`. When this is set to
+false, any operators have to be defined with, e.g.,
+```julia
+@boson_ops b
+@fermion_ops c
+@tlspm_ops S
+@tlsxyz_ops S
+```
 
 # Old README:
 

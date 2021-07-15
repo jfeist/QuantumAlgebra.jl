@@ -5,8 +5,15 @@ export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
 
-export σx, σy, σz, σp, σm
-export a, adag, f, fdag
+# externally changeable options
+const _using_σpm = Ref(false)
+use_σpm(t::Bool=true) = (_using_σpm[] = t; nothing)
+use_σxyz() = use_σpm(false)
+using_σpm() = _using_σpm[]
+
+const _auto_normal_form = Ref(false)
+auto_normal_form(t::Bool=true) = (_auto_normal_form[] = t; nothing)
+using_auto_normal_form() = _auto_normal_form[]
 
 const IndexInt = Int32
 
@@ -191,9 +198,7 @@ OpSum(A::OpTerm) = OpSum(((A,1),))
 Base.isempty(A::OpSum) = isempty(A.terms)
 Base.copy(A::OpSum) = OpSum(copy(A.terms))
 
-const _auto_normal_form = Ref(false)
-auto_normal_form(t::Bool=true) = (_auto_normal_form[] = t; nothing)
-_add_with_auto_order!(A::OpSum,B::OpTerm,sB) = _auto_normal_form[] ? _add_with_normal_order!(A,B,sB) : _add_sum_term!(A,B,sB)
+_add_with_auto_order!(A::OpSum,B::OpTerm,sB) = using_auto_normal_form() ? _add_with_normal_order!(A,B,sB) : _add_sum_term!(A,B,sB)
 
 function _add_sum_term!(A::OpSum,oB::OpTerm,sB)
     iszero(sB) && return A
@@ -214,78 +219,77 @@ _map_opsum_ops(f,A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
 
 
 #################################################################
-## Here the "external" functions that always construct OpSum   ##
+## For the "external" functions that always construct OpSum    ##
 #################################################################
+module OpConstructors
+    using ..QuantumAlgebra: using_σpm, OpName, OpTerm, OpSum, BaseOpProduct,
+                            BosonDestroy, BosonCreate,
+                            FermionDestroy, FermionCreate,
+                            TLSDestroy, TLSCreate, TLSx, TLSy, TLSz
 
-"`boson_ops(name::Symbol)`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
-function boson_ops(name::Symbol)
-    op_name = OpName(name)
-    ann(args...) = OpSum(BosonDestroy(op_name,args...))
-    cre(args...) = OpSum(BosonCreate(op_name,args...))
-    ann,cre
+    "`boson_ops(name::Symbol)`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
+    function boson_ops(name::Symbol)
+        op_name = OpName(name)
+        namedag = Symbol(name,:dag)
+        ann = @eval $name(   args...) = OpSum(BosonDestroy($op_name,args...))
+        cre = @eval $namedag(args...) = OpSum(BosonCreate( $op_name,args...))
+        ann, cre
+    end
+
+    "`fermion_ops(name::Symbol)`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
+    function fermion_ops(name::Symbol)
+        op_name = OpName(name)
+        namedag = Symbol(name,:dag)
+        ann = @eval $name(   args...) = OpSum(FermionDestroy($op_name,args...))
+        cre = @eval $namedag(args...) = OpSum(FermionCreate( $op_name,args...))
+        ann, cre
+    end
+
+    "`tlspm_ops(name::Symbol)`: return functions for creating jump operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
+    function tlspm_ops(name::Symbol)
+        op_name = OpName(name)
+        namep = Symbol(name,:p)
+        namem = Symbol(name,:m)
+        tlsm = @eval $namem(args...) = using_σpm() ? OpSum(TLSDestroy($op_name,args...)) : OpSum((OpTerm(TLSx($op_name,args...))=>1//2, OpTerm(TLSy($op_name,args...))=>-1im//2))
+        tlsp = @eval $namep(args...) = using_σpm() ? OpSum(TLSCreate( $op_name,args...)) : OpSum((OpTerm(TLSx($op_name,args...))=>1//2, OpTerm(TLSy($op_name,args...))=>1im//2))
+        tlsm, tlsp
+    end
+
+    "`tlsxyz_ops(name::Symbol)`: return functions for creating Pauli operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
+    function tlsxyz_ops(name::Symbol)
+        op_name = OpName(name)
+        namex = Symbol(name,:x)
+        namey = Symbol(name,:y)
+        namez = Symbol(name,:z)
+        tlsx = @eval $namex(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy($op_name,args...))=>1, OpTerm(TLSCreate($op_name,args...))=>1)) : OpSum(TLSx($op_name,args...))
+        tlsy = @eval $namey(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy($op_name,args...))=>1im, OpTerm(TLSCreate($op_name,args...))=>-1im)) : OpSum(TLSy($op_name,args...))
+        tlsz = @eval $namez(args...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([TLSCreate($op_name,args...),TLSDestroy($op_name,args...)]))=>2, OpTerm()=>-1)) : OpSum(TLSz($op_name,args...))
+        tlsx, tlsy, tlsz
+    end
 end
+using .OpConstructors: boson_ops, fermion_ops, tlspm_ops, tlsxyz_ops
 
-"`@boson_ops name`: define functions `\$name` and `\$(name)dag` for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
+"`@boson_ops name`: define functions `\$name` and `\$(name)dag` for creating bosonic annihilation and creation operators with name `name`"
 macro boson_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = boson_ops($(Meta.quot(name))) )
 end
 
-"`fermion_ops(name::Symbol)`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
-function fermion_ops(name::Symbol)
-    op_name = OpName(name)
-    ann(args...) = OpSum(FermionDestroy(op_name,args...))
-    cre(args...) = OpSum(FermionCreate(op_name,args...))
-    ann,cre
-end
-
-"`@fermion_ops name`: define functions `\$name` and `\$(name)dag` for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
+"`@fermion_ops name`: define functions `\$name` and `\$(name)dag` for creating fermionic annihilation and creation operators with name `name`"
 macro fermion_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = fermion_ops($(Meta.quot(name))) )
 end
 
 # functions for constructing Pauli operators depending on whether we use (σ+,σ-) or (σx,σy,σz) as the "basic" operators
 
-const _using_σpm = Ref(false)
-use_σpm(t::Bool=true) = (_using_σpm[] = t; nothing)
-use_σxyz() = use_σpm(false)
-using_σpm() = _using_σpm[]
-
-"`tlspm_ops(name::Symbol)`: return functions for creating jump operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
-function tlspm_ops(name::Symbol)
-    op_name = OpName(name)
-    tlsm(args...) = using_σpm() ? OpSum(TLSDestroy(op_name,args...)) : OpSum((OpTerm(TLSx(op_name,args...))=>1//2, OpTerm(TLSy(op_name,args...))=>-1im//2))
-    tlsp(args...) = using_σpm() ? OpSum(TLSCreate( op_name,args...)) : OpSum((OpTerm(TLSx(op_name,args...))=>1//2, OpTerm(TLSy(op_name,args...))=>1im//2))
-    tlsm,tlsp
-end
-
 "`@tlspm_ops name`: define functions `\$(name)m` and `\$(name)p` creating jump operators for a two-level system with name `name`."
 macro tlspm_ops(name)
     :( ($(esc(Symbol(name,:m))), $(esc(Symbol(name,:p)))) = tlspm_ops($(Meta.quot(name))) )
-end
-
-"`tlsxyz_ops(name::Symbol)`: return functions for creating Pauli operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
-function tlsxyz_ops(name::Symbol)
-    op_name = OpName(name)
-    tlsx(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(op_name,args...))=>1, OpTerm(TLSCreate(op_name,args...))=>1)) : OpSum(TLSx(op_name,args...))
-    tlsy(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy(op_name,args...))=>1im, OpTerm(TLSCreate(op_name,args...))=>-1im)) : OpSum(TLSy(op_name,args...))
-    tlsz(args...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([TLSCreate(op_name,args...),TLSDestroy(op_name,args...)]))=>2, OpTerm()=>-1)) : OpSum(TLSz(op_name,args...))
-    tlsx,tlsy,tlsz
 end
 
 "`@tlsxyz_ops name`: define functions `\$(name)x`, `\$(name)y`, and `\$(name)z` creating Pauli operators for a two-level system with name `name`."
 macro tlsxyz_ops(name)
     :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
 end
-
-module DefaultOps
-    using ..QuantumAlgebra
-    export a, adag, f, fdag, σm, σp, σx, σy, σz
-    @boson_ops a
-    @fermion_ops f
-    @tlspm_ops σ
-    @tlsxyz_ops σ
-end
-using .DefaultOps
 
 ## functions for constructing `param`s with string macros,
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
