@@ -38,8 +38,24 @@ function ≈(A::OpSum,B::OpSum)
     return true
 end
 
+function Base.hash(v::Vector{T},h::UInt) where T <: QuantumObject
+    h = hash(length(v),h)
+    for x in v
+        h = hash(x,h)
+    end
+    h
+end
+function Base.hash(ind::OpIndex,h::UInt)
+    h = hash(ind.sym,h)
+    h = hash(ind.num,h)
+    h
+end
+function Base.hash(name::OpName,h::UInt)
+    h = hash(name.i,h)
+    h
+end
 function Base.hash(A::BaseOperator,h::UInt)
-    h = hash(A.t,h)
+    h = hash(UInt(A.t),h)
     h = hash(A.name,h)
     h = hash(A.inds,h)
     h

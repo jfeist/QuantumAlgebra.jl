@@ -343,3 +343,5 @@ function ∑(ind::OpIndex,A::OpTerm)
 end
 ∑(ind::OpIndex,A::OpSum) = _map_opsum_ops(t->∑(ind,t),A)
 ∑(ind::Symbol,A) = ∑(OpIndex(ind),A)
+
+const QuantumObject = Union{OpIndex,OpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,OpTerm,OpSum}

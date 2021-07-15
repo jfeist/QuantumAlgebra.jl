@@ -104,7 +104,6 @@ function Base.print(io::IO,A::OpSum)
     end
 end
 
-const QuantumObject = Union{OpIndex,OpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,OpTerm,OpSum}
 Base.show(io::IO, A::QuantumObject) = print(io,A)
 Base.show(io::IO, ::MIME"text/latex", A::QuantumObject) = (print(io,"\$"); printlatex(io,A); print(io,"\$"))
 
