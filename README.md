@@ -10,12 +10,14 @@
 # NOTE: This package is currently undergoing a major rewrite
 The current branch
 ([full_rewrite](https://github.com/jfeist/QuantumAlgebra.jl/tree/full_rewrite))
-corresponds to a major revision and apart from updated examples and
-documentation is mostly stable and well-tested by now. New users are encouraged
+corresponds to a major revision and apart from updated documentation is mostly stable and well-tested by now. New users are encouraged
 to use this branch (install with `]add QuantumAlgebra#full_rewrite`). The
 biggest user-facing change compared to the main branch is that normal/canonical
 form is not enforced automatically, but has to be explicitly calculated (with
 `normal_form(x)`).
+
+**Update (July 15, 2021)**: The branch just gained the option to automatically transform to normal form by setting `QuantumAlgebra.auto_normal_form(true)`. This is quite convenient for interactive work.
+
 
 # Old README:
 
