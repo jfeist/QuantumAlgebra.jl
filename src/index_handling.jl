@@ -82,12 +82,15 @@ hasind(ind::OpIndex,A::BaseOpProduct) = any(hasind.((ind,),A.v))
 split_by_ind(ind::OpIndex,v) = (iwiths = hasind.((ind,),v); (v[.!iwiths], v[iwiths]))
 
 indices(d::δ)::Vector{OpIndex} = [d.iA,d.iB]
-indices(A::Union{BaseOperator,Param})::Vector{OpIndex} = collect(assignedinds(A.inds))
-indices(v::AbstractVector)::Vector{OpIndex} = vcat(indices.(v)...)
+indices(A::Union{BaseOperator,Param})::Vector{OpIndex} = collect(assignedinds(A.inds)) # collect to guarantee copy
+indices(v::AbstractVector)::Vector{OpIndex} = mapreduce(indices, vcat, v; init=OpIndex[])
 indices(A::BaseOpProduct)::Vector{OpIndex} = indices(A.v)
 indices(A::Union{ExpVal,Corr})::Vector{OpIndex} = indices(A.ops)
-indices(A::OpTerm)::Vector{OpIndex} = vcat(indices.((A.δs,A.params,A.expvals,A.corrs,A.bares))...)
-indices(A::OpSum)::Vector{OpIndex} = vcat(indices.(sort!(collect(keys(A.terms))))...)
+indices(A::OpTerm, withδs::Bool=true)::Vector{OpIndex} = begin
+    args = withδs ? (A.δs,A.params,A.expvals,A.corrs,A.bares) : (A.params,A.expvals,A.corrs,A.bares)
+    mapreduce(indices, vcat, args; init=OpIndex[])
+end
+indices(A::OpSum)::Vector{OpIndex} = mapreduce(indices, vcat, sort!(collect(keys(A.terms))); init=OpIndex[])
 
 "`extindices(A)` return externally visible indices of an expression"
 extindices(A) = filter(!issumindex,indices(A))

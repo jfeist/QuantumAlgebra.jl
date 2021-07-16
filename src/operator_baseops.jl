@@ -202,11 +202,9 @@ function is_normal_form(t::OpTerm)
     end
 
     # ensure that sum indices are ordered
-    changeable_indices = vcat(indices.((t.params,t.expvals,t.corrs,t.bares))...)
+    changeable_indices = indices(t,false)
     last_sumind = sumindex(0).num
-    for ind in changeable_indices
-        #@show ind, last_sumind
-        issumindex(ind) || continue
+    for ind in Base.Iterators.filter(issumindex,changeable_indices)
         # sumindex have to be increasing without jumps
         ind.num ≤ last_sumind + oneunit(last_sumind) || return false
         last_sumind = max(ind.num,last_sumind)
