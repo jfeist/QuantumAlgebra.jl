@@ -296,13 +296,12 @@ function _normalize_without_commutation(A::OpTerm)::Union{OpTerm,Nothing}
             # this is the same as replacing results from replacements with sumrepls,
             # and then applying sumrepls on indices that have not been replaced yet
             for (iold,inew) in replacements
-                replacements[iold] = get(sumrepls,inew,inew)
+                x = get(sumrepls,inew,inew)
+                x != inew && (replacements[iold] = x)
             end
-            for (iold,inew) in sumrepls
-                if iold ∉ keys(replacements)
-                    replacements[iold] = inew
-                end
-            end
+            # sumrepl only for indices not in replacements
+            merge!(sumrepls,replacements)
+            replacements = sumrepls
         end
         nsuminds = A.nsuminds-length(delsuminds)
         f = replace_inds(replacements)
