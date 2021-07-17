@@ -23,18 +23,6 @@ This can also be controlled by setting the environment variable
 `parse(Bool,value)` parses as `true`). The environment variable has to be set
 before doing `using QuantumAlgebra`.
 
-It also just gained the option to **NOT** define and export the default
-operators `a, adag, f, fdag, σm, σp, σx, σy, σz`, by setting the environment
-variable `QUANTUMALGEBRA_DEFAULT_OPS` to any value that parses as `false`. This
-also has to be set before doing `using QuantumAlgebra`. When this is set to
-false, any operators have to be defined with, e.g.,
-```julia
-@boson_ops b
-@fermion_ops c
-@tlspm_ops S
-@tlsxyz_ops S
-```
-
 # Old README:
 
 This package does quantum operator algebra (i.e., algebra with non-commuting

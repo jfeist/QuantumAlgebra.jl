@@ -4,6 +4,8 @@ export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
+export σx, σy, σz, σp, σm
+export a, adag, f, fdag
 
 # externally changeable options
 const _using_σpm = Ref(false)
@@ -291,6 +293,12 @@ end
 macro tlsxyz_ops(name)
     :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
 end
+
+# default operators
+@boson_ops a
+@fermion_ops f
+@tlspm_ops σ
+@tlsxyz_ops σ
 
 ## functions for constructing `param`s with string macros,
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
