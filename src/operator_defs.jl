@@ -88,7 +88,8 @@ const NoName = OpName(Symbol())
 # start the counting at 1 so we can index into the tuples defined below with Int(OpType)
 @enum OpType        BosonCreate_=1 FermionCreate_   TLSCreate_   TLSx_  TLSy_  TLSz_  TLSDestroy_ FermionDestroy_ BosonDestroy_
 const OpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
-const OpType_sym = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
+const OpType_sym  = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
+const OpType_expr = ("ᴴ", "ᴴ", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
 const OpType_latex = ("^\\dagger", "^\\dagger", "^+", "^x", "^y", "^z", "^-", "", "")
 
 @concrete struct BaseOperator

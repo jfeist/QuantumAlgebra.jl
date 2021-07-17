@@ -1,25 +1,7 @@
 export julia_expression
 
 # to make a variable name from operators
-function varname(A::BaseOperator)
-    if A.t in (BosonDestroy_,FermionDestroy_)
-        string(A.name)
-    elseif A.t in (BosonCreate_,FermionCreate_)
-        string(A.name)*"ᴴ"
-    elseif A.t == TLSx_
-        string(A.name)*"ˣ"
-    elseif A.t == TLSy_
-        string(A.name)*"ʸ"
-    elseif A.t == TLSz_
-        string(A.name)*"ᶻ"
-    elseif A.t == TLSDestroy_
-        string(A.name)*"⁻"
-    elseif A.t == TLSCreate_
-        string(A.name)*"⁺"
-    else
-        error("should never be reached")
-    end
-end
+varname(A::BaseOperator) = string(A.name,OpType_expr[Int(A.t)])
 varname(A::BaseOpProduct) = Symbol(varname.(A.v)...)
 varname(A::Union{ExpVal,Corr}) = varname(A.ops)
 
