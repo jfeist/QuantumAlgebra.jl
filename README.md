@@ -2,8 +2,8 @@
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://jfeist.github.io/QuantumAlgebra.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://jfeist.github.io/QuantumAlgebra.jl/dev)
-[![Build Status](https://github.com/jfeist/QuantumAlgebra.jl/actions/workflows/Test.yml/badge.svg)](https://github.com/jfeist/QuantumAlgebra.jl/actions?query=workflow%3Arun-tests)
-[![Codecov](https://codecov.io/gh/jfeist/QuantumAlgebra.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/QuantumAlgebra.jl)
+[![Build Status](https://github.com/jfeist/QuantumAlgebra.jl/workflows/CI/badge.svg)](https://github.com/jfeist/QuantumAlgebra.jl/actions)
+[![Coverage](https://codecov.io/gh/jfeist/QuantumAlgebra.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/QuantumAlgebra.jl)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/full_rewrite?filepath=examples)
 [![DOI](https://zenodo.org/badge/211471154.svg)](https://zenodo.org/badge/latestdoi/211471154)
 
@@ -71,3 +71,7 @@ Some other useful functions that are implemented:
 - `ascorr(x)` takes an expression `x=A B C + D E...` and writes its expectation value in terms of single-body expectation values ⟨_A_⟩, ⟨_B_⟩, ..., and many-body correlations ⟨_AB_⟩<sub>c</sub>, ⟨_ABC_⟩<sub>c</sub>, etc. Currently, up to fourth-order correlations (i.e., products of four operators) are supported.
 - `Avac(A)` and `vacA(A)` simplify operators by assuming they are applied to the vacuum from the left or right, respectively. To be precise, `Avac(A)` returns _A'_ such that _A_|0⟩ = _A'_|0⟩, while `vacA(A)` does the same for ⟨0|_A_.
 - `vacExpVal(A,S=1)` calculates the vacuum expectation value ⟨0|_S<sup>†</sup>AS_|0⟩, i.e., the expectation value ⟨ψ|_A_|ψ⟩ for the state defined by |ψ⟩=_S_|0⟩.
+
+## Citing
+
+See [`CITATION.bib`](CITATION.bib) for the relevant reference(s).
