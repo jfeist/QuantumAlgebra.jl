@@ -4,24 +4,23 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://jfeist.github.io/QuantumAlgebra.jl/dev)
 [![Build Status](https://github.com/jfeist/QuantumAlgebra.jl/workflows/CI/badge.svg)](https://github.com/jfeist/QuantumAlgebra.jl/actions)
 [![Coverage](https://codecov.io/gh/jfeist/QuantumAlgebra.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/QuantumAlgebra.jl)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/full_rewrite?filepath=examples)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/main?filepath=examples)
 [![DOI](https://zenodo.org/badge/211471154.svg)](https://zenodo.org/badge/latestdoi/211471154)
 
 # NOTE: This package is currently undergoing a major rewrite
-The current branch
-([full_rewrite](https://github.com/jfeist/QuantumAlgebra.jl/tree/full_rewrite))
-corresponds to a major revision and apart from updated documentation is mostly
-stable and well-tested by now. New users are encouraged to use this branch
-(install with `]add QuantumAlgebra#full_rewrite`). The biggest user-facing
-change compared to the main branch is that normal/canonical form is not enforced
+The development version (main branch) corresponds to a major revision and apart
+from updated documentation is mostly stable and well-tested by now. New users
+are encouraged to use this version (install with `]add QuantumAlgebra#main`),
+which will form the basis of the next release. The biggest user-facing change
+compared to the main branch is that normal/canonical form is not enforced
 automatically, but has to be explicitly calculated (with `normal_form(x)`).
 
-**Update (July 15, 2021)**: The branch just gained the option to automatically
-transform to normal form by setting `QuantumAlgebra.auto_normal_form(true)`.
-This can also be controlled by setting the environment variable
-`QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any value that
-`parse(Bool,value)` parses as `true`). The environment variable has to be set
-before doing `using QuantumAlgebra`.
+**Update (July 15, 2021)**: The development version just gained the option to
+automatically transform to normal form by setting
+`QuantumAlgebra.auto_normal_form(true)`. This can also be controlled by setting
+the environment variable `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any
+value that `parse(Bool,value)` parses as `true`). The environment variable has
+to be set before doing `using QuantumAlgebra`.
 
 # Old README:
 
