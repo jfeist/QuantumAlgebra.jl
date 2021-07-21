@@ -1,68 +1,109 @@
 export Avac, vacA, vacExpVal
 
-Avac(A::Union{BosonDestroy,FermionDestroy,σminus}) = scal(0)
-Avac(A::Union{BosonCreate,FermionCreate,σplus}) = A
-# vacuum is an eigenstate of σz
-Avac(A::σ) = (A.a == z) ? scal(-1) : A
-Avac(A::OpSum) = Avac(A.A) + Avac(A.B)
-Avac(A::OpSumAnalytic) = OpSumAnalytic(A.ind,Avac(A.A))
-Avac(A::OpProd) = begin
-    Bv = Avac(A.B)
-    Bv != A.B && return Avac(A.A*Bv)
-    # if A.A and A.B commute, try what happens with Avac(A.B*A.A)
-    if comm(A.A,A.B) == scal(0)
-        Av = Avac(A.A)
-        Av != A.A && return Avac(A.B*Av)
+function Avac(A::OpTerm,fac)
+    ii = length(A.bares.v)
+    while ii >= 1
+        O = A.bares.v[ii]
+        if O.t in (BosonCreate_,FermionCreate_,TLSCreate_)
+            ii==length(A.bares.v) && return (A,fac)
+            break
+        elseif O.t in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
+            return (A,zero(fac))
+        elseif O.t == TLSz_
+            # vacuum is eigenvalue of σz
+            fac = -fac
+        elseif O.t in (TLSx_,TLSy_)
+            break
+        else
+            error("should not be reached")
+        end
+        ii -= 1
     end
-    # did not find a way to simplify
-    A
+    Anew = OpTerm(A.nsuminds,A.δs,A.params,A.expvals,A.corrs,BaseOpProduct(A.bares.v[1:ii]))
+    return (Anew, fac)
 end
-Avac(A::Scalar) = A
 
-vacA(A::Union{BosonDestroy,FermionDestroy,σminus}) = A
-vacA(A::Union{BosonCreate,FermionCreate,σplus}) = scal(0)
-
-# vacuum is an eigenstate of σz
-vacA(A::σ) = (A.a == z) ? scal(-1) : A
-vacA(A::OpSum) = vacA(A.A) + vacA(A.B)
-vacA(A::OpSumAnalytic) = OpSumAnalytic(A.ind,vacA(A.A))
-vacA(A::OpProd) = begin
-    if A.A isa Scalar
-        A.A*vacA(A.B)
-    else
-        # for applying ⟨0|AB, see if ⟨0|A changes A, and if so,
-        # keep going with the new operator
-        vA = vacA(A.A)
-        vA==A.A ?  A : vacA(vA * A.B)
+function vacA(A::OpTerm,fac)
+    ii = 1
+    while ii <= length(A.bares.v)
+        O = A.bares.v[ii]
+        if O.t in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
+            ii==1 && return (A,fac)
+            break
+        elseif O.t in (BosonCreate_,FermionCreate_,TLSCreate_)
+            return (A,zero(fac))
+        elseif O.t == TLSz_
+            # vacuum is eigenvalue of σz
+            fac = -fac
+        elseif O.t in (TLSx_,TLSy_)
+            break
+        else
+            error("should not be reached")
+        end
+        ii += 1
     end
+    Anew = OpTerm(A.nsuminds,A.δs,A.params,A.expvals,A.corrs,BaseOpProduct(A.bares.v[ii:end]))
+    return (Anew, fac)
 end
-vacA(A::Scalar) = A
+
+Avac(A::OpSum) = OpSum(Avac(t,s) for (t,s) in normal_form(A).terms)
+vacA(A::OpSum) = OpSum(vacA(t,s) for (t,s) in normal_form(A).terms)
 
 """
-    Avac(A::Operator), vacA(A::Operator)
+    Avac(A::OpSum), vacA(A::OpSum)
 
 Simplify operator by assuming it is applied to the vacuum from the left or
 right, respectively. To be precise, `Avac(A)` returns ``A'`` such that ``A'|0⟩ =
 A|0⟩``, while `vacA(A)` does the same for ``⟨0|A``."""
 Avac, vacA
 
+function _TLS_to_pm_normal(A::OpSum)
+    An = OpSum()
+    terms_to_clean = collect(A.terms)
+    while !isempty(terms_to_clean)
+        (t,s) = pop!(terms_to_clean)
+        v = t.bares.v
+        iTLS = findfirst(A->A.t ∈ (TLSx_,TLSy_,TLSz_), v)
+        if iTLS === nothing
+            _add_with_normal_order!(An,t,s)
+        else
+            O = v[iTLS]
+            if O.t == TLSx_
+                # σˣ = σ⁺ + σ⁻
+                for On in (TLSCreate(O.name,O.inds),TLSDestroy(O.name,O.inds))
+                    vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
+                    tn = OpTerm(t.nsuminds,t.δs,t.params,t.expvals,t.corrs,BaseOpProduct(vn))
+                    push!(terms_to_clean,tn=>s)
+                end
+            elseif O.t == TLSy_
+                # σʸ = -i σ⁺ + i σ⁻
+                for (On,sn) in ((TLSCreate(O.name,O.inds),-1im),(TLSDestroy(O.name,O.inds),1im))
+                    vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
+                    tn = OpTerm(t.nsuminds,t.δs,t.params,t.expvals,t.corrs,BaseOpProduct(vn))
+                    push!(terms_to_clean,tn=>s*sn)
+                end
+            elseif O.t == TLSz_
+                # σᶻ = 2σ⁺σ⁻ - 1
+                for (On,sn) in (([TLSCreate(O.name,O.inds),TLSDestroy(O.name,O.inds)],2),(BaseOperator[],-1))
+                    vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
+                    tn = OpTerm(t.nsuminds,t.δs,t.params,t.expvals,t.corrs,BaseOpProduct(vn))
+                    push!(terms_to_clean,tn=>s*sn)
+                end
+            end
+        end
+    end
+    An
+end
+
 """
-    vacExpVal(A::Operator,S::Operator=scal(1))
+    vacExpVal(A::OpSum,S::OpSum=1)
 
 Calculate the vacuum expectation value ``⟨0|S^\\dagger A S|0⟩``, i.e., the
 expectation value ``⟨ψ|A|ψ⟩`` for the state defined by ``|ψ⟩= S|0⟩```.
 """
-function vacExpVal(A::Operator,stateop::Operator=scal(1))
+function vacExpVal(A::OpSum,stateop::OpSum=OpSum(OpTerm()))
     # simplify down as much as possible by applying vacuum from left and right
-    vsAsv = vacA(Avac(stateop' * A * stateop))
-    # only operators that should survive here as operators are σs
-    _vacExpVal(vsAsv)
+    # convert TLSx/y/z operators to TLSCreate/TLSDestroy to ensure that no bare operators survive
+    vsAsv = vacA(Avac(_TLS_to_pm_normal(stateop' * A * stateop)))
+    _map_opsum_ops(t -> (@assert isempty(t.bares); t), vsAsv)
 end
-_vacExpVal(A::Scalar) = A
-# the terms that survive until here have at most a single σ of any particle
-# so it does not matter if we are inside a product
-_vacExpVal(A::σ) = A.a == z ? scal(-1) : scal(0)
-_vacExpVal(A::OpSum) = _vacExpVal(A.A) + _vacExpVal(A.B)
-_vacExpVal(A::OpSumAnalytic) = OpSumAnalytic(A.ind,_vacExpVal(A.A))
-# we know that the operators here commute (all a and a† have disappeared, and at most a single σ remaining for each particle)
-_vacExpVal(A::OpProd) = _vacExpVal(A.A) * _vacExpVal(A.B)

@@ -1,21 +1,28 @@
-# NOTE: This package is currently undergoing a major rewrite
-The new version is in branch 
-[full_rewrite](https://github.com/jfeist/QuantumAlgebra.jl/tree/full_rewrite), 
-and apart from updating the documentation is mostly stable and 
-well-tested by now. New users are encouraged to use that branch (`]add QuantumAlgebra#full_rewrite`). The biggest user-facing 
-change is that normal/canonical form is not enforced automatically, but has to be
-explicitly calculated (with `normal_form(x)`).
-
-**Update (July 15, 2021)**: The branch just gained the option to automatically transform to normal form by setting `QuantumAlgebra.auto_normal_form(true)`.
-
 # QuantumAlgebra.jl - quantum operator algebra in Julia
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://jfeist.github.io/QuantumAlgebra.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://jfeist.github.io/QuantumAlgebra.jl/dev)
-[![Build Status](https://github.com/jfeist/QuantumAlgebra.jl/actions/workflows/Test.yml/badge.svg)](https://github.com/jfeist/QuantumAlgebra.jl/actions?query=workflow%3Arun-tests)
-[![Codecov](https://codecov.io/gh/jfeist/QuantumAlgebra.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/QuantumAlgebra.jl)
+[![Build Status](https://github.com/jfeist/QuantumAlgebra.jl/workflows/CI/badge.svg)](https://github.com/jfeist/QuantumAlgebra.jl/actions)
+[![Coverage](https://codecov.io/gh/jfeist/QuantumAlgebra.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jfeist/QuantumAlgebra.jl)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/main?filepath=examples)
 [![DOI](https://zenodo.org/badge/211471154.svg)](https://zenodo.org/badge/latestdoi/211471154)
+
+# NOTE: This package is currently undergoing a major rewrite
+The development version (main branch) corresponds to a major revision and apart
+from updated documentation is mostly stable and well-tested by now. New users
+are encouraged to use this version (install with `]add QuantumAlgebra#main`),
+which will form the basis of the next release. The biggest user-facing change
+compared to the main branch is that normal/canonical form is not enforced
+automatically, but has to be explicitly calculated (with `normal_form(x)`).
+
+**Update (July 15, 2021)**: The development version just gained the option to
+automatically transform to normal form by setting
+`QuantumAlgebra.auto_normal_form(true)`. This can also be controlled by setting
+the environment variable `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any
+value that `parse(Bool,value)` parses as `true`). The environment variable has
+to be set before doing `using QuantumAlgebra`.
+
+# Old README:
 
 This package does quantum operator algebra (i.e., algebra with non-commuting
 operators) in Julia. It defines an opinionated canonical form (normal ordering
@@ -63,3 +70,7 @@ Some other useful functions that are implemented:
 - `ascorr(x)` takes an expression `x=A B C + D E...` and writes its expectation value in terms of single-body expectation values ⟨_A_⟩, ⟨_B_⟩, ..., and many-body correlations ⟨_AB_⟩<sub>c</sub>, ⟨_ABC_⟩<sub>c</sub>, etc. Currently, up to fourth-order correlations (i.e., products of four operators) are supported.
 - `Avac(A)` and `vacA(A)` simplify operators by assuming they are applied to the vacuum from the left or right, respectively. To be precise, `Avac(A)` returns _A'_ such that _A_|0⟩ = _A'_|0⟩, while `vacA(A)` does the same for ⟨0|_A_.
 - `vacExpVal(A,S=1)` calculates the vacuum expectation value ⟨0|_S<sup>†</sup>AS_|0⟩, i.e., the expectation value ⟨ψ|_A_|ψ⟩ for the state defined by |ψ⟩=_S_|0⟩.
+
+## Citing
+
+See [`CITATION.bib`](CITATION.bib) for the relevant reference(s).

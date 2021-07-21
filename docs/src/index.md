@@ -1,3 +1,7 @@
+```@meta
+CurrentModule = QuantumAlgebra
+```
+
 # [QuantumAlgebra.jl](https://github.com/jfeist/QuantumAlgebra.jl) - quantum operator algebra in Julia
 
 This package does quantum operator algebra (i.e., algebra with non-commuting
