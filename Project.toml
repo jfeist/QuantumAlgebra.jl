@@ -1,6 +1,6 @@
 name = "QuantumAlgebra"
 uuid = "1b9008d5-2a9d-4901-8cfb-44bb87795b64"
-authors = ["Johannes Feist"]
+authors = ["Johannes Feist <johannes.feist@gmail.com> and contributors"]
 version = "0.4.0"
 
 [deps]
@@ -11,9 +11,3 @@ REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [compat]
 Combinatorics = "1"
 julia = "1.3"
-
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[targets]
-test = ["Test"]
