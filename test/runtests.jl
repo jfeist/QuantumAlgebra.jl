@@ -6,7 +6,7 @@ function myδ(i,j)
     iA,iB = OpIndex.((i,j))
     OpSum(OpTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
 end
-scal(x) = OpSum(((OpTerm(),x),))
+scal(x) = x*one(OpSum)
 
 macro test_is_normal_form(x)
     x = esc(x)
@@ -26,10 +26,10 @@ end
     end
     @test isbitstype(QuantumAlgebra.δ)
 
-    @testset "auto_normal_form($auto_normal_form)" for auto_normal_form in (false,true)
-        QuantumAlgebra.auto_normal_form(auto_normal_form)
+    @testset "auto_normal_form($auto_norm)" for auto_norm in (false,true)
+        QuantumAlgebra.auto_normal_form(auto_norm)
 
-        @test QuantumAlgebra._auto_normal_form[] == auto_normal_form
+        @test QuantumAlgebra._auto_normal_form[] == auto_norm
 
         @boson_ops b
         @test normal_form(b(:i)*bdag(:j)) == bdag(:j)*b(:i) + myδ(:i,:j)
@@ -75,8 +75,8 @@ end
         @test normal_form((a(1,2,:k)*a(:m))') == normal_form(adag(1,2,:k)*adag(:m))
 
         @test normal_form(fdag(:a)*f(:b) + f(:b)*fdag(:a)) == myδ(:a,:b)
-        @test normal_form(f(:a)*f(:b) + f(:b)*f(:a)) == scal(0)
-        @test normal_form(fdag(:a)*fdag(:b) + fdag(:b)*fdag(:a)) == scal(0)
+        @test iszero(normal_form(f(:a)*f(:b) + f(:b)*f(:a)))
+        @test iszero(normal_form(fdag(:a)*fdag(:b) + fdag(:b)*fdag(:a)))
 
         @test f()' == fdag()
         @test fdag()' == f()
@@ -109,7 +109,7 @@ end
 
             α = param(:α)
             tmp = α' * a(1) + α * a(1)
-            @test tmp - tmp == scal(0)
+            @test iszero(tmp - tmp)
 
             @test σx() == σp() + σm()
             @test σx(:i) == σp(:i) + σm(:i)
@@ -119,7 +119,7 @@ end
             @test normal_form(σz(:i)) == normal_form(2*σp(:i)*σm(:i) - 1)
 
             for s=(σx,σy,σz)
-                @test normal_form(s(:i)*s(:i)) == scal(1)
+                @test isone(normal_form(s(:i)*s(:i)))
                 @test s(:i)' == s(:i)
             end
             @test normal_form(σx(:i)*σy(:i)) == 1im*σz(:i)
@@ -150,13 +150,26 @@ end
             @test normal_form(x1 * x2 + x2) == normal_form(normal_form(x1) * normal_form(x2)) + normal_form(x2)
 
             @testset "is_normal_form" begin
-                y = scal(1)
+                y = one(OpSum)
                 for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α), expval(adag(:c)*a(:d)))
                     @test_is_normal_form x
                     y *= x
                     @test_is_normal_form y
                     @test_is_normal_form ∑(:c,∑(:i,∑(:α,y)))
                 end
+            end
+
+            @testset "exponent" begin
+                for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α), expval(adag(:c)*a(:d)))
+                    @test isone(x^0)
+                    @test x^1 == x
+                    @test x^2 == x*x
+                    @test x^3 == x*x*x
+                    @test x^4 == x*x*x*x
+                    @test_throws ArgumentError x^-1
+                    @test_throws ArgumentError x^-2
+                end
+                
             end
 
             @testset "Commutation inside ExpVal/Corr" begin
@@ -183,7 +196,7 @@ end
                     #
                     # For use_σxyz, this is even worse, since even though non-adjacent operators are contracted,
                     # there are ambiguities in sums that even lead to different numbers of terms
-                    if auto_normal_form
+                    if auto_norm
                         @test normal_form(xsqn*x) == normal_form(xn*xn*xn)
                     else
                         @test_broken normal_form(xsqn*x) == normal_form(xn*xn*xn)
@@ -195,20 +208,20 @@ end
             @test normal_form(myδ(:i,:k)*a(:k,:i)) == normal_form(a(:i,:i)*myδ(:k,:i))
             @test normal_form(myδ(:i,:k)*myδ(:i,:j)) == normal_form(myδ(:k,:i)*myδ(:j,:k))
             # k cannot be equal to 1 and 3 at the same time
-            @test normal_form(myδ(1,:k)*myδ(:k,3)*σx(:k)) == scal(0)
+            @test iszero(normal_form(myδ(1,:k)*myδ(:k,3)*σx(:k)))
             @test normal_form(myδ(1,:k)*myδ(:k,1)*σx(:k)) == myδ(1,:k)*σx(1)
 
-            @test normal_form(comm(σx(5),σy(3))) == scal(0)
-            @test normal_form(comm(σx(5),σx(5))) == scal(0)
+            @test iszero(normal_form(comm(σx(5),σy(3))))
+            @test iszero(normal_form(comm(σx(5),σx(5))))
             @test normal_form(comm(σx(1),σz(1))) == normal_form(-2im*σy(1))
             @test normal_form(comm(σx(:μ),σy(:ν))) == normal_form(2im*myδ(:μ,:ν)*σz(:ν))
             @test normal_form(1//2im * comm(σx(:m),σy(:m))) == normal_form(σz(:m))
-            @test normal_form(σx(:a)*σy(:a)*σz(:a)) == scal(1im)
+            @test normal_form(σx(:a)*σy(:a)*σz(:a)) == 1im*one(OpSum)
 
-            @test normal_form(comm(Pc"g",a(5)+a(3))) == scal(0)
-            @test normal_form(comm(Pc"g",a(5)*a(3))) == scal(0)
-            @test normal_form(comm(a(5)+a(3),Pc"g")) == scal(0)
-            @test normal_form(comm(a(5)*a(3),Pc"g")) == scal(0)
+            @test iszero(normal_form(comm(Pc"g",a(5)+a(3))))
+            @test iszero(normal_form(comm(Pc"g",a(5)*a(3))))
+            @test iszero(normal_form(comm(a(5)+a(3),Pc"g")))
+            @test iszero(normal_form(comm(a(5)*a(3),Pc"g")))
 
             @test normal_form(comm(a(5)+a(3),adag(5))) == normal_form(comm(a(5),adag(5))+ comm(a(3),adag(5)))
             @test normal_form(comm(a(5)+a(3),adag(5)*a(3))) == normal_form(comm(a(5),adag(5)*a(3))+ comm(a(3),adag(5)*a(3)))
@@ -221,7 +234,7 @@ end
             @test normal_form(σm(1)*σp(1)) == normal_form(σp(1)*σm(1) + comm(σm(1),σp(1)))
             @test normal_form(σz(1)) == normal_form(σp(1)*σm(1) - σm(1)*σp(1))
 
-            @test comm(σp(1),σp(1)) == scal(0)
+            @test iszero(comm(σp(1),σp(1)))
             @test normal_form(comm(σp(:n),σm(:n))) == normal_form(σz(:n))
 
             @test normal_form(comm(a(1),   adag(1)*a(1))) == a(1)
@@ -264,29 +277,29 @@ end
             HH = ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i))
             @test normal_form(a(:k,:k)*HH) == normal_form(param(:ω,'r',:k,:k)*a(:k,:k) + ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i)*a(:k,:k)))
 
-            @test Avac(H) == scal(0)
-            @test vacA(H) == scal(0)
-            @test vacA(adag(3)*σp(1)*σm(1)) == scal(0)
-            @test vacA(fdag(:n)) == scal(0)
+            @test iszero(Avac(H))
+            @test iszero(vacA(H))
+            @test iszero(vacA(adag(3)*σp(1)*σm(1)))
+            @test iszero(vacA(fdag(:n)))
             @test vacA(f(:n)) == f(:n)
             @test vacA(a(:n)) == a(:n)
             @test Avac(fdag(:n)) == fdag(:n)
-            @test Avac(f(:n)) == scal(0)
-            @test Avac(a(3)*σp(1)*σm(1)) == scal(0)
-            @test Avac(σm(1)*σp(1)) == scal(1)
-            @test Avac(σp(1)*σm(1)) == scal(0)
+            @test iszero(Avac(f(:n)))
+            @test iszero(Avac(a(3)*σp(1)*σm(1)))
+            @test isone(Avac(σm(1)*σp(1)))
+            @test iszero(Avac(σp(1)*σm(1)))
             @test Avac(σp(1)) == σp(1)
             @test vacA(σm(1)) == σm(1)
             if QuantumAlgebra.using_σpm()
-                @test Avac(σm(1)) == scal(0)
-                @test vacA(σp(1)) == scal(0)
+                @test iszero(Avac(σm(1)))
+                @test iszero(vacA(σp(1)))
             else
                 @test Avac(σx(1)) == vacA(σx(1)) == σx(1)
             end
-            @test vacExpVal(σx(1)) == scal(0)
-            @test vacExpVal(σp(1)) == scal(0)
-            @test vacExpVal(∑(:i,σp(:i))) == scal(0)
-            @test vacExpVal(σp(:i)*σm(:k)) == scal(0)
+            @test iszero(vacExpVal(σx(1)))
+            @test iszero(vacExpVal(σp(1)))
+            @test iszero(vacExpVal(∑(:i,σp(:i))))
+            @test iszero(vacExpVal(σp(:i)*σm(:k)))
             @test vacExpVal(σm(:j)*σp(:l)) == myδ(:j,:l)
             if QuantumAlgebra.using_σpm()
                 @test normal_form(σp(:i)*σm(:k)) == σp(:i)*σm(:k)

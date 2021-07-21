@@ -7,6 +7,23 @@ Base.length(A::BaseOpProduct) = length(A.v)
 Base.length(A::Union{ExpVal,Corr}) = length(A.ops)
 Base.length(A::OpTerm) = length(A.bares) + mapreduce(length,+,A.expvals;init=0) + mapreduce(length,+,A.corrs;init=0)
 
+Base.zero(::Type{OpSum}) = OpSum()
+Base.zero(::OpSum) = zero(OpSum)
+Base.one(::Type{OpSum}) = OpSum(OpTerm())
+Base.one(::Type{OpTerm}) = OpSum(OpTerm())
+Base.one(::T) where T<:Union{OpTerm,OpSum} = one(T)
+
+function Base.:^(A::Union{OpTerm,OpSum},n::Int)
+    if n > 0
+        prod(A for _=1:n)
+    elseif n == 0
+        one(A)
+    else
+        throw(ArgumentError("Only positive exponents supported for QuantumAlgebra objects."))
+    end
+end
+Base.literal_pow(::typeof(^),A::Union{OpTerm,OpSum},::Val{n}) where n = A^n
+
 noaliascopy(A::Param) = Param(A.name,A.state,copy(A.inds))
 # δ is isbitstype
 noaliascopy(A::δ) = A
