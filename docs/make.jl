@@ -20,4 +20,5 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/jfeist/QuantumAlgebra.jl",
+    devbranch = "main",
 )
