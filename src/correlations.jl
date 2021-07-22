@@ -2,7 +2,7 @@ using Combinatorics
 
 export expval_as_corrs
 
-function term2corr(A::OpTerm,C::Tuple)
+function term2corr(A::QuTerm,C::Tuple)
     corrs = noaliascopy(A.corrs)
     sizehint!(corrs,length(corrs)+length(C))
     for grp in C
@@ -10,11 +10,11 @@ function term2corr(A::OpTerm,C::Tuple)
         push!(corrs,cc)
     end
     sort!(corrs)
-    OpTerm(A.nsuminds,A.δs,A.params,A.expvals,corrs,BaseOpProduct())
+    QuTerm(A.nsuminds,A.δs,A.params,A.expvals,corrs,BaseOpProduct())
 end
 
 """
-    expval_as_corrs(expr::Operator)
+    expval_as_corrs(expr::QuExpr)
 
 Take an expression `expr=A B C + D E...` and write its expectation value in
 terms of correlations ``⟨A⟩_c, ⟨B⟩_c, ⟨AB⟩_c, ⟨ABC⟩_c, \\ldots``. Note that
@@ -30,9 +30,9 @@ a_{n}^\\dagger a_{n} \\rangle_{c} + \\langle a_{n} \\rangle_{c} \\langle
 a_{n}^\\dagger a_{m} \\rangle_{c}``.
 
 See also: [`expval`](@ref), [`corr`](@ref)"""
-function expval_as_corrs(A::OpSum)
-    newA = OpSum()
-    corrterms = OpSum()
+function expval_as_corrs(A::QuExpr)
+    newA = QuExpr()
+    corrterms = QuExpr()
     for (t,s) in A.terms
         # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
         # is assumed to be distinct from the indices of the expressions
@@ -51,9 +51,9 @@ function expval_as_corrs(A::OpSum)
                     normal_order!(tb,corrterms)
                     @assert isempty(corrterms)
                     if tb != tbc
-                        tright = _normalize_without_commutation(OpTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
+                        tright = _normalize_without_commutation(QuTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
                         _add_corrs!(newA,tright,s)
-                        twrong = OpTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
+                        twrong = QuTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
                         _add_corrs!(newA,twrong,-s,_add_with_normal_order!)
                     end
                 end
@@ -76,7 +76,7 @@ end
 """
     CorrTup_isless(a,b)
 
-isless for Tuples of integers that represent Corr of sorted Operators (with n representing An such that n<m == An<Am).
+isless for Tuples of integers that represent Corr of sorted operators (with n representing An such that n<m == An<Am).
 (n,m,...) ≡ Corr(An*Am*...). Defined in such a way that the same order is obtained as with `BaseOperator` objects
 """
 CorrTup_isless(a::NTuple{N,Int},b::NTuple{M,Int}) where {N,M} = N==M ? a<b : N<M
@@ -137,7 +137,7 @@ function ncomb_inds(n,inds,used_combs=Set())
     terms
 end
 
-function term2expvals(A::OpTerm,C::Tuple)
+function term2expvals(A::QuTerm,C::Tuple)
     expvals = noaliascopy(A.expvals)
     sizehint!(expvals,length(expvals)+length(C))
     for grp in C
@@ -145,7 +145,7 @@ function term2expvals(A::OpTerm,C::Tuple)
         push!(expvals,cc)
     end
     sort!(expvals)
-    OpTerm(A.nsuminds,A.δs,A.params,expvals,A.corrs,BaseOpProduct())
+    QuTerm(A.nsuminds,A.δs,A.params,expvals,A.corrs,BaseOpProduct())
 end
 
 _canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(A.inds))
@@ -153,18 +153,18 @@ _expval2tuple(A::ExpVal) = Tuple(_canon_op_to_num.(A.ops.v))
 const _CORR2EXPVALS_CACHE = Dict{Int,Vector{Any}}()
 function corr2expvals_inds(N)
     get!(_CORR2EXPVALS_CACHE,N) do
-        A = OpSum(OpTerm(BaseOpProduct(BosonDestroy.(:a,_canon_ind.(1:N)))))
+        A = QuExpr(QuTerm(BaseOpProduct(BosonDestroy.(:a,_canon_ind.(1:N)))))
         # expval_as_corrs(As...) = <As...> in terms of correlators <A1 A2...>c
         # <As...>c = <As...> - <As...> + <As...>c, where RHS expression only contains <As...> and lower-order correlators
         cA = expval(A) - expval_as_corrs(A) + corr(A)
         # rewrite the lower-order correlators in terms of expectation values
-        ncA = OpSum()
+        ncA = QuExpr()
         for (t,s) in cA.terms
             nt = noaliascopy(t)
             empty!(nt.corrs)
-            nts = OpSum(nt)
+            nts = QuExpr(nt)
             for co in t.corrs
-                nts *= OpSum((term2expvals(OpTerm(co.ops),C)=>sC for (C,sC) in corr2expvals_inds(length(co))))
+                nts *= QuExpr((term2expvals(QuTerm(co.ops),C)=>sC for (C,sC) in corr2expvals_inds(length(co))))
             end
             for (ntt,ns) in nts.terms
                 _add_with_normal_order!(ncA,ntt,ns*s)

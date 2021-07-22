@@ -1,3 +1,4 @@
+export QuExpr
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops
 export tlspm_ops, tlsxyz_ops
@@ -19,18 +20,18 @@ using_auto_normal_form() = _auto_normal_form[]
 
 const IndexInt = Int32
 
-@concrete struct OpIndex
+@concrete struct QuIndex
     # sym is the index character, apart from two special values:
     # '\0' for integer indices, which ensures they are ordered before any other indices
     # '#' for sum indices, which ensures that they are ordered before letters etc, and
     sym::Char
     # num is integer subindex, special value typemin(IndexInt) means no subindex
     num::IndexInt
-    OpIndex(sym::Char,num::Integer=typemin(IndexInt)) = new(sym,num)
+    QuIndex(sym::Char,num::Integer=typemin(IndexInt)) = new(sym,num)
 end
-OpIndex(ii::OpIndex) = ii
-OpIndex(ii::Symbol) = OpIndex(string(ii))
-function OpIndex(ii::String)
+QuIndex(ii::QuIndex) = ii
+QuIndex(ii::Symbol) = QuIndex(string(ii))
+function QuIndex(ii::String)
     s = split(ii,"_")
     length(s) <= 2 || throw(ArgumentError("index can have at most one subindex, got $ii with subindices $(s[2:end])"))
     length(s[1]) == 1 || throw(ArgumentError("index names must be single character, got $ii."))
@@ -43,62 +44,62 @@ function OpIndex(ii::String)
         catch
             throw(ArgumentError("Only integer literals are supported as index subscripts. Got \"$(s[2])\"."))
         end
-        OpIndex(sym,num)
+        QuIndex(sym,num)
     else
-        OpIndex(sym)
+        QuIndex(sym)
     end
 end
-OpIndex(ii::Integer) = OpIndex('\0',ii)
-sumindex(ii) = OpIndex('#',ii)
-isintindex(ii::OpIndex) = ii.sym=='\0'
-issumindex(ii::OpIndex) = ii.sym=='#'
-const NoIndex = OpIndex(typemin(IndexInt))
-isnoindex(ii::OpIndex) = ii == NoIndex
+QuIndex(ii::Integer) = QuIndex('\0',ii)
+sumindex(ii) = QuIndex('#',ii)
+isintindex(ii::QuIndex) = ii.sym=='\0'
+issumindex(ii::QuIndex) = ii.sym=='#'
+const NoIndex = QuIndex(typemin(IndexInt))
+isnoindex(ii::QuIndex) = ii == NoIndex
 
-@inline Base.isless(i1::OpIndex,i2::OpIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
+@inline Base.isless(i1::QuIndex,i2::QuIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
 
-const OpIndices = Vector{OpIndex}
-assignedinds(inds::OpIndices) = inds
-# const OpIndices = NTuple{5,OpIndex}
-# assignedinds(inds::OpIndices) = filter(!isnoindex,inds)
+const QuIndices = Vector{QuIndex}
+assignedinds(inds::QuIndices) = inds
+# const QuIndices = NTuple{5,QuIndex}
+# assignedinds(inds::QuIndices) = filter(!isnoindex,inds)
 
-make_indices(inds::OpIndices) = inds
+make_indices(inds::QuIndices) = inds
 make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
-make_indices(inds...)::OpIndices = [OpIndex(i) for i in inds]
-#make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::OpIndices = (OpIndex(i1),OpIndex(i2),OpIndex(i3),OpIndex(i4),OpIndex(i5))
+make_indices(inds...)::QuIndices = [QuIndex(i) for i in inds]
+#make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::QuIndices = (QuIndex(i1),QuIndex(i2),QuIndex(i3),QuIndex(i4),QuIndex(i5))
 
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]
 
-@concrete struct OpName
+@concrete struct QuOpName
     i::IndexInt
-    function OpName(name::Symbol)
+    function QuOpName(name::Symbol)
         i = get!(_NameTable,name) do
             push!(_NameTableInv,name)
             length(_NameTableInv)
         end
         new(i)
     end
-    OpName(name::OpName) = name
+    QuOpName(name::QuOpName) = name
 end
-sym(ind::OpName) = _NameTableInv[ind.i]
-Base.print(io::IO, ind::OpName) = print(io, sym(ind))
-Base.isless(i1::OpName,i2::OpName) = isless(sym(i1),sym(i2))
-const NoName = OpName(Symbol())
+sym(ind::QuOpName) = _NameTableInv[ind.i]
+Base.print(io::IO, ind::QuOpName) = print(io, sym(ind))
+Base.isless(i1::QuOpName,i2::QuOpName) = isless(sym(i1),sym(i2))
+const NoName = QuOpName(Symbol())
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
-# start the counting at 1 so we can index into the tuples defined below with Int(OpType)
-@enum OpType        BosonCreate_=1 FermionCreate_   TLSCreate_   TLSx_  TLSy_  TLSz_  TLSDestroy_ FermionDestroy_ BosonDestroy_
-const OpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
-const OpType_sym  = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
-const OpType_expr = ("ᴴ", "ᴴ", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
-const OpType_latex = ("^\\dagger", "^\\dagger", "^+", "^x", "^y", "^z", "^-", "", "")
+# start the counting at 1 so we can index into the tuples defined below with Int(BaseOpType)
+@enum BaseOpType        BosonCreate_=1 FermionCreate_   TLSCreate_   TLSx_  TLSy_  TLSz_  TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
+const BaseOpType_sym  = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
+const BaseOpType_expr = ("ᴴ", "ᴴ", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
+const BaseOpType_latex = ("^\\dagger", "^\\dagger", "^+", "^x", "^y", "^z", "^-", "", "")
 
 @concrete struct BaseOperator
-    t::OpType
-    name::OpName
-    inds::OpIndices
-    BaseOperator(t,name,inds...) = new(t,OpName(name),make_indices(inds...))
+    t::BaseOpType
+    name::QuOpName
+    inds::QuIndices
+    BaseOperator(t,name,inds...) = new(t,QuOpName(name),make_indices(inds...))
 end
 
 for (op,desc) in (
@@ -125,11 +126,11 @@ BaseOpProduct() = BaseOpProduct(BaseOperator[])
 
 # a struct representing a delta function with unequal indices
 @concrete struct δ
-    iA::OpIndex
-    iB::OpIndex
+    iA::QuIndex
+    iB::QuIndex
     δ(iA,iB) = (@assert !isnoindex(iA) && !isnoindex(iB); new(iA,iB))
 end
-function δ(Ainds::OpIndices,Binds::OpIndices)
+function δ(Ainds::QuIndices,Binds::QuIndices)
     length(Ainds) == length(Binds) || return nothing
 
     res = Vector{δ}(undef,length(Ainds))
@@ -154,62 +155,62 @@ end
 end
 
 @concrete struct Param
-    name::OpName
+    name::QuOpName
     state::Char
-    inds::OpIndices
+    inds::QuIndices
 end
 
-@concrete struct OpTerm
-    nsuminds::IndexInt # have a sum over n indices, represented by OpIndex with issumindex(ind)==true
+@concrete struct QuTerm
+    nsuminds::IndexInt # have a sum over n indices, represented by QuIndex with issumindex(ind)==true
     δs::Vector{δ}
     params::Vector{Param}
     expvals::Vector{ExpVal}
     corrs::Vector{Corr}
     bares::BaseOpProduct
 end
-OpTerm() = OpTerm(BaseOpProduct())
-OpTerm(op::BaseOperator) = OpTerm(BaseOpProduct([op]))
-OpTerm(ops::BaseOpProduct) = OpTerm(0,δ[],Param[],ExpVal[],Corr[],ops)
-OpTerm(δs::Vector{δ},ops::BaseOpProduct) = OpTerm(0,δs,Param[],ExpVal[],Corr[],ops)
-OpTerm(p::Param)  = OpTerm(0,δ[],Param[p],ExpVal[],Corr[],BaseOpProduct())
-OpTerm(E::ExpVal) = OpTerm(0,δ[],Param[],ExpVal[E],Corr[],BaseOpProduct())
-OpTerm(C::Corr)   = OpTerm(0,δ[],Param[],ExpVal[],Corr[C],BaseOpProduct())
-OpTerm(Es::Vector{ExpVal}) = OpTerm(0,δ[],Param[],Es,Corr[],BaseOpProduct())
-OpTerm(Cs::Vector{Corr}) = OpTerm(0,δ[],Param[],ExpVal[],Cs,BaseOpProduct())
-OpTerm(δs::Vector{δ},Es::Vector{ExpVal}) = OpTerm(0,δs,Param[],Es,Corr[],BaseOpProduct())
-OpTerm(δs::Vector{δ},Cs::Vector{Corr})   = OpTerm(0,δs,Param[],ExpVal[],Cs,BaseOpProduct())
+QuTerm() = QuTerm(BaseOpProduct())
+QuTerm(op::BaseOperator) = QuTerm(BaseOpProduct([op]))
+QuTerm(ops::BaseOpProduct) = QuTerm(0,δ[],Param[],ExpVal[],Corr[],ops)
+QuTerm(δs::Vector{δ},ops::BaseOpProduct) = QuTerm(0,δs,Param[],ExpVal[],Corr[],ops)
+QuTerm(p::Param)  = QuTerm(0,δ[],Param[p],ExpVal[],Corr[],BaseOpProduct())
+QuTerm(E::ExpVal) = QuTerm(0,δ[],Param[],ExpVal[E],Corr[],BaseOpProduct())
+QuTerm(C::Corr)   = QuTerm(0,δ[],Param[],ExpVal[],Corr[C],BaseOpProduct())
+QuTerm(Es::Vector{ExpVal}) = QuTerm(0,δ[],Param[],Es,Corr[],BaseOpProduct())
+QuTerm(Cs::Vector{Corr}) = QuTerm(0,δ[],Param[],ExpVal[],Cs,BaseOpProduct())
+QuTerm(δs::Vector{δ},Es::Vector{ExpVal}) = QuTerm(0,δs,Param[],Es,Corr[],BaseOpProduct())
+QuTerm(δs::Vector{δ},Cs::Vector{Corr})   = QuTerm(0,δs,Param[],ExpVal[],Cs,BaseOpProduct())
 
-Base.isempty(A::OpTerm) = A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs) && isempty(A.bares)
+Base.isempty(A::QuTerm) = A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs) && isempty(A.bares)
 
 const PREFAC_TYPES = Union{Int,Float64,Rational{Int},ComplexF64,Complex{Int},Complex{Rational{Int}}}
-struct OpSum
-    # sum of Operators is saved as Dictionary of operators with scalar prefactors
-    terms::Dict{OpTerm,PREFAC_TYPES}
-    OpSum() = new(Dict{OpTerm,PREFAC_TYPES}())
-    OpSum(terms::Dict{OpTerm,PREFAC_TYPES}) = new(terms)
+struct QuExpr
+    # A QuantumAlgebra Expression is saved as a Dictionary of QuTerms with scalar prefactors
+    terms::Dict{QuTerm,PREFAC_TYPES}
+    QuExpr() = new(Dict{QuTerm,PREFAC_TYPES}())
+    QuExpr(terms::Dict{QuTerm,PREFAC_TYPES}) = new(terms)
 end
 
-function OpSum(itr)
-    A = OpSum()
+function QuExpr(itr)
+    A = QuExpr()
     for (t,s) in itr
         _add_with_auto_order!(A,t,simplify_number(s))
     end
     A
 end
-OpSum(A::Union{BaseOperator,Param,Corr,ExpVal}) = OpSum(OpTerm(A))
-OpSum(A::OpTerm) = OpSum(((A,1),))
-Base.isempty(A::OpSum) = isempty(A.terms)
-Base.copy(A::OpSum) = OpSum(copy(A.terms))
+QuExpr(A::Union{BaseOperator,Param,Corr,ExpVal}) = QuExpr(QuTerm(A))
+QuExpr(A::QuTerm) = QuExpr(((A,1),))
+Base.isempty(A::QuExpr) = isempty(A.terms)
+Base.copy(A::QuExpr) = QuExpr(copy(A.terms))
 
-_add_with_auto_order!(A::OpSum,B::OpTerm,sB) = using_auto_normal_form() ? _add_with_normal_order!(A,B,sB) : _add_sum_term!(A,B,sB)
+_add_with_auto_order!(A::QuExpr,B::QuTerm,sB) = using_auto_normal_form() ? _add_with_normal_order!(A,B,sB) : _add_sum_term!(A,B,sB)
 
-function _add_sum_term!(A::OpSum,oB::OpTerm,sB)
+function _add_sum_term!(A::QuExpr,oB::QuTerm,sB)
     iszero(sB) && return A
     sold = get(A.terms,oB,zero(sB))
     # function barrier to have concrete types
     _add_sum_term!(A,oB,sB,sold)
 end
-function _add_sum_term!(A::OpSum,oB::OpTerm,sB,sold)
+function _add_sum_term!(A::QuExpr,oB::QuTerm,sB,sold)
     snew = sB + sold
     if iszero(snew)
         delete!(A.terms,oB)
@@ -218,55 +219,55 @@ function _add_sum_term!(A::OpSum,oB::OpTerm,sB,sold)
     end
     A
 end
-_map_opsum_ops(f,A::OpSum) = OpSum((f(t),s) for (t,s) in A.terms)
+_map_quexpr_ops(f,A::QuExpr) = QuExpr((f(t),s) for (t,s) in A.terms)
 
 
 #################################################################
-## For the "external" functions that always construct OpSum    ##
+## For the "external" functions that always construct QuExpr    ##
 #################################################################
 module OpConstructors
-    using ..QuantumAlgebra: using_σpm, OpName, OpTerm, OpSum, BaseOpProduct,
+    using ..QuantumAlgebra: using_σpm, QuOpName, QuTerm, QuExpr, BaseOpProduct,
                             BosonDestroy, BosonCreate,
                             FermionDestroy, FermionCreate,
                             TLSDestroy, TLSCreate, TLSx, TLSy, TLSz
 
     "`boson_ops(name::Symbol)`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
     function boson_ops(name::Symbol)
-        op_name = OpName(name)
+        op_name = QuOpName(name)
         namedag = Symbol(name,:dag)
-        ann = @eval $name(   args...) = OpSum(BosonDestroy($op_name,args...))
-        cre = @eval $namedag(args...) = OpSum(BosonCreate( $op_name,args...))
+        ann = @eval $name(   args...) = QuExpr(BosonDestroy($op_name,args...))
+        cre = @eval $namedag(args...) = QuExpr(BosonCreate( $op_name,args...))
         ann, cre
     end
 
     "`fermion_ops(name::Symbol)`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
     function fermion_ops(name::Symbol)
-        op_name = OpName(name)
+        op_name = QuOpName(name)
         namedag = Symbol(name,:dag)
-        ann = @eval $name(   args...) = OpSum(FermionDestroy($op_name,args...))
-        cre = @eval $namedag(args...) = OpSum(FermionCreate( $op_name,args...))
+        ann = @eval $name(   args...) = QuExpr(FermionDestroy($op_name,args...))
+        cre = @eval $namedag(args...) = QuExpr(FermionCreate( $op_name,args...))
         ann, cre
     end
 
     "`tlspm_ops(name::Symbol)`: return functions for creating jump operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
     function tlspm_ops(name::Symbol)
-        op_name = OpName(name)
+        op_name = QuOpName(name)
         namep = Symbol(name,:p)
         namem = Symbol(name,:m)
-        tlsm = @eval $namem(args...) = using_σpm() ? OpSum(TLSDestroy($op_name,args...)) : OpSum((OpTerm(TLSx($op_name,args...))=>1//2, OpTerm(TLSy($op_name,args...))=>-1im//2))
-        tlsp = @eval $namep(args...) = using_σpm() ? OpSum(TLSCreate( $op_name,args...)) : OpSum((OpTerm(TLSx($op_name,args...))=>1//2, OpTerm(TLSy($op_name,args...))=>1im//2))
+        tlsm = @eval $namem(args...) = using_σpm() ? QuExpr(TLSDestroy($op_name,args...)) : QuExpr((QuTerm(TLSx($op_name,args...))=>1//2, QuTerm(TLSy($op_name,args...))=>-1im//2))
+        tlsp = @eval $namep(args...) = using_σpm() ? QuExpr(TLSCreate( $op_name,args...)) : QuExpr((QuTerm(TLSx($op_name,args...))=>1//2, QuTerm(TLSy($op_name,args...))=>1im//2))
         tlsm, tlsp
     end
 
     "`tlsxyz_ops(name::Symbol)`: return functions for creating Pauli operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
     function tlsxyz_ops(name::Symbol)
-        op_name = OpName(name)
+        op_name = QuOpName(name)
         namex = Symbol(name,:x)
         namey = Symbol(name,:y)
         namez = Symbol(name,:z)
-        tlsx = @eval $namex(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy($op_name,args...))=>1, OpTerm(TLSCreate($op_name,args...))=>1)) : OpSum(TLSx($op_name,args...))
-        tlsy = @eval $namey(args...) = using_σpm() ? OpSum((OpTerm(TLSDestroy($op_name,args...))=>1im, OpTerm(TLSCreate($op_name,args...))=>-1im)) : OpSum(TLSy($op_name,args...))
-        tlsz = @eval $namez(args...) = using_σpm() ? OpSum((OpTerm(BaseOpProduct([TLSCreate($op_name,args...),TLSDestroy($op_name,args...)]))=>2, OpTerm()=>-1)) : OpSum(TLSz($op_name,args...))
+        tlsx = @eval $namex(args...) = using_σpm() ? QuExpr((QuTerm(TLSDestroy($op_name,args...))=>1, QuTerm(TLSCreate($op_name,args...))=>1)) : QuExpr(TLSx($op_name,args...))
+        tlsy = @eval $namey(args...) = using_σpm() ? QuExpr((QuTerm(TLSDestroy($op_name,args...))=>1im, QuTerm(TLSCreate($op_name,args...))=>-1im)) : QuExpr(TLSy($op_name,args...))
+        tlsz = @eval $namez(args...) = using_σpm() ? QuExpr((QuTerm(BaseOpProduct([TLSCreate($op_name,args...),TLSDestroy($op_name,args...)]))=>2, QuTerm()=>-1)) : QuExpr(TLSz($op_name,args...))
         tlsx, tlsy, tlsz
     end
 end
@@ -304,11 +305,11 @@ end
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
 # Pr"ω_i,j" = param(:ω,'r',:i,:j) (real parameter)
 
-param(name::Symbol,args...) = param(OpName(name),args...)
-param(name::OpName,args...) = param(name,'n',args...)
-function param(name::OpName,state::Char,inds...)
+param(name::Symbol,args...) = param(QuOpName(name),args...)
+param(name::QuOpName,args...) = param(name,'n',args...)
+function param(name::QuOpName,state::Char,inds...)
     state ∈ ('r','n','c') || throw(ArgumentError("state has to be one of n,r,c"))
-    OpSum(Param(name,state,make_indices(inds...)))
+    QuExpr(Param(name,state,make_indices(inds...)))
 end
 
 function parse_paramstr(s)
@@ -328,25 +329,25 @@ macro Pr_str(s)
     param(par,'r',inds)
 end
 
-function expval(A::OpTerm)
+function expval(A::QuTerm)
     if isempty(A.bares)
         A
     else
-        OpTerm(A.nsuminds,A.δs,A.params,[A.expvals; ExpVal(A.bares)],A.corrs,BaseOpProduct())
+        QuTerm(A.nsuminds,A.δs,A.params,[A.expvals; ExpVal(A.bares)],A.corrs,BaseOpProduct())
     end
 end
-function corr(A::OpTerm)
+function corr(A::QuTerm)
     if isempty(A.bares)
         A
     else
-        OpTerm(A.nsuminds,A.δs,A.params,A.expvals,[A.corrs; Corr(A.bares)],BaseOpProduct())
+        QuTerm(A.nsuminds,A.δs,A.params,A.expvals,[A.corrs; Corr(A.bares)],BaseOpProduct())
     end
 end
 
-expval(A::OpSum) = _map_opsum_ops(expval,A)
-corr(A::OpSum) = _map_opsum_ops(corr,A)
+expval(A::QuExpr) = _map_quexpr_ops(expval,A)
+corr(A::QuExpr) = _map_quexpr_ops(corr,A)
 
-function ∑(ind::OpIndex,A::OpTerm)
+function ∑(ind::QuIndex,A::QuTerm)
     (issumindex(ind) || isintindex(ind)) && error("Index $ind to be summed over needs to be symbolic!")
     sumind = sumindex(A.nsuminds+one(A.nsuminds))
     f = replace_inds(ind=>sumind)
@@ -354,7 +355,7 @@ function ∑(ind::OpIndex,A::OpTerm)
     # use the form that also sets nsuminds
     g(f(A,sumind.num))
 end
-∑(ind::OpIndex,A::OpSum) = _map_opsum_ops(t->∑(ind,t),A)
-∑(ind::Symbol,A) = ∑(OpIndex(ind),A)
+∑(ind::QuIndex,A::QuExpr) = _map_quexpr_ops(t->∑(ind,t),A)
+∑(ind::Symbol,A) = ∑(QuIndex(ind),A)
 
-const QuantumObject = Union{OpIndex,OpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,OpTerm,OpSum}
+const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr}

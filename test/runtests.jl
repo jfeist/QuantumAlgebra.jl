@@ -1,12 +1,12 @@
 using QuantumAlgebra
-using QuantumAlgebra: δ, OpSum, OpTerm, BaseOpProduct, BaseOperator, Param, OpIndex, _map_opsum_ops, TLSx, TLSCreate, is_normal_form
+using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
 using Test
 
 function myδ(i,j)
-    iA,iB = OpIndex.((i,j))
-    OpSum(OpTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
+    iA,iB = QuIndex.((i,j))
+    QuExpr(QuTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
 end
-scal(x) = x*one(OpSum)
+scal(x) = x*one(QuExpr)
 
 macro test_is_normal_form(x)
     x = esc(x)
@@ -18,9 +18,9 @@ macro test_is_normal_form(x)
 end
 
 @time @testset "QuantumAlgebra.jl" begin
-    @test isbitstype(QuantumAlgebra.OpIndex)
-    @test isbitstype(QuantumAlgebra.OpName)
-    if isbitstype(QuantumAlgebra.OpIndices)
+    @test isbitstype(QuantumAlgebra.QuIndex)
+    @test isbitstype(QuantumAlgebra.QuOpName)
+    if isbitstype(QuantumAlgebra.QuIndices)
         @test isbitstype(QuantumAlgebra.BaseOperator)
         @test isbitstype(QuantumAlgebra.Param)
     end
@@ -133,7 +133,7 @@ end
             @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:i)) == σx(:i)
             @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:j)) == σx(:j)
 
-            @test_throws ArgumentError normal_form(OpSum(TLSx(:σ)) * OpSum(TLSCreate(:σ)))
+            @test_throws ArgumentError normal_form(QuExpr(TLSx(:σ)) * QuExpr(TLSCreate(:σ)))
 
             tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*adag(5)*a(5))
             if QuantumAlgebra.using_σpm()
@@ -150,7 +150,7 @@ end
             @test normal_form(x1 * x2 + x2) == normal_form(normal_form(x1) * normal_form(x2)) + normal_form(x2)
 
             @testset "is_normal_form" begin
-                y = one(OpSum)
+                y = one(QuExpr)
                 for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α), expval(adag(:c)*a(:d)))
                     @test_is_normal_form x
                     y *= x
@@ -216,7 +216,7 @@ end
             @test normal_form(comm(σx(1),σz(1))) == normal_form(-2im*σy(1))
             @test normal_form(comm(σx(:μ),σy(:ν))) == normal_form(2im*myδ(:μ,:ν)*σz(:ν))
             @test normal_form(1//2im * comm(σx(:m),σy(:m))) == normal_form(σz(:m))
-            @test normal_form(σx(:a)*σy(:a)*σz(:a)) == 1im*one(OpSum)
+            @test normal_form(σx(:a)*σy(:a)*σz(:a)) == 1im*one(QuExpr)
 
             @test iszero(normal_form(comm(Pc"g",a(5)+a(3))))
             @test iszero(normal_form(comm(Pc"g",a(5)*a(3))))
@@ -342,9 +342,9 @@ end
                 @test string(normal_form(a(5)*adag(5)*σz(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σᶻ(3) + ⟨a†(5i) a(5)⟩c σᶻ(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σᶻ(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σᶻ(3) a(5)"
             end
 
-            @test julia_expression(OpSum()) == 0
-            # an empty OpTerm is the identity operator!
-            @test julia_expression(OpTerm()) == 1
+            @test julia_expression(QuExpr()) == 0
+            # an empty QuTerm is the identity operator!
+            @test julia_expression(QuTerm()) == 1
 
             x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*adag(:i_1,:J,:k)*σp(:i))
             ex = julia_expression(expval(normal_form(x)))

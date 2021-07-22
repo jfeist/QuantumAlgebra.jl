@@ -27,8 +27,8 @@ We define an abstract type that represents an operator, and some concrete subtyp
 - `f(i)` and `fdag(i)` representing ``f_{i}`` and ``f_{i}^{†}``, the annihilation and creation operators for fermionic mode ``i``
 - `σ(a,i)` representing the Pauli matrix ``σ_{a,i}`` for two-level system (TLS) ``i``, where ``a ∈ {x=1,y=2,z=3}`` is the type of Pauli matrix.
 - `OpProd(A,B)` representing ``A B``, i.e., the product of two operators
-- `OpSum(A,B)` representing ``A + B``, i.e., the sum of two operators
-- `OpSumAnalytical(i,A)` or `∑(i,A)` representing ``∑_{i} A``, i.e., an analytical sum over an index (assumed to run over all possible values of ``i``).
+- `QuExpr(A,B)` representing ``A + B``, i.e., the sum of two operators
+- `∑(i,A)` representing ``∑_{i} A``, i.e., an analytical sum over an index (assumed to run over all possible values of ``i``).
 - `ExpVal(A)` representing the expectation value ``⟨A⟩``
 - `Corr(AB)` representing the correlation ``⟨AB⟩_{c} = ⟨AB⟩ - ⟨A⟩⟨B⟩``, with corresponding extensions for products of more operators.
 

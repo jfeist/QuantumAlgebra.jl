@@ -30,7 +30,7 @@ function printspaced(io::IO,v,trailing_space=false)
 end
 
 Base.print(io::IO,A::BaseOpProduct) = printspaced(io,A.v)
-function Base.print(io::IO,ii::OpIndex)
+function Base.print(io::IO,ii::QuIndex)
     if isnoindex(ii)
         return
     elseif isintindex(ii)
@@ -41,13 +41,13 @@ function Base.print(io::IO,ii::OpIndex)
     end
 end
 
-Base.print(io::IO,A::BaseOperator) = print(io,A.name,OpType_sym[Int(A.t)],"(",A.inds...,")")
+Base.print(io::IO,A::BaseOperator) = print(io,A.name,BaseOpType_sym[Int(A.t)],"(",A.inds...,")")
 Base.print(io::IO,A::δ) = print(io,"δ(",A.iA,A.iB,")")
 Base.print(io::IO,A::Param) = print(io, A.name, A.state=='c' ? "*" : "", length(A.inds)==0 ? "" : "($(A.inds...))")
 Base.print(io::IO,A::ExpVal) = print(io,"⟨", A.ops, "⟩")
 Base.print(io::IO,A::Corr) = print(io,"⟨", A.ops, "⟩c")
 
-function Base.print(io::IO,A::OpTerm)
+function Base.print(io::IO,A::QuTerm)
     if A.nsuminds > 0
         print(io,"∑")
         for ii=1:A.nsuminds
@@ -74,7 +74,7 @@ function print_as_connector(io,str::String,print_connector::Bool)
     end
 end
 
-function print_term_scalar(io::IO,t::OpTerm,s::Number, print_connector::Bool)
+function print_term_scalar(io::IO,t::QuTerm,s::Number, print_connector::Bool)
     if isempty(t)
         print_as_connector(io,string(s),print_connector)
         return
@@ -93,7 +93,7 @@ numstring(x::Number) = @sprintf "%g" x
 numstring(x::Rational) = denominator(x)==1 ? string(numerator(x)) : string(x)
 numstring(x::Complex) = ((r,i) = reim(x); iszero(i) ? numstring(r) : (iszero(r) ? numstring(i)*"i" : "($(numstring(r))$(i<0 ? '-' : '+')$(numstring(abs(i)))i)"))
 
-function Base.print(io::IO,A::OpSum)
+function Base.print(io::IO,A::QuExpr)
     if isempty(A.terms)
         print(io,0)
     else
@@ -113,7 +113,7 @@ function latex(A::Union{QuantumObject,Number})
     String(take!(io))
 end
 
-function printlatex(io::IO,ii::OpIndex)
+function printlatex(io::IO,ii::QuIndex)
     if isnoindex(ii)
         return
     elseif isintindex(ii)
@@ -150,7 +150,7 @@ function printlatex(io::IO,v::Vector)
 end
 
 latexjoin(args...) = join(latex.(args...))
-latexindstr(inds::OpIndex...) = latexindstr(inds)
+latexindstr(inds::QuIndex...) = latexindstr(inds)
 latexindstr(inds) = isempty(inds) ? "" : "_{$(latexjoin(inds))}"
 
 numlatex(x::Number) = @sprintf "%g" x
@@ -160,17 +160,17 @@ numlatex(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" nu
 
 const _unicode_to_latex = Dict(v[1]=>"{$k}" for (k,v) in REPL.REPLCompletions.latex_symbols if length(v)==1)
 unicode_to_latex(s::AbstractString) = join(map(c -> get(_unicode_to_latex,c,string(c)), collect(s)))
-unicode_to_latex(s::OpName) = unicode_to_latex(string(s))
+unicode_to_latex(s::QuOpName) = unicode_to_latex(string(s))
 
 printlatex(io::IO,x::Number) = print(io, imag(x)==0 ? numlatex(real(x)) : (real(x)==0 ? numlatex(imag(x))*"i" : numlatex(x)))
-printlatex(io::IO,A::BaseOperator) = print(io,"{", unicode_to_latex(A.name), "}", latexindstr(A.inds), OpType_latex[Int(A.t)])
+printlatex(io::IO,A::BaseOperator) = print(io,"{", unicode_to_latex(A.name), "}", latexindstr(A.inds), BaseOpType_latex[Int(A.t)])
 printlatex(io::IO,A::δ) = print(io, "\\delta", latexindstr(A.iA,A.iB))
 printlatex(io::IO,A::Param) = print(io, unicode_to_latex(A.name), latexindstr(A.inds), A.state=='c' ? "^{*}" : "")
 printlatex(io::IO,A::BaseOpProduct) = printlatex(io,A.v)
 printlatex(io::IO,A::ExpVal) = (print(io, "\\langle "); printlatex(io, A.ops); print(io," \\rangle"))
 printlatex(io::IO,A::Corr)   = (print(io, "\\langle "); printlatex(io, A.ops); print(io," \\rangle_{c}"))
 
-function printlatex(io::IO,A::OpTerm)
+function printlatex(io::IO,A::QuTerm)
     if A.nsuminds > 0
         print(io,"\\sum",latexindstr(sumindex.(1:A.nsuminds)))
     end
@@ -181,7 +181,7 @@ function printlatex(io::IO,A::OpTerm)
     printlatex(io,A.bares)
 end
 
-function printlatex(io::IO,A::OpSum)
+function printlatex(io::IO,A::QuExpr)
     if isempty(A)
         print(io,0)
     else
