@@ -313,11 +313,19 @@ function param(name::QuOpName,state::Char,inds...)
 end
 
 function parse_paramstr(s)
-    s = split(s,"_")
+    s = split(s, "_"; limit=2)
     par = Symbol(s[1])
-    @assert length(s) <= 2
-    inds = length(s)==1 ? () : Meta.parse.(split(s[2],","))
-    par,inds
+    if length(s) == 1
+        inds = ()
+    else
+        indstr = s[2]
+        # allow {} around the index expression
+        if startswith(indstr,"{") && endswith(indstr,"}")
+            indstr = chop(indstr,head=1,tail=1)
+        end
+        inds = Meta.parse.(split(indstr,","))
+    end
+    par, inds
 end
 
 macro Pc_str(s)

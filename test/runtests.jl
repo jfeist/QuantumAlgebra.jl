@@ -97,6 +97,8 @@ end
         @test Pr"gz_i,μ" == param(:gz,'r',(:i,:μ))
         @test Pc"gz_i,μ" == param(:gz,'n',(:i,:μ))
         @test (Pc"gz_i,μ")' == param(:gz,'c',(:i,:μ))
+        @test Pr"α_i_1,μ_2" == Pr"α_{i_1,μ_2}" == param(:α,'r',:i_1,:μ_2)
+        @test Pr"α_◔,◔" == Pr"α_{◔,◔}" == param(:α,'r',:◔,:◔)
 
         @testset "use_σpm($with_σpm)" for with_σpm in (false,true)
             QuantumAlgebra.use_σpm(with_σpm)
