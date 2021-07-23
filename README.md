@@ -36,49 +36,206 @@ expressions, and the interface has been cleaned up in several places.
   QuantumAlgebra`.
 - The function to obtain expectation values is now `expval(A)` (instead of
   `ExpVal`), and `expval_as_corrs(A)` to express an expectation value through a
-  correlator / cumulant expansion, e.g., ⟨_AB_⟩ = ⟨_AB_⟩<sub>c</sub> - ⟨_A_⟩<sub>c</sub>
-  ⟨_B_⟩<sub>c</sub>, with corresponding extensions for products of more
-  operators. Note that for a single operator, ⟨_A_⟩<sub>c</sub> = ⟨_A_⟩, but we
-  distinguish the two formally for clarity.
+  correlator / cumulant expansion, e.g., ⟨_AB_⟩ = ⟨_AB_⟩<sub>c</sub> -
+  ⟨_A_⟩<sub>c</sub> ⟨_B_⟩<sub>c</sub>, with corresponding extensions for
+  products of more operators. Note that for a single operator, ⟨_A_⟩<sub>c</sub>
+  = ⟨_A_⟩, but we distinguish the two formally for clarity.
 - There is a new function `julia_expression(A)` that converts a QuantumAlgebra
   object to a julia expression, which helps in using QuantumAlgebra to
   programatically derive codes for numerical implementation. The object `A`
   cannot contain any "bare" operators, but only expectation values or
   correlators. See the documentation for more details.
-- Quantum expressions are now printed in pretty format in the terminal etc.
+- QuantumAlgebra expressions are now printed in pretty format in the terminal
+  etc.
 
-## Overview
+# Overview
 
-We define an abstract type that represents an operator, and some concrete subtypes to describe various operators. We have:
-- `scal(x)` representing a scalar _x_
-- `param(g,(i,j),state='n')` representing a named scalar parameter _g<sub>i,j</sub>_. `state` can be `'r'` for purely real parameters (invariant under complex conjugation), `'n'` for not-conjugated values, and `'c'` for a conjugated parameter _g<sub>i,j</sub><sup>*</sup>_.
-- `a(i)` and `adag(i)` representing _a<sub>i</sub>_ and _a<sub>i</sub><sup>†</sup>_, the annihilation and creation operators for bosonic mode _i_
-- `f(i)` and `fdag(i)` representing _f<sub>i</sub>_ and _f<sub>i</sub><sup>†</sup>_, the annihilation and creation operators for fermionic mode _i_
-- `σ(a,i)` representing the Pauli matrix _σ<sub>a,i</sub>_ for two-level system (TLS) _i_, where _a ∈ {x=1,y=2,z=3}_ is the type of Pauli matrix.
-- `OpProd(A,B)` representing _A B_, i.e., the product of two operators
-- `QuExpr(A,B)` representing _A + B_, i.e., the sum of two operators
-- `∑(i,A)` representing _∑<sub>i</sub> A_, i.e., an analytical sum over an index (assumed to run over all possible values of _i_).
-- `ExpVal(A)` representing the expectation value ⟨_A_⟩
-- `Corr(AB)` representing the correlation ⟨_AB_⟩<sub>c</sub> = ⟨_AB_⟩ - ⟨_A_⟩⟨_B_⟩, with corresponding extensions for products of more operators.
+The basic functions to create QuantumAlgebra expressions (which are of type
+`QuExpr`) are
+- `a(inds...)` and `adag(inds...)` for _a_ and _a<sup>†</sup>_, the annihilation
+  and creation operators for a bosonic mode.
+- `f(inds...)` and `fdag(inds...)` for _f_ and _f<sup>†</sup>_, the annihilation
+  and creation operators for a fermionic mode.
+- `σx(inds...)`, `σy(inds...)`, `σz(inds...)` for the Pauli matrices
+  _σ<sup>x,y,z</sup>_ for a two-level system (TLS).
+- `σp(inds...)`, `σm(inds...)` for excitation and deexcitation operators
+  _σ<sup>±</sub>_ for a two-level system (TLS).
 
-All operations are defined in such a way that the finally created object is automatically transformed to "canonical" form, which is defined by the following:
-- Operator sums are expanded fully, such that the final expression is always a sum of operator products. I.e., if we write _(A + B)(C + D)_, we get _AC + AD + BC + BD_.
-- Operator products are expressed in a well-defined "canonical" order. To achieve this canonical form, relevant commutators etc are used, so that an expression written as a single product can turn into a sum of expressions.
-    1. at most one scalar prefactor (i.e., all prefactors collapsed into one)
-    1. parameters ordered alphabetically (by string comparison)
-    1. expectation values ⟨_A_⟩
-    1. many-body correlations ⟨_AB_⟩<sub>c</sub>
-    1. bosonic operators in normal ordering (i.e., first creation, then annihilation operators), ordered by mode index
-    1. fermionic operators in normal ordering (i.e., first creation, then annihilation operators), ordered by mode index
-    1. Two-level Pauli matrices, ordered by TLS mode index. At most one Pauli matrix per TLS
-- Operator sums are ordered first by number of operators (both bare and within expectation values and correlations), and then with the same priority rules.
+- **Indices**: All of these functions take an arbitrary number of indices as
+  arguments, which can be either integers (1,2,...) or symbolic, where symbolic
+  indices must be a single unicode character, with possibly an integer subindex:
+  ```julia
+  julia> a()
+  a()
 
-Some other useful functions that are implemented:
-- `comm(A,B)`: calculates the commutator of arbitrary operators [_A,B_] = _AB - BA_. This allows, e.g., to calculate Heisenberg equations of motion for the operators.
-- `ascorr(x)` takes an expression `x=A B C + D E...` and writes its expectation value in terms of single-body expectation values ⟨_A_⟩, ⟨_B_⟩, ..., and many-body correlations ⟨_AB_⟩<sub>c</sub>, ⟨_ABC_⟩<sub>c</sub>, etc. Currently, up to fourth-order correlations (i.e., products of four operators) are supported.
-- `Avac(A)` and `vacA(A)` simplify operators by assuming they are applied to the vacuum from the left or right, respectively. To be precise, `Avac(A)` returns _A'_ such that _A_|0⟩ = _A'_|0⟩, while `vacA(A)` does the same for ⟨0|_A_.
-- `vacExpVal(A,S=1)` calculates the vacuum expectation value ⟨0|_S<sup>†</sup>AS_|0⟩, i.e., the expectation value ⟨ψ|_A_|ψ⟩ for the state defined by |ψ⟩=_S_|0⟩.
+  julia> adag(:i)
+  a(i)
+
+  julia> fdag(1,2,:i_9)
+  f†(12i₉)
+
+  julia> σx(:i_1, 1, :j, :k_2, :μ_2, :◔_1, :😄_121)
+  σˣ(i₁1jk₂μ₂◔₁😄₁₂₁)
+  ```
+
+- You can define your own bosonic/fermionic/two-level system operators with a
+  set of macros:
+  - `@boson_ops name` defines new functions `$name()` and `$(name)dag()` for
+    bosonic species `name`.
+  - `@fermion_ops name` defines new functions `$name()` and `$(name)dag()` for
+    fermionic species `name`.
+  - `@tlsxyz_ops name` defines new functions `$(name)x()`, `$(name)y()` and
+    `$(name)z()` for the Pauli matrices for two-level system species `name`.
+  - `@tlspm_ops name` defines new functions `$(name)p()` and `$(name)m()` for
+    the two-level system excitation and deexcitation operators for species
+    `name`.
+  ```julia
+  julia> @boson_ops b
+  (QuantumAlgebra.OpConstructors.b, QuantumAlgebra.OpConstructors.bdag)
+
+  julia> bdag(:k)*b(:i)
+  b†(k) b(i)
+  ```
+  Operators with different names are assumed to belong to different "species"
+  and always commute.
+
+- `param(name::Symbol,state='n',inds...)` to create a named parameter. `state` must be
+  one of `'r'`, `'n'`, or `'c'` for purely real, non-conjugated complex, and
+  conjugated complex parameters. More conveniently, parameters can be entered
+  with string macros `Pr"name_inds..."` and `Pc"name_inds..."` for real and
+  complex parameters:
+  ```julia
+  julia> Pr"g_i,j_2,k"
+  g(ij₂k)
+
+  julia> Pr"g_i,j_2,k" == param(:g,'r',:i,:j_2,:k)
+  true
+
+  julia> Pc"α_3" == param(:α,3)
+  true
+  ```
+
+- Arithmetic operations (`*`, `+`, `-`, `^`, `adjoint`=`'`) are supported
+  (exponents must be nonnegative integers), with any `Number` types integrating
+  automatically.
+  ```julia
+  julia> 5*adag(:k)*f(3)*σx(3)
+  5 a†(k) f(3) σˣ(3)
+
+  julia> (5//3+4im) * adag(:k)*f(3)*σx(3) + 9.4
+  9.4 + (5//3+4i) a†(k) f(3) σˣ(3)
+
+  julia> (a(:i)*f(:k))'
+  f†(k) a†(i)
+  ```
+  If you need a bare number as a QuantumAlgebra expression, you can use
+  `x*one(QuExpr)` (or `one(A)`, where `A` is any `QuExpr`).
+
+- `∑(ind,A::QuExpr)` to represent an analytic sum over index `ind`. Since summed
+  indices have no semantic meaning, the index within the expression gets
+  replaced by a special numbered sum index `#ᵢ`, with `i=1,2,...`.
+  ```julia
+  julia> ∑(:i,a(:i))
+  ∑₁ a(#₁)
+  ```
+
+- `normal_form(A::QuExpr)` converts an expression to a well-defined "canonical"
+  order. To achieve this canonical form, relevant commutators etc are used, so
+  an expression written as a single product can turn into a sum of expressions.
+  The order is essentially normal ordering (creation before annihilation
+  operators, with σˣʸᶻ in the middle), with some additional conventions to make
+  the normal form (hopefully) unique. In some contexts (e.g., interactive work),
+  it can be convenient to automatically transform all expressions to normal
+  form. This can be enabled by calling `QuantumAlgebra.auto_normal_form(true)`,
+  or alternatively by setting the environment variable
+  `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any value that
+  `parse(Bool,value)` parses as `true`) before `using QuantumAlgebra`.
+
+- `expval(A::QuExpr)` to represent an expectation value.
+  ```julia
+  julia> expval(adag(:j)*a(:i))
+  ⟨a†(j) a(i)⟩
+  ```
+
+- `expval_as_corrs(A::QuExpr)` to represent an expectation value through its
+  correlators, i.e., a cumulant expansion.
+  ```julia
+  julia> expval_as_corrs(adag(:j)*a(:i))
+  ⟨a†(j)⟩c ⟨a(i)⟩c  + ⟨a†(j) a(i)⟩c
+  ```
+
+- `comm(A::QuExpr,B::QuExpr)` to calculate the commutator [_A,B_] = _AB - BA_.
+  ```julia
+  julia> comm(a(),adag())
+  -a†() a() + a() a†()
+
+  julia> normal_form(comm(a(),adag()))
+  1
+  ```
+
+- `Avac(A)` and `vacA(A)` simplify operators by assuming they are applied to the
+  vacuum from the left or right, respectively. To be precise, `Avac(A)` returns
+  _A'_ such that _A_|0⟩ = _A'_|0⟩, while `vacA(A)` does the same for ⟨0|_A_.
+  These functions automatically apply `normal_form` to assure that the operators
+  are simplified as much as possible. Note that "vacuum" for two-level systems
+  is interpreted as the lower state, `σᶻ|0⟩ = -|0⟩`.
+  ```julia
+  julia> Avac(a())
+  0
+
+  julia> Avac(a(:i)*adag(:j))
+  δ(ij)
+
+  julia> Avac(a()*adag()*adag())
+  2 a†()
+
+  julia> vacA(a()*adag()*adag())
+  0
+
+  julia> Avac(σx())
+  σˣ()
+
+  julia> Avac(σz())
+  -1
+  ```
+
+- `vacExpVal(A,S=1)` calculates the vacuum expectation value
+  ⟨0|_S<sup>†</sup>AS_|0⟩, i.e., the expectation value ⟨ψ|_A_|ψ⟩ for the state
+  defined by |ψ⟩=_S_|0⟩. The result is guaranteed to not contain any operators.
+  ```julia
+  julia> vacExpVal(adag()*a())
+  0
+
+  julia> vacExpVal(adag()*a(), adag()^4/sqrt(factorial(4)))
+  4.000000000000001
+
+  julia> vacExpVal(adag()*a(), adag()^4/sqrt(factorial(big(4))))
+  4
+
+  julia> vacExpVal(σx())
+  0
+  ```
+
+- `julia_expression(A)` to obtain a julia expression that can be used to
+  automatically build codes implementing equations derived with QuantumAlgebra.
+  Every expectation value or correlator is treated as a separate array. Daggers
+  are represented as `ᴴ`, which are valid identifiers that can appear in the
+  array names. Note that expectation values and correlators are not
+  distinguished, so it is best to have all expressions use the same kind.
+  ```julia
+  julia> julia_expression(expval_as_corrs(adag(:j)*a(:i)*σx(:k)))
+  :(aᴴ[j] * a[i] + aᴴa[j, i])
+  ```
+  Also note that expressions are always treated as arrays, even if they have no
+  indices (which gives zero-dimensional arrays). If you are working with scalar
+  quantities exclusively, it might be useful to clean up the resulting
+  expression (e.g., use `MacroTools` to remove the `[]`).
+  ```julia
+  julia> julia_expression(expval(adag()*a()*σx()))
+  :(aᴴaσ⁺[] + aᴴaσ⁻[])
+  ```
 
 ## Citing
 
-See [`CITATION.bib`](CITATION.bib) for the relevant references.
+If you use QuantumAlgebra in academic work, we would appreciate a citation. See
+[`CITATION.bib`](CITATION.bib) for the relevant references.
