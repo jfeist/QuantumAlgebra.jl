@@ -351,9 +351,12 @@ function corr(A::QuTerm)
     end
 end
 
+"`expval(A::QuExpr)`: replace expression A by its (formal) expectation value ⟨A⟩."
 expval(A::QuExpr) = _map_quexpr_ops(expval,A)
+"`expval(A::QuExpr)`: replace expression A by its (formal) correlator ⟨A⟩c."
 corr(A::QuExpr) = _map_quexpr_ops(corr,A)
 
+"`∑(ind,A::QuExpr)`: return (formal) sum of expression A over index ind."
 function ∑(ind::QuIndex,A::QuTerm)
     (issumindex(ind) || isintindex(ind)) && error("Index $ind to be summed over needs to be symbolic!")
     sumind = sumindex(A.nsuminds+one(A.nsuminds))

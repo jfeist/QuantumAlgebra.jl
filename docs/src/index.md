@@ -36,10 +36,10 @@ expressions, and the interface has been cleaned up in several places.
   QuantumAlgebra`.
 - The function to obtain expectation values is now `expval(A)` (instead of
   `ExpVal`), and `expval_as_corrs(A)` to express an expectation value through a
-  correlator / cumulant expansion, e.g., ⟨_AB_⟩ = ⟨_AB_⟩<sub>c</sub> -
-  ⟨_A_⟩<sub>c</sub> ⟨_B_⟩<sub>c</sub>, with corresponding extensions for
-  products of more operators. Note that for a single operator, ⟨_A_⟩<sub>c</sub>
-  = ⟨_A_⟩, but we distinguish the two formally for clarity.
+  correlator / cumulant expansion, e.g., ``⟨AB⟩ = ⟨AB⟩_{c}`` - ``⟨A⟩_{c}
+  ⟨B⟩_{c}``, with corresponding extensions for products of more operators. Note
+  that for a single operator, ``⟨A⟩_{c} = ⟨A⟩``, but we distinguish the two
+  formally for clarity.
 - There is a new function `julia_expression(A)` that converts a QuantumAlgebra
   object to a julia expression, which helps in using QuantumAlgebra to
   programatically derive codes for numerical implementation. The object `A`
@@ -119,7 +119,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
 
 - Arithmetic operations (`*`, `+`, `-`, `^`, `adjoint`=`'`) are supported
   (exponents must be nonnegative integers), with any `Number` types integrating
-  automatically.
+  automatically. Division by numbers is also supported.
   ```jldoctest
   julia> 5*adag(:k)*f(3)*σx(3)
   5 a†(k) f(3) σˣ(3)
@@ -152,6 +152,10 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   or alternatively by setting the environment variable
   `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any value that
   `parse(Bool,value)` parses as `true`) before `using QuantumAlgebra`.
+  ```jldoctest
+  julia> normal_form(a(:i)*adag(:j))
+  δ(ij)  + a†(j) a(i)
+  ```
 
 - `expval(A::QuExpr)` to represent an expectation value.
   ```jldoctest
@@ -235,6 +239,30 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   ```jldoctest
   julia> julia_expression(expval(adag()*a()*σx()))
   :(aᴴaσˣ[])
+  ```
+
+- By default, two-level system operators are represented by the Pauli
+  matrices `σˣʸᶻ`, and calling `σp()` and `σm()` will give results expressed through them:
+  ```jldoctest
+  julia> σp()
+  1//2 σˣ() + 1//2i σʸ()
+
+  julia> σm()
+  1//2 σˣ() - 1//2i σʸ()
+  ```
+  This can be changed by calling `QuantumAlgebra.use_σpm(true)`. In this mode,
+  `σ⁺` and `σ⁻` are the "fundamental" operators, and all expressions are written in terms of them. Note that mixing conventions within the same expression is not supported, so it is suggested to set this flag once at the beginning of any calculation.
+  ```jldoctest
+  julia> QuantumAlgebra.use_σpm(true)
+
+  julia> σp()
+  σ⁺()
+
+  julia> σx()
+  σ⁺() + σ⁻()
+
+  julia> σz()
+  -1 + 2 σ⁺() σ⁻()
   ```
 
 ## Citing

@@ -152,6 +152,10 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   or alternatively by setting the environment variable
   `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any value that
   `parse(Bool,value)` parses as `true`) before `using QuantumAlgebra`.
+  ```julia
+  julia> normal_form(a(:i)*adag(:j))
+  δ(ij)  + a†(j) a(i)
+  ```
 
 - `expval(A::QuExpr)` to represent an expectation value.
   ```julia
@@ -235,6 +239,30 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   ```julia
   julia> julia_expression(expval(adag()*a()*σx()))
   :(aᴴaσˣ[])
+  ```
+
+- By default, two-level system operators are represented by the Pauli
+  matrices `σˣʸᶻ`, and calling `σp()` and `σm()` will give results expressed through them:
+  ```julia
+  julia> σp()
+  1//2 σˣ() + 1//2i σʸ()
+
+  julia> σm()
+  1//2 σˣ() - 1//2i σʸ()
+  ```
+  This can be changed by calling `QuantumAlgebra.use_σpm(true)`. In this mode,
+  `σ⁺` and `σ⁻` are the "fundamental" operators, and all expressions are written in terms of them. Note that mixing conventions within the same expression is not supported, so it is suggested to set this flag once at the beginning of any calculation.
+  ```julia
+  julia> QuantumAlgebra.use_σpm(true)
+
+  julia> σp()
+  σ⁺()
+
+  julia> σx()
+  σ⁺() + σ⁻()
+
+  julia> σz()
+  -1 + 2 σ⁺() σ⁻()
   ```
 
 ## Citing
