@@ -65,11 +65,13 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   arguments, which can be either integers (1,2,...) or symbolic, where symbolic
   indices must be a single unicode character, with possibly an integer subindex:
   ```julia
+  julia> using QuantumAlgebra
+
   julia> a()
   a()
 
   julia> adag(:i)
-  a(i)
+  a†(i)
 
   julia> fdag(1,2,:i_9)
   f†(12i₉)
@@ -223,7 +225,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   array names. Note that expectation values and correlators are not
   distinguished, so it is best to have all expressions use the same kind.
   ```julia
-  julia> julia_expression(expval_as_corrs(adag(:j)*a(:i)*σx(:k)))
+  julia> julia_expression(expval_as_corrs(adag(:j)*a(:i)))
   :(aᴴ[j] * a[i] + aᴴa[j, i])
   ```
   Also note that expressions are always treated as arrays, even if they have no
@@ -232,7 +234,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   expression (e.g., use `MacroTools` to remove the `[]`).
   ```julia
   julia> julia_expression(expval(adag()*a()*σx()))
-  :(aᴴaσ⁺[] + aᴴaσ⁻[])
+  :(aᴴaσˣ[])
   ```
 
 ## Citing

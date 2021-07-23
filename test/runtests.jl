@@ -1,6 +1,6 @@
 using QuantumAlgebra
 using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
-using Test
+using Test, Documenter
 
 function myδ(i,j)
     iA,iB = QuIndex.((i,j))
@@ -18,6 +18,8 @@ macro test_is_normal_form(x)
 end
 
 @time @testset "QuantumAlgebra.jl" begin
+    doctest(QuantumAlgebra)
+
     @test isbitstype(QuantumAlgebra.QuIndex)
     @test isbitstype(QuantumAlgebra.QuOpName)
     if isbitstype(QuantumAlgebra.QuIndices)
