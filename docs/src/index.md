@@ -21,7 +21,7 @@ notebooks in the `examples` folder, which can be viewed online with
 and tried out interactively with
 [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/main?filepath=examples).
 
-# Updates in v0.4.0
+# Updates in v1.0.0
 This is a major revision with some breaking changes. The backend has been almost
 completely rewritten to make the code more efficient when dealing with large
 expressions, and the interface has been cleaned up in several places.
