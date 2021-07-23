@@ -182,12 +182,11 @@ QuTerm(δs::Vector{δ},Cs::Vector{Corr})   = QuTerm(0,δs,Param[],ExpVal[],Cs,Ba
 
 Base.isempty(A::QuTerm) = A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs) && isempty(A.bares)
 
-const PREFAC_TYPES = Union{Int,Float64,Rational{Int},ComplexF64,Complex{Int},Complex{Rational{Int}}}
 struct QuExpr
     # A QuantumAlgebra Expression is saved as a Dictionary of QuTerms with scalar prefactors
-    terms::Dict{QuTerm,PREFAC_TYPES}
-    QuExpr() = new(Dict{QuTerm,PREFAC_TYPES}())
-    QuExpr(terms::Dict{QuTerm,PREFAC_TYPES}) = new(terms)
+    terms::Dict{QuTerm,Number}
+    QuExpr() = new(Dict{QuTerm,Number}())
+    QuExpr(terms::Dict{QuTerm,Number}) = new(terms)
 end
 
 function QuExpr(itr)

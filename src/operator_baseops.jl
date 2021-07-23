@@ -34,7 +34,7 @@ noaliascopy(v::Vector{T}) where T<:Union{δ,Param,BaseOperator,ExpVal,Corr} = no
 noaliascopy(A::QuTerm) = QuTerm(A.nsuminds, noaliascopy(A.δs), noaliascopy(A.params),
                                 noaliascopy(A.expvals), noaliascopy(A.corrs), noaliascopy(A.bares))
 # IMPT: create a dictionary directly here, do not go through _add_sum_term
-noaliascopy(A::QuExpr) = QuExpr(Dict{QuTerm,PREFAC_TYPES}(noaliascopy(t) => s for (t,s) in A.terms))
+noaliascopy(A::QuExpr) = QuExpr(Dict{QuTerm,Number}(noaliascopy(t) => s for (t,s) in A.terms))
 
 ==(A::BaseOperator,B::BaseOperator) = A.t == B.t && A.name == B.name && A.inds == B.inds
 ==(A::BaseOpProduct,B::BaseOpProduct) = A.v == B.v
