@@ -653,6 +653,7 @@ function *(A::QuExpr,B::QuExpr)
 end
 *(A::Number,B::QuExpr) = QuExpr((tB,A*sB) for (tB,sB) in B.terms)
 *(B::QuExpr,A::Number) = A*B
+Base.:/(A::QuExpr,B::Number) = inv(B)*A
 
 +(A::QuExpr) = A
 function +(A::QuExpr,B::QuExpr)
