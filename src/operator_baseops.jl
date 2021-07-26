@@ -585,10 +585,20 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s)
     prefcorr = normal_order!(t.corrs,   newcorrterms)
 
     # normal_form(t) = t.prefs * (prefexpv*tN.ev + ev_new) * (prefcorr*tN.co + co_new) * (prefbare*tN.bare + bare_new)
-    # t has already been transformed to tN in-place and is guaranteed to be in normal order
+    # t has already been transformed to tN in-place
     pref = prefbare*prefexpv*prefcorr
-    iszero(t.nsuminds) || (t = reorder_suminds()(t))
-    iszero(pref) || _add_sum_term!(A,t,s*pref)
+    if !iszero(pref)
+        if iszero(t.nsuminds)
+            # should be guaranteed to be in normal order
+            _add_sum_term!(A,t,s*pref)
+        else
+            # might need to reorder sum indices, which can "break" our normal order
+            tn = reorder_suminds()(t)
+            # this will check again if it is in normal form to make sure
+            _add_with_normal_order!(A,tn,s*pref)
+        end
+    end
+
     isempty(newexpvterms) && isempty(newcorrterms) && isempty(newbareterms) && return
 
     firstterm = true

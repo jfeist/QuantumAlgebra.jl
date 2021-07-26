@@ -102,6 +102,14 @@ end
         @test Pr"α_i_1,μ_2" == Pr"α_{i_1,μ_2}" == param(:α,'r',:i_1,:μ_2)
         @test Pr"α_◔,◔" == Pr"α_{◔,◔}" == param(:α,'r',:◔,:◔)
 
+        @testset "normal_form with sums" begin
+            # bug report from FJ Matute
+            t1 = Pc"a_w"*Pc"B_x"*Pc"C_y"*Pc"D_z"*f(:w)*f(:x)'*f(:y)*f(:z)'
+            X1 = ∑(:w,∑(:x,∑(:y,∑(:z,t1))))
+            X2 = ∑(:w,∑(:x,∑(:y,∑(:z,normal_form(t1)))))
+            @test normal_form(X1) == normal_form(X2)
+        end
+
         @testset "use_σpm($with_σpm)" for with_σpm in (false,true)
             QuantumAlgebra.use_σpm(with_σpm)
 
