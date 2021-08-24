@@ -355,7 +355,7 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         # these operators always commute with the same type
         A.t in (BosonDestroy_,BosonCreate_,TLSCreate_,TLSDestroy_,TLSx_,TLSy_,TLSz_) && return (1,nothing)
         # these operators anticommute if they refer to the same species (name), and commute otherwise
-        A.t in (FermionDestroy_,FermionCreate_) && return (A.name == B.name ? -1 : 1,nothing)
+        A.t in (FermionDestroy_,FermionCreate_) && return (-1,nothing)
     end
 
     # different types of operators commute
@@ -382,7 +382,7 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
             dd = δ(A.inds,B.inds)
             return (-1, dd === nothing ? nothing : ExchangeResult(1,dd,nothing))
         else
-            return (1, nothing)
+            return (-1, nothing)
         end
     end
 
