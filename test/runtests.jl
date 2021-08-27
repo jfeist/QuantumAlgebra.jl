@@ -39,7 +39,16 @@ end
 
         @fermion_ops c
         @test normal_form(c(:i)*cdag(:j) + cdag(:j)*c(:i)) == myδ(:i,:j)
+        # different fermionic species commute by default
         @test normal_form(c(:i)*fdag(:j)) == fdag(:j)*c(:i)
+
+        # this creates two fermionic operators belonging to the same species (which anticommute, e.g., for itinerant and localized electrons)
+        # NB: sort order is the order in which names are given (not alphabetic like normally)
+        @anticommuting_fermion_group e d
+        # fermionic operators of the same species anticommute
+        @test iszero(normal_form(d()*e() + e()*d()))
+        # ...but different fermionic species commute
+        @test normal_form(f()*e() + e()*f()) == 2*e()*f()
 
         # all equal numbers should be equal scalars (ignore type)
         @test a() + 0 == a() + 0.0
@@ -333,6 +342,9 @@ end
 
             @test latex(a(:i_1,:i_2)) == raw"{a}_{i_{1}i_{2}}"
 
+            @test latex(normal_form(e(:i)*ddag(:j))) == "-{d}_{j}^\\dagger {e}_{i}"
+            @test latex(normal_form(f(:i)*ddag(:j))) == "{d}_{j}^\\dagger {f}_{i}"
+
             lσp = latex(σp())
             lσz = latex(σz())
             if QuantumAlgebra.using_σpm()
@@ -344,6 +356,9 @@ end
             end
 
             @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
+
+            @test string(normal_form(f(:i) * ddag(:j))) == "d†(j) f(i)"
+            @test string(normal_form(e(:i) * ddag(:j))) == "-d†(j) e(i)"
 
             @test string(normal_form(∑(:i,a(:i)) * adag(:n))) == "1 + ∑₁ a†(n) a(#₁)"
             @test string(5a(:i) + 3adag(:j) - 3f(1)) == "3 a†(j) - 3 f(1) + 5 a(i)"

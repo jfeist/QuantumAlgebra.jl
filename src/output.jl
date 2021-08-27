@@ -41,7 +41,8 @@ function Base.print(io::IO,ii::QuIndex)
     end
 end
 
-Base.print(io::IO,A::BaseOperator) = print(io,A.name,BaseOpType_sym[Int(A.t)],"(",A.inds...,")")
+_print(io::IO,A::BaseOperator) = print(io,A.name,BaseOpType_sym[Int(A.t)],"(",A.inds...,")")
+Base.print(io::IO,A::BaseOperator) = _print(io, unalias(A))
 Base.print(io::IO,A::δ) = print(io,"δ(",A.iA,A.iB,")")
 Base.print(io::IO,A::Param) = print(io, A.name, A.state=='c' ? "*" : "", length(A.inds)==0 ? "" : "($(A.inds...))")
 Base.print(io::IO,A::ExpVal) = print(io,"⟨", A.ops, "⟩")
@@ -163,7 +164,8 @@ unicode_to_latex(s::AbstractString) = join(map(c -> get(_unicode_to_latex,c,stri
 unicode_to_latex(s::QuOpName) = unicode_to_latex(string(s))
 
 printlatex(io::IO,x::Number) = print(io, imag(x)==0 ? numlatex(real(x)) : (real(x)==0 ? numlatex(imag(x))*"i" : numlatex(x)))
-printlatex(io::IO,A::BaseOperator) = print(io,"{", unicode_to_latex(A.name), "}", latexindstr(A.inds), BaseOpType_latex[Int(A.t)])
+_printlatex(io::IO,A::BaseOperator) = print(io,"{", unicode_to_latex(A.name), "}", latexindstr(A.inds), BaseOpType_latex[Int(A.t)])
+printlatex(io::IO,A::BaseOperator) = _printlatex(io, unalias(A))
 printlatex(io::IO,A::δ) = print(io, "\\delta", latexindstr(A.iA,A.iB))
 printlatex(io::IO,A::Param) = print(io, unicode_to_latex(A.name), latexindstr(A.inds), A.state=='c' ? "^{*}" : "")
 printlatex(io::IO,A::BaseOpProduct) = printlatex(io,A.v)

@@ -1,6 +1,6 @@
 export QuExpr
 export boson_ops, fermion_ops
-export @boson_ops, @fermion_ops
+export @boson_ops, @fermion_ops, @anticommuting_fermion_group
 export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
@@ -59,8 +59,10 @@ isnoindex(ii::QuIndex) = ii == NoIndex
 @inline Base.isless(i1::QuIndex,i2::QuIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
 
 const QuIndices = Vector{QuIndex}
+Base.tail(inds::QuIndices) = inds[2:end]
 assignedinds(inds::QuIndices) = inds
 # const QuIndices = NTuple{5,QuIndex}
+# # no need to define Base.tail for NTuple
 # assignedinds(inds::QuIndices) = filter(!isnoindex,inds)
 
 make_indices(inds::QuIndices) = inds
@@ -280,6 +282,23 @@ end
 "`@fermion_ops name`: define functions `\$name` and `\$(name)dag` for creating fermionic annihilation and creation operators with name `name`"
 macro fermion_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = fermion_ops($(Meta.quot(name))) )
+end
+
+"`@anticommuting_fermion_group name1 name2 ...`: define a group of mutually anticommuting fermionic operators"
+macro anticommuting_fermion_group(names...)
+    # start the groupname (which is the "internal" species name) by concatenating all names,
+    # to ensure reasonable sorting relative to other fermionic species
+    code = quote
+        groupname = Symbol($names...,gensym())
+        add_groupaliases(groupname,$names)
+        ann, cre = fermion_ops(groupname)
+    end
+    for (ii,name) in enumerate(names)
+        push!(code.args,:( $(esc(name))(args...) = ann($ii,args...) ))
+        push!(code.args,:( $(esc(Symbol(name,:dag)))(args...) = cre($ii,args...) ))
+    end
+    push!(code.args, :( nothing ))
+    code
 end
 
 # functions for constructing Pauli operators depending on whether we use (σ+,σ-) or (σx,σy,σz) as the "basic" operators
