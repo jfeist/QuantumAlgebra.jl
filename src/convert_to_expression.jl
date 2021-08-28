@@ -25,6 +25,7 @@ function julia_expression(A::Param,varnames=nothing)
 end
 julia_expression(A::δ,varnames=nothing) = :( I[$(indexpr(A)...)] )
 function julia_expression(A::Union{ExpVal,Corr},varnames=nothing)
+    A = unalias(A)
     x = varname(A)
     if varnames === nothing || x ∈ varnames
         :( $x[$(indexpr(A)...)] )

@@ -12,3 +12,5 @@ function unalias(A::BaseOperator)::BaseOperator
         A
     end
 end
+
+unalias(A::T) where T<:Union{ExpVal,Corr} = T(BaseOpProduct(unalias.(A.ops.v)))
