@@ -99,7 +99,17 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   b†(k) b(i)
   ```
   Operators with different names are assumed to belong to different "species"
-  and always commute.
+  and always commute. For fermions, this is not always desired, since you might
+  want to use different named operators to refer to different kinds of states
+  for the same species (e.g., localized and itinerant electrons). This can be
+  achieved with the macro `@anticommuting_fermion_group`, which creates several
+  fermionic operators that mutually anticommute:
+  ```julia
+  julia> @anticommuting_fermion_group c d
+
+  julia> normal_form(c()*d() + d()*c())
+  0
+  ```
 
 - `param(name::Symbol,state='n',inds...)` to create a named parameter. `state` must be
   one of `'r'`, `'n'`, or `'c'` for purely real, non-conjugated complex, and
