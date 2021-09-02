@@ -104,7 +104,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   for the same species (e.g., localized and itinerant electrons). This can be
   achieved with the macro `@anticommuting_fermion_group`, which creates several
   fermionic operators that mutually anticommute:
-  ```julia
+  ```jldoctest
   julia> @anticommuting_fermion_group c d
 
   julia> normal_form(c()*d() + d()*c())
