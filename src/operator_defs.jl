@@ -271,8 +271,15 @@ module OpConstructors
         tlsz = @eval $namez(args...) = using_σpm() ? QuExpr((QuTerm(BaseOpProduct([TLSCreate($op_name,args...),TLSDestroy($op_name,args...)]))=>2, QuTerm()=>-1)) : QuExpr(TLSz($op_name,args...))
         tlsx, tlsy, tlsz
     end
+
+    # default operators
+    boson_ops(:a)
+    fermion_ops(:f)
+    tlspm_ops(:σ)
+    tlsxyz_ops(:σ)
 end
 using .OpConstructors: boson_ops, fermion_ops, tlspm_ops, tlsxyz_ops
+using .OpConstructors: a, adag, f, fdag, σx, σy, σz, σp, σm
 
 "`@boson_ops name`: define functions `\$name` and `\$(name)dag` for creating bosonic annihilation and creation operators with name `name`"
 macro boson_ops(name)
@@ -312,12 +319,6 @@ end
 macro tlsxyz_ops(name)
     :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
 end
-
-# default operators
-@boson_ops a
-@fermion_ops f
-@tlspm_ops σ
-@tlsxyz_ops σ
 
 ## functions for constructing `param`s with string macros,
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
