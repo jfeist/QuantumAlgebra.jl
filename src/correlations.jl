@@ -1,6 +1,6 @@
 using Combinatorics
 
-export expval_as_corrs
+export expval_as_corrs, corr_as_expvals
 
 function term2corr(A::QuTerm,C::Tuple)
     corrs = noaliascopy(A.corrs)
@@ -69,6 +69,16 @@ function _add_corrs!(A,t,s,addfun! = _add_sum_term!)
     else
         for C in expval2corrs_inds(length(t.bares))
             addfun!(A,term2corr(t,C),s)
+        end
+    end
+end
+
+function _add_expvs!(A,t,s,addfun! = _add_sum_term!)
+    if isempty(t.bares)
+        addfun!(A,t,s)
+    else
+        for (C,sC) in corr2expvals_inds(length(t.bares))
+            addfun!(A,term2expvals(t,C),s*sC)
         end
     end
 end
@@ -172,4 +182,37 @@ function corr2expvals_inds(N)
         end
         [Tuple(_expval2tuple.(t.expvals))=>s for (t,s) in sort!(collect(ncA.terms),by=x->x[1])]
     end
+end
+
+function corr_as_expvals(A::QuExpr)
+    newA = QuExpr()
+    corrterms = QuExpr()
+    for (t,s) in A.terms
+        # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
+        # is assumed to be distinct from the indices of the expressions
+        # then, calculate the correction expression for the term where the sum index is the same as any of the non-summed indices,
+        # and add the correction between that and the "incorrect" term where index identity is not taken into account
+        _add_expvs!(newA,t,s)
+
+        if t.nsuminds>0 && !isempty(t.bares)
+            extinds = unique(extindices(t.bares))
+            for ii in 1:t.nsuminds
+                sumind = sumindex(ii)
+                for ind in extinds
+                    f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
+                    tb = f(t.bares)
+                    tbc = noaliascopy(tb)
+                    normal_order!(tb,corrterms)
+                    @assert isempty(corrterms)
+                    if tb != tbc
+                        tright = _normalize_without_commutation(QuTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
+                        _add_expvs!(newA,tright,s)
+                        twrong = QuTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
+                        _add_expvs!(newA,twrong,-s,_add_with_normal_order!)
+                    end
+                end
+            end
+        end
+    end
+    newA
 end
