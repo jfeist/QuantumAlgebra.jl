@@ -373,6 +373,9 @@ end
             # an empty QuTerm is the identity operator!
             @test julia_expression(QuTerm()) == 1
 
+            @test julia_expression(expval(adag(:i)a(:j)),[:aᴴa]) == :(aᴴa[i, j])
+            @test_throws ArgumentError julia_expression(expval(adag(:i)a(:j)),[:aa])
+
             x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*adag(:i_1,:J,:k)*σp(:i))
             ex = julia_expression(expval(normal_form(x)))
             if QuantumAlgebra.using_σpm()

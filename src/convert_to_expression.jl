@@ -33,7 +33,7 @@ function julia_expression(A::Union{ExpVal,Corr},varnames=nothing)
         # <A> = <A^†>^*
         Ap = A'
         x = varname(Ap)
-        x ∈ varnames || throw(ValueError("passed allowed varnames = $(varnames), but neither $(varname(A)) nor $x are valid."))
+        x ∈ varnames || throw(ArgumentError("Neither $(repr(varname(A))) nor $(repr(x)) are in the list of allowed variable names, varnames = $(varnames)."))
         # since conjugation changes the order, we have to use the indices of A after conjugation
         :( conj($x[$(indexpr(Ap)...)]) )
     end
