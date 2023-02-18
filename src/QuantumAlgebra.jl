@@ -11,7 +11,6 @@ include("vacuum_expvals.jl")
 include("convert_to_expression.jl")
 
 include("precompile.jl")
-_precompile_()
 
 function __init__()
     # WARNING: This does not work since using @eval in __init__ means the module
