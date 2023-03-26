@@ -249,12 +249,7 @@ function is_normal_form(t::QuTerm)
     end
     return true
 end
-function is_normal_form(A::QuExpr)
-    for t in keys(A.terms)
-        is_normal_form(t) || return false
-    end
-    return true
-end
+is_normal_form(A::QuExpr) = all(is_normal_form, keys(A.terms))
 
 function _normalize_without_commutation(A::QuTerm)::Union{QuTerm,Nothing}
     # first, clean up the δs
@@ -332,13 +327,13 @@ end
 
 # levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
 # for c=6-a-b, i.e, when a,b,c is a permutation of 1,2,3
-const levicivita_lut = [0 1 -1; -1 0 1; 1 -1 0]
+const levicivita_lut = ((0,1,-1), (-1,0,1), (1,-1,0))
 function ϵ_ab(A::BaseOperator,B::BaseOperator)
     # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
     a = Int(A.t) - Int(TLSx_) + 1
     b = Int(B.t) - Int(TLSx_) + 1
     c = BaseOpType(Int(TLSx_) - 1 + (6 - a - b))
-    s = @inbounds levicivita_lut[a,b]
+    s = @inbounds levicivita_lut[a][b]
     c, s
 end
 
