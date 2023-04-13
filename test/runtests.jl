@@ -334,6 +334,15 @@ end
                 @test vacExpVal(A,S) ≈ val
             end
 
+            H = Pr"ωc"*adag()*a() + Pr"ωe"*σz() + Pr"g"*σx()*(a()+adag())
+            Ls = ((Pr"κ",a()),(Pr"γ",σm()))
+            @test normal_form(heisenberg_eom(a(),H,Ls)) == -1im*Pr"g"*σx() - 1im*Pr"ωc"*a() - 1//2*Pr"κ"*a()
+            @test normal_form(heisenberg_eom(σz(),H,Ls)) == -Pr"γ"*(1+σz()) + 2Pr"g"*(σy()*a()+adag()*σy())
+
+            H = ∑(:i,∑(:j,Pr"ω_i,j"*adag(:i)*a(:j)))
+            Ls = ((:i,Pr"κ_i",a(:i)),)
+            @test normal_form(heisenberg_eom(a(:i),H,Ls)) == -1im*∑(:j,Pr"ω_i,j"*a(:j)) - 1//2*Pr"κ_i"*a(:i)
+
             tmp = ∑(:i,expval_as_corrs(adag(:n)*a(:i)))
             tmplatex = raw"\sum_{\#_{1}} \langle {a}_{n}^\dagger\rangle_{c} \langle {a}_{\#_{1}}\rangle_{c}  + \sum_{\#_{1}} \langle {a}_{n}^\dagger {a}_{\#_{1}}\rangle_{c} "
             @test latex(tmp) == tmplatex

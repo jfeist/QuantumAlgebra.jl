@@ -51,6 +51,9 @@ function QuIndex(ii::String)
 end
 QuIndex(ii::Integer) = QuIndex('\0',ii)
 sumindex(ii) = QuIndex('#',ii)
+# by convention, these should never be present in the input or output of any function,
+# but just as temporary variables that cannot conflict with any other within a computation
+tmpindex(ii) = QuIndex('!',ii)
 isintindex(ii::QuIndex) = ii.sym=='\0'
 issumindex(ii::QuIndex) = ii.sym=='#'
 const NoIndex = QuIndex(typemin(IndexInt))
