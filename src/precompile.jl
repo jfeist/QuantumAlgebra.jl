@@ -80,12 +80,6 @@ using SnoopPrecompile
         ∑(:i,∑(:j,param(:g,'r',(:i,:j))*(adag(:i)+a(:i))*σx(:j)))
     comm(adag(:n)*a(:m),H)
     comm(adag(:n)*a(:n),H)
-    for op in [a(:n),adag(:n),σx(:k),σy(:k),σz(:k)]
-        latex(op),latex(comm(op,H))
-    end
-    for op in [adag(:n)*σz(:k),a(:n)*σz(:k)]
-        latex(op),latex(comm(op,H))
-    end
 
     for op in [adag(:n)*σz(:k),a(:n)*σz(:k)]
         for x = 1:3
@@ -103,7 +97,7 @@ using SnoopPrecompile
     for i2 = (:n,:m)
         stateop = (1/√2)*adag(:n)*adag(:n)*adag(:n) + (1/√2)*adag(i2)
         for A in [adag(:n)*a(:n),adag(:n)*adag(:n)*a(:n)*a(:n)]
-            latex(A),latex(vacExpVal(A,stateop))
+            vacExpVal(A,stateop)
         end
     end
 

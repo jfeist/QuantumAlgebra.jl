@@ -335,24 +335,24 @@ end
             end
 
             tmp = ∑(:i,expval_as_corrs(adag(:n)*a(:i)))
-            tmplatex = raw"\sum_{\#_{1}}\langle {a}_{n}^\dagger \rangle_{c} \langle {a}_{\#_{1}} \rangle_{c} + \sum_{\#_{1}}\langle {a}_{n}^\dagger {a}_{\#_{1}} \rangle_{c}"
+            tmplatex = raw"\sum_{\#_{1}} \langle {a}_{n}^\dagger\rangle_{c} \langle {a}_{\#_{1}}\rangle_{c}  + \sum_{\#_{1}} \langle {a}_{n}^\dagger {a}_{\#_{1}}\rangle_{c} "
             @test latex(tmp) == tmplatex
             @test expval_as_corrs(tmp) == tmp
             @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
 
             @test latex(a(:i_1,:i_2)) == raw"{a}_{i_{1}i_{2}}"
 
-            @test latex(normal_form(e(:i)*ddag(:j))) == "-{d}_{j}^\\dagger {e}_{i}"
+            @test latex(normal_form(e(:i)*ddag(:j))) == " - {d}_{j}^\\dagger {e}_{i}"
             @test latex(normal_form(f(:i)*ddag(:j))) == "{d}_{j}^\\dagger {f}_{i}"
 
             lσp = latex(σp())
             lσz = latex(σz())
             if QuantumAlgebra.using_σpm()
-                @test lσp == "{{\\sigma}}^+"
-                @test lσz == "-1 + 2{{\\sigma}}^+ {{\\sigma}}^-"
+                @test lσp == "{\\sigma}^+"
+                @test lσz == " - 1 + 2 {\\sigma}^+ {\\sigma}^-"
             else
-                @test lσp == "\\frac{1}{2}{{\\sigma}}^x + \\frac{1}{2}i{{\\sigma}}^y"
-                @test lσz == "{{\\sigma}}^z"
+                @test lσp == "\\frac{1}{2} {\\sigma}^x + \\frac{1}{2}\\mathit{i} {\\sigma}^y"
+                @test lσz == "{\\sigma}^z"
             end
 
             @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]

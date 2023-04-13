@@ -2,6 +2,8 @@ export latex
 
 using REPL
 using Printf
+using Latexify
+using LaTeXStrings
 
 const _SUPERSCRIPTNUMS = collect("⁰¹²³⁴⁵⁶⁷⁸⁹")
 subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digits(abs(i))))
@@ -106,99 +108,84 @@ function Base.print(io::IO,A::QuExpr)
 end
 
 Base.show(io::IO, A::QuantumObject) = print(io,A)
-Base.show(io::IO, ::MIME"text/latex", A::QuantumObject) = (print(io,"\$"); printlatex(io,A); print(io,"\$"))
-
-function latex(A::Union{QuantumObject,Number})
-    io = IOBuffer()
-    printlatex(io, A)
-    String(take!(io))
-end
-
-function printlatex(io::IO,ii::QuIndex)
-    if isnoindex(ii)
-        return
-    elseif isintindex(ii)
-        print(io,ii.num)
-    elseif issumindex(ii)
-        print(io,"\\#_{",ii.num,"}")
-    else
-        print(io,ii.sym)
-        ii.num != typemin(ii.num) && print(io,"_{",ii.num,"}")
-    end
-end
-
-function printlatex(io::IO,v::Vector)
-    isempty(v) && return
-    prevA = v[1]
-    exponent = 1
-    for i = 2:length(v)
-        if v[i]==prevA
-            exponent += 1
-        else
-            # print previous object
-            exponent > 1 && print(io,"{")
-            printlatex(io,prevA)
-            exponent > 1 && print(io,"}^{",exponent,"}")
-            exponent = 1
-            prevA = v[i]
-            print(io," ")
-        end
-    end
-    # print last object
-    exponent > 1 && print(io,"{")
-    printlatex(io,prevA)
-    exponent > 1 && print(io,"}^{",exponent,"}")
-end
-
-latexjoin(args...) = join(latex.(args...))
-latexindstr(inds::QuIndex...) = latexindstr(inds)
-latexindstr(inds) = isempty(inds) ? "" : "_{$(latexjoin(inds))}"
-
-numlatex(x::Number) = @sprintf "%g" x
-numlatex(x::Rational) = denominator(x)==1 ? "$(numerator(x))" : "\\frac{$(numerator(x))}{$(denominator(x))}"
-numlatex(x::Complex) = @sprintf "(%g%+gi)" real(x) imag(x)
-numlatex(x::Complex{Rational{T}}) where T = @sprintf "\\left(%s%s%si\\right)" numlatex(real(x)) (imag(x)>=0 ? "+" : "-") numlatex(abs(imag(x)))
+Base.show(io::IO, m::MIME"text/latex", A::QuantumObject) = Base.show(io::IO, m, latexify(A))
+Base.show(io::IO, m::MIME"text/latex", A::Vector{<:QuantumObject}) = Base.show(io::IO, m, latexify(A))
+Base.show(io::IO, m::MIME"text/latex", A::Matrix{<:QuantumObject}) = Base.show(io::IO, m, latexify(A))
+Base.show(io::IO, m::MIME"text/latex", A::NTuple{N,<:QuantumObject}) where N = Base.show(io::IO, m, latexify(A))
 
 const _unicode_to_latex = Dict(v[1]=>"{$k}" for (k,v) in REPL.REPLCompletions.latex_symbols if length(v)==1)
 unicode_to_latex(s::AbstractString) = join(map(c -> get(_unicode_to_latex,c,string(c)), collect(s)))
 unicode_to_latex(s::QuOpName) = unicode_to_latex(string(s))
 
-printlatex(io::IO,x::Number) = print(io, imag(x)==0 ? numlatex(real(x)) : (real(x)==0 ? numlatex(imag(x))*"i" : numlatex(x)))
-_printlatex(io::IO,A::BaseOperator) = print(io,"{", unicode_to_latex(A.name), "}", latexindstr(A.inds), BaseOpType_latex[Int(A.t)])
-printlatex(io::IO,A::BaseOperator) = _printlatex(io, unalias(A))
-printlatex(io::IO,A::δ) = print(io, "\\delta", latexindstr(A.iA,A.iB))
-printlatex(io::IO,A::Param) = print(io, unicode_to_latex(A.name), latexindstr(A.inds), A.state=='c' ? "^{*}" : "")
-printlatex(io::IO,A::BaseOpProduct) = printlatex(io,A.v)
-printlatex(io::IO,A::ExpVal) = (print(io, "\\langle "); printlatex(io, A.ops); print(io," \\rangle"))
-printlatex(io::IO,A::Corr)   = (print(io, "\\langle "); printlatex(io, A.ops); print(io," \\rangle_{c}"))
-
-function printlatex(io::IO,A::QuTerm)
-    if A.nsuminds > 0
-        print(io,"\\sum",latexindstr(sumindex.(1:A.nsuminds)))
-    end
-    printlatex(io,A.δs)
-    printlatex(io,A.params)
-    printlatex(io,A.expvals)
-    printlatex(io,A.corrs)
-    printlatex(io,A.bares)
-end
-
-function printlatex(io::IO,A::QuExpr)
-    if isempty(A)
-        print(io,0)
-    else
-        # convert to tuples so sorting ignores the numbers if terms are different (which they are)
-        for (ii,(t,s)) in enumerate(sort!(Tuple.(collect(A.terms))))
-            if isempty(t)
-                printlatex(io,s)
-            else
-                ls = s==one(s) ? "" : (s==-one(s) ? "-" : latex(s))
-                if ii > 1 && (ls=="" || (ls[1] ∉ ('-','+')))
-                    print(io," + ")
-                end
-                print(io,ls)
-                printlatex(io,t)
-            end
+function _push_exponents!(ex,itr)
+    prevO = nothing
+    exponent = 0
+    for O in itr
+        if O==prevO
+            exponent += 1
+        else
+            exponent>0 && push!(ex.args,exponent==1 ? prevO : LaTeXString("{$(latexify(prevO))}^$exponent"))
+            exponent = 1
+            prevO = O
         end
     end
+    # last object
+    exponent>0 && push!(ex.args,exponent==1 ? prevO : LaTeXString("{$(latexify(prevO))}^$exponent"))
 end
+
+@latexrecipe function f(ii::QuIndex)
+    isnoindex(ii) && return
+    isintindex(ii) && return LaTeXString("$(ii.num)")
+    issumindex(ii) && return LaTeXString("\\#_{$(ii.num)}")
+    s = unicode_to_latex(string(ii.sym))
+    return LaTeXString(ii.num == typemin(ii.num) ? s : "$(s)_{$(ii.num)}")
+end
+latexindstr(inds) = isempty(inds) ? "" : "_{$(latexify.(inds)...)}"
+@latexrecipe function f(A::BaseOperator)
+    B = unalias(A)
+    return LaTeXString("{$(B.name)}$(latexindstr(B.inds))$(BaseOpType_latex[Int(B.t)])")
+end
+@latexrecipe function f(A::Param)
+    return LaTeXString(string("$(unicode_to_latex(A.name))$(latexindstr(A.inds))", A.state=='c' ? "^{*}" : ""))
+end
+@latexrecipe function f(A::δ)
+    return LaTeXString("\\delta$(latexindstr((A.iA,A.iB)))")
+end
+@latexrecipe function f(A::BaseOpProduct)
+    isempty(A.v) && return
+    ex = Expr(:call,:*)
+    _push_exponents!(ex,A.v)
+    return ex
+end
+@latexrecipe function f(A::ExpVal)
+    return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle")
+end
+@latexrecipe function f(A::Corr)
+    return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle_{c}")
+end
+@latexrecipe function f(A::QuTerm)
+    isempty(A) && return
+    ex = Expr(:call,:*)
+    A.nsuminds > 0 && push!(ex.args,LaTeXString("\\sum_{$(latexify.(sumindex.(1:A.nsuminds))...)}"))
+    _push_exponents!(ex,Iterators.flatten((A.δs,A.params,A.expvals,A.corrs,(A.bares,))))
+    return ex
+end
+@latexrecipe function f(A::QuExpr)
+    fmt --> FancyNumberFormatter()
+    cdot --> false
+
+    ex = 0
+    # convert to tuples so sorting ignores the numbers if terms are different (which they are)
+    for (t,s) in sort!(Tuple.(collect(A.terms)))
+        sign, s = isreal(s) && s<0 ? (-1,-s) : (1,s)
+        x = isone(s) ? (isempty(t) ? s : t) : :($s*$t)
+        if ex === 0
+            ex = isone(sign) ? x : :(-$x)
+        else
+            ex = isone(sign) ? :($ex + $x) : :($ex - $x)
+        end
+    end
+    return ex isa Expr ? ex : Expr(:latexifymerge,ex)
+end
+
+latex(A::QuantumObject) = latexify(A,env=:raw).s
