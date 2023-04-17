@@ -32,8 +32,7 @@ function (LT::SummedLindbladTerm{N,T})(A::QuExpr) where {N,T}
     tmpinds = tmpindex.(1:length(inds))
     f1 = replace_inds(inds .=> tmpinds)
     f2 = replace_inds(tmpinds .=> inds)
-    # foldr calculates ∑(i1,∑(i2,∑(i3,x))), i.e., the sum over all indices
-    foldr(∑,inds,init=LT.L(f1(A))) |> f2
+    ∑(inds,LT.L(f1(A))) |> f2
 end
 
 lindbladterm(L::QuExpr) = SingleLindbladTerm(1,L)

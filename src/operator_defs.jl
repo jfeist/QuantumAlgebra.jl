@@ -389,6 +389,8 @@ function ∑(ind::QuIndex,A::QuTerm)
     g(f(A,sumind.num))
 end
 ∑(ind::QuIndex,A::QuExpr) = _map_quexpr_ops(t->∑(ind,t),A)
-∑(ind::Symbol,A) = ∑(QuIndex(ind),A)
+∑(ind::Symbol,A::QuExpr) = ∑(QuIndex(ind),A)
+# foldr calculates ∑(i1,∑(i2,∑(i3,A))), i.e., the sum over all indices in inds
+∑(inds::T,A::QuExpr) where T<:NTuple{N,Union{Symbol,QuIndex}} where N = foldr(∑,inds,init=A)
 
 const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr}

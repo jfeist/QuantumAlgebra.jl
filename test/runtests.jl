@@ -95,6 +95,8 @@ end
         @test comm(fdag(),f()) == -comm(f(),fdag())
 
         @test ∑(:j,a(:j))*∑(:i,a(:i)) == ∑(:i,∑(:j,a(:i)*a(:j)))
+        @test ∑(:i,∑(:j,a(:i)*a(:j))) == ∑((:i,:j),a(:i)*a(:j))
+        @test ∑(:i,∑(:j,∑(:k,a(:i)*a(:j)*a(:k)))) == ∑((:i,:j,:k),a(:i)*a(:j)*a(:k))
 
         tmp = ∑(:i,adag(:i)*a(:i))
         @test tmp' == tmp
@@ -342,6 +344,10 @@ end
             H = ∑(:i,∑(:j,Pr"ω_i,j"*adag(:i)*a(:j)))
             Ls = ((:i,Pr"κ_i",a(:i)),)
             @test normal_form(heisenberg_eom(a(:i),H,Ls)) == -1im*∑(:j,Pr"ω_i,j"*a(:j)) - 1//2*Pr"κ_i"*a(:i)
+
+            H = ∑((:i,:j,:k,:l),Pr"ω_i,j,k,l"*adag(:i,:j)*a(:k,:l))
+            Ls = (((:k,:l),Pr"κ_k,l",a(:k,:l)),)
+            @test normal_form(heisenberg_eom(a(:i,:j),H,Ls)) == -1im*∑((:k,:l),Pr"ω_i,j,k,l"*a(:k,:l)) - 1//2*Pr"κ_i,j"*a(:i,:j)
 
             tmp = ∑(:i,expval_as_corrs(adag(:n)*a(:i)))
             tmplatex = raw"\sum_{\#_{1}} \langle {a}_{n}^\dagger\rangle_{c} \langle {a}_{\#_{1}}\rangle_{c}  + \sum_{\#_{1}} \langle {a}_{n}^\dagger {a}_{\#_{1}}\rangle_{c} "
