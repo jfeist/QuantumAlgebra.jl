@@ -17,7 +17,7 @@ macro concrete(expr)
 end
 
 simplify_number(x::Number) = x
-simplify_number(x::AbstractFloat) = isinteger(x) ? Int(x) : x
+simplify_number(x::AbstractFloat) = isinteger(x) && typemin(Int) <= x <= typemax(Int) ? Int(x) : x
 simplify_number(x::Rational) = isone(denominator(x)) ? numerator(x) : x
 simplify_number(x::Complex) = begin
     r, i = reim(x)
