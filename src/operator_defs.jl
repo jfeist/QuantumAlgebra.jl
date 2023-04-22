@@ -225,64 +225,60 @@ function _add_sum_term!(A::QuExpr,oB::QuTerm,sB,sold)
 end
 _map_quexpr_ops(f,A::QuExpr) = QuExpr((f(t),s) for (t,s) in A.terms)
 
-
-#################################################################
-## For the "external" functions that always construct QuExpr    ##
-#################################################################
-module OpConstructors
-    using ..QuantumAlgebra: using_σpm, QuOpName, QuTerm, QuExpr, BaseOpProduct,
-                            BosonDestroy, BosonCreate,
-                            FermionDestroy, FermionCreate,
-                            TLSDestroy, TLSCreate, TLSx, TLSy, TLSz
-
-    "`boson_ops(name::Symbol)`: return functions for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
-    function boson_ops(name::Symbol)
-        op_name = QuOpName(name)
-        namedag = Symbol(name,:dag)
-        ann = @eval $name(   args...) = QuExpr(BosonDestroy($op_name,args...))
-        cre = @eval $namedag(args...) = QuExpr(BosonCreate( $op_name,args...))
-        ann, cre
-    end
-
-    "`fermion_ops(name::Symbol)`: return functions for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
-    function fermion_ops(name::Symbol)
-        op_name = QuOpName(name)
-        namedag = Symbol(name,:dag)
-        ann = @eval $name(   args...) = QuExpr(FermionDestroy($op_name,args...))
-        cre = @eval $namedag(args...) = QuExpr(FermionCreate( $op_name,args...))
-        ann, cre
-    end
-
-    "`tlspm_ops(name::Symbol)`: return functions for creating jump operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
-    function tlspm_ops(name::Symbol)
-        op_name = QuOpName(name)
-        namep = Symbol(name,:p)
-        namem = Symbol(name,:m)
-        tlsm = @eval $namem(args...) = using_σpm() ? QuExpr(TLSDestroy($op_name,args...)) : QuExpr((QuTerm(TLSx($op_name,args...))=>1//2, QuTerm(TLSy($op_name,args...))=>-1im//2))
-        tlsp = @eval $namep(args...) = using_σpm() ? QuExpr(TLSCreate( $op_name,args...)) : QuExpr((QuTerm(TLSx($op_name,args...))=>1//2, QuTerm(TLSy($op_name,args...))=>1im//2))
-        tlsm, tlsp
-    end
-
-    "`tlsxyz_ops(name::Symbol)`: return functions for creating Pauli operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
-    function tlsxyz_ops(name::Symbol)
-        op_name = QuOpName(name)
-        namex = Symbol(name,:x)
-        namey = Symbol(name,:y)
-        namez = Symbol(name,:z)
-        tlsx = @eval $namex(args...) = using_σpm() ? QuExpr((QuTerm(TLSDestroy($op_name,args...))=>1, QuTerm(TLSCreate($op_name,args...))=>1)) : QuExpr(TLSx($op_name,args...))
-        tlsy = @eval $namey(args...) = using_σpm() ? QuExpr((QuTerm(TLSDestroy($op_name,args...))=>1im, QuTerm(TLSCreate($op_name,args...))=>-1im)) : QuExpr(TLSy($op_name,args...))
-        tlsz = @eval $namez(args...) = using_σpm() ? QuExpr((QuTerm(BaseOpProduct([TLSCreate($op_name,args...),TLSDestroy($op_name,args...)]))=>2, QuTerm()=>-1)) : QuExpr(TLSz($op_name,args...))
-        tlsx, tlsy, tlsz
-    end
-
-    # default operators
-    boson_ops(:a)
-    fermion_ops(:f)
-    tlspm_ops(:σ)
-    tlsxyz_ops(:σ)
+struct QuExprConstructor{F,Fdag} <: Function
+    name::String
+    f::F
+    namedag::String
+    fdag::Fdag
+    QuExprConstructor(name,f,namedag,fdag) = new{Core.Typeof(f),Core.Typeof(fdag)}(name,f,namedag,fdag)
+    QuExprConstructor(name,f) = QuExprConstructor(name,f,name,f)
 end
-using .OpConstructors: boson_ops, fermion_ops, tlspm_ops, tlsxyz_ops
-using .OpConstructors: a, adag, f, fdag, σx, σy, σz, σp, σm
+(q::QuExprConstructor)(args...)::QuExpr = q.f(args...)
+Base.adjoint(q::QuExprConstructor) = QuExprConstructor(q.namedag,q.fdag,q.name,q.f)
+Base.print(io::IO, q::QuExprConstructor) = print(io, q.name, " (QuExpr constructor)")
+Base.show(io::IO, q::QuExprConstructor) = print(io, q)
+Base.show(io::IO, ::MIME"text/plain", q::QuExprConstructor) = show(io, q)
+
+#################################################################
+## "external" functions that always construct QuExpr           ##
+#################################################################
+"`boson_ops(name::Symbol)`: return function for creating bosonic annihilation and creation operators with name `name` (i.e., wrappers of [`BosonDestroy`](@ref) and [`BosonCreate`](@ref))"
+function boson_ops(name::Symbol)
+    op_name = QuOpName(name)
+    c = QuExprConstructor(string(name),     (args...) -> QuExpr(BosonDestroy(op_name,args...)),
+                          string(name,"†"), (args...) -> QuExpr(BosonCreate( op_name,args...)))
+    c, c'
+end
+
+"`fermion_ops(name::Symbol)`: return function for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
+function fermion_ops(name::Symbol)
+    op_name = QuOpName(name)
+    c = QuExprConstructor(string(name),     (args...) -> QuExpr(FermionDestroy(op_name,args...)),
+                          string(name,"†"), (args...) -> QuExpr(FermionCreate( op_name,args...)))
+    c, c'
+end
+
+"`tlspm_ops(name::Symbol)`: return functions for creating jump operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
+function tlspm_ops(name::Symbol)
+    op_name = QuOpName(name)
+    namem = string(name,"m")
+    namep = string(name,"p")
+    fm = (args...) -> using_σpm() ? QuExpr(TLSDestroy(op_name,args...)) : QuExpr((QuTerm(TLSx(op_name,args...))=>1//2, QuTerm(TLSy(op_name,args...))=>-1im//2))
+    fp = (args...) -> using_σpm() ? QuExpr(TLSCreate( op_name,args...)) : QuExpr((QuTerm(TLSx(op_name,args...))=>1//2, QuTerm(TLSy(op_name,args...))=>1im//2))
+    (QuExprConstructor(namem, fm, namep, fp), QuExprConstructor(namep, fp, namem, fm))
+end
+
+"`tlsxyz_ops(name::Symbol)`: return functions for creating Pauli operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
+function tlsxyz_ops(name::Symbol)
+    op_name = QuOpName(name)
+    namex = string(name,"x")
+    namey = string(name,"y")
+    namez = string(name,"z")
+    tlsx = QuExprConstructor(namex, (args...) -> using_σpm() ? QuExpr((QuTerm(TLSDestroy(op_name,args...))=>1, QuTerm(TLSCreate(op_name,args...))=>1)) : QuExpr(TLSx(op_name,args...)))
+    tlsy = QuExprConstructor(namey, (args...) -> using_σpm() ? QuExpr((QuTerm(TLSDestroy(op_name,args...))=>1im, QuTerm(TLSCreate(op_name,args...))=>-1im)) : QuExpr(TLSy(op_name,args...)))
+    tlsz = QuExprConstructor(namez, (args...) -> using_σpm() ? QuExpr((QuTerm(BaseOpProduct([TLSCreate(op_name,args...),TLSDestroy(op_name,args...)]))=>2, QuTerm()=>-1)) : QuExpr(TLSz(op_name,args...)))
+    tlsx, tlsy, tlsz
+end
 
 "`@boson_ops name`: define functions `\$name` and `\$(name)dag` for creating bosonic annihilation and creation operators with name `name`"
 macro boson_ops(name)
@@ -304,8 +300,9 @@ macro anticommuting_fermion_group(names...)
         ann, cre = fermion_ops(groupname)
     end
     for (ii,name) in enumerate(names)
-        push!(code.args,:( $(esc(name))(args...) = ann($ii,args...) ))
-        push!(code.args,:( $(esc(Symbol(name,:dag)))(args...) = cre($ii,args...) ))
+        push!(code.args,:( $(esc(name)) = QuExprConstructor($(string(name)), (args...) -> ann($ii,args...),
+                                                            $(string(name,"†")), (args...) -> cre($ii,args... )) ))
+        push!(code.args,:( $(esc(Symbol(name,:dag))) = ($(esc(name)))' ))
     end
     push!(code.args, :( nothing ))
     code
@@ -394,3 +391,8 @@ end
 ∑(inds::T,A::QuExpr) where T<:NTuple{N,Union{Symbol,QuIndex}} where N = foldr(∑,inds,init=A)
 
 const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr}
+
+@boson_ops a
+@fermion_ops f
+@tlspm_ops σ
+@tlsxyz_ops σ
