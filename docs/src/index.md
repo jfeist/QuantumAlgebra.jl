@@ -93,7 +93,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
     `name`.
   ```jldoctest
   julia> @boson_ops b
-  (QuantumAlgebra.OpConstructors.b, QuantumAlgebra.OpConstructors.bdag)
+  (b (QuExpr constructor), b† (QuExpr constructor))
 
   julia> bdag(:k)*b(:i)
   b†(k) b(i)
