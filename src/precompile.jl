@@ -14,24 +14,24 @@ using PrecompileTools
     σx(:i)*σy(:i)
     σz(3)*σy(2)
 
-    a(:m)*adag(:n)*adag(3)*a(3)*adag(3)*a(:n)*adag(:m)
+    a(:m)*a'(:n)*a'(3)*a(3)*a'(3)*a(:n)*a'(:m)
 
     σy(1)'
     σy(:m)'
-    (adag(1)*a(:n))' == adag(:n)*a(1)
+    (a'(1)*a(:n))' == a'(:n)*a(1)
     a(1) * (σy(1) * a(1))'
 
-    tmp = ∑(:i,adag(:i)*a(:i))
-    adag(:n)*tmp
+    tmp = ∑(:i,a'(:i)*a(:i))
+    a'(:n)*tmp
     a(:n)*tmp
     σz(:n)*tmp
     tmp*2
     2*tmp
     tmp*param(:g,'n',:n)
     tmp*a(:n)
-    tmp*adag(:n)
-    tmp*(adag(:n)*adag(:n))
-    tmp*(adag(:n)*a(:n))
+    tmp*a'(:n)
+    tmp*(a'(:n)*a'(:n))
+    tmp*(a'(:n)*a(:n))
 
     ∑(:i,σx(:i))*σy(:j)
     ∑(:i,σx(:i))*σy(:a)
@@ -53,9 +53,9 @@ using PrecompileTools
 
     Pc"g_2"*Pc"g_1"*(Pc"g_3")'*Pr"b"*Pc"a"*Pr"d_3"
 
-    normal_form(a(2)*adag(2)*adag(3)*σy(1)*adag(2)*adag(4)*σz(1)*a(2)*adag(3))
+    normal_form(a(2)*a'(2)*a'(3)*σy(1)*a'(2)*a'(4)*σz(1)*a(2)*a'(3))
 
-    adag(2)*a(2)*adag(2)*σy(1) + 2*param(:g,'c',1)
+    a'(2)*a(2)*a'(2)*σy(1) + 2*param(:g,'c',1)
 
     -1//2 + σp(1) * σm(1)
 
@@ -65,11 +65,11 @@ using PrecompileTools
 
     comm(σp(1),σp(1))
     comm(σm(:n),σp(:n))
-    comm(a(2),adag(:m))
+    comm(a(2),a'(:m))
 
-    comm(a(1),adag(1)*a(1))
-    comm(a(1),adag(1)*a(2)*a(1))
-    comm(a(1),a(2)*adag(1)*a(1)*adag(2))
+    comm(a(1),a'(1)*a(1))
+    comm(a(1),a'(1)*a(2)*a(1))
+    comm(a(1),a(2)*a'(1)*a(1)*a'(2))
 
     expval_as_corrs(a(2))
     expval_as_corrs(3*a(2))
@@ -77,18 +77,24 @@ using PrecompileTools
     expval_as_corrs(a(2)*a(2))
     expval_as_corrs(2*a(1)*a(2)*a(3))
     expval_as_corrs(a(1)*a(2)*a(3)*a(4))
-    expval_as_corrs(adag(2)*a(1)*σz(1))
+    expval_as_corrs(a'(2)*a(1)*σz(1))
 
-    expval_as_corrs(param(:g,'r')*adag(3)*a(2)*a(2))
+    expval_as_corrs(param(:g,'r')*a'(3)*a(2)*a(2))
     expval_as_corrs(-1*param(:g,'r',1)*σz(1))
-    expval_as_corrs(adag(:n)*σy(:k)*a(:m)*adag(:m))
+    expval_as_corrs(a'(:n)*σy(:k)*a(:m)*a'(:m))
 
-    H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i)) + ∑(:j,(1//2)*param(:ωe,'r',:j)*σz(:j)) +
-        ∑(:i,∑(:j,param(:g,'r',(:i,:j))*(adag(:i)+a(:i))*σx(:j)))
-    comm(adag(:n)*a(:m),H)
-    comm(adag(:n)*a(:n),H)
+    H = ∑(:i,param(:ω,'r',:i)*a'(:i)*a(:i)) + ∑(:j,(1//2)*param(:ωe,'r',:j)*σz(:j)) +
+        ∑(:i,∑(:j,param(:g,'r',(:i,:j))*(a'(:i)+a(:i))*σx(:j)))
+    comm(a'(:n)*a(:m),H)
+    comm(a'(:n)*a(:n),H)
+    for op in [a(:n),a'(:n),σx(:k),σy(:k),σz(:k)]
+        comm(op,H)
+    end
+    for op in [a'(:n)*σz(:k),a(:n)*σz(:k)]
+        comm(op,H)
+    end
 
-    for op in [adag(:n)*σz(:k),a(:n)*σz(:k)]
+    for op in [a'(:n)*σz(:k),a(:n)*σz(:k)]
         for x = 1:3
             op = comm(op,H)
         end
@@ -99,11 +105,11 @@ using PrecompileTools
 
     vacA(Avac(σp(1)*σm(1)))
     vacA(Avac(σm(1)*σp(1)))
-    vacExpVal(adag(),a())
+    vacExpVal(a'(),a())
 
     for i2 = (:n,:m)
-        stateop = (1/√2)*adag(:n)*adag(:n)*adag(:n) + (1/√2)*adag(i2)
-        for A in [adag(:n)*a(:n),adag(:n)*adag(:n)*a(:n)*a(:n)]
+        stateop = (1/√2)*a'(:n)*a'(:n)*a'(:n) + (1/√2)*a'(i2)
+        for A in [a'(:n)*a(:n),a'(:n)*a'(:n)*a(:n)*a(:n)]
             vacExpVal(A,stateop)
         end
     end
@@ -115,7 +121,7 @@ using PrecompileTools
             end
             A
         end
-        H = ∑(:n,∑(:m,∑(:k,Pr"ω_n,m"*adag(:n,:k)*a(:m,:k)))) + ∑(:i,1//2*Pr"ν_i"*σz(:i)) + ∑(:n,∑(:k,∑(:i,Pr"g_i,n,k"*σx(:i)*(adag(:n,:k)+a(:n,:k)))))
+        H = ∑(:n,∑(:m,∑(:k,Pr"ω_n,m"*a'(:n,:k)*a(:m,:k)))) + ∑(:i,1//2*Pr"ν_i"*σz(:i)) + ∑(:n,∑(:k,∑(:i,Pr"g_i,n,k"*σx(:i)*(a'(:n,:k)+a(:n,:k)))))
         dotest(H,σz(:j))
     end
 

@@ -45,13 +45,13 @@ end
         @test QuantumAlgebra.using_auto_normal_form() == auto_norm
 
         @boson_ops b
-        @test normal_form(b(:i)*bdag(:j)) == bdag(:j)*b(:i) + myδ(:i,:j)
-        @test normal_form(b(:i)*adag(:j)) == adag(:j)*b(:i)
+        @test normal_form(b(:i)*b'(:j)) == b'(:j)*b(:i) + myδ(:i,:j)
+        @test normal_form(b(:i)*a'(:j)) == a'(:j)*b(:i)
 
         @fermion_ops c
-        @test normal_form(c(:i)*cdag(:j) + cdag(:j)*c(:i)) == myδ(:i,:j)
+        @test normal_form(c(:i)*c'(:j) + c'(:j)*c(:i)) == myδ(:i,:j)
         # different fermionic species commute by default
-        @test normal_form(c(:i)*fdag(:j)) == fdag(:j)*c(:i)
+        @test normal_form(c(:i)*f'(:j)) == f'(:j)*c(:i)
 
         # this creates two fermionic operators belonging to the same species (which anticommute, e.g., for itinerant and localized electrons)
         # NB: sort order is the order in which names are given (not alphabetic like normally)
@@ -91,29 +91,29 @@ end
         @test 5-a() == -a() + 5
         @test a()-5 == -5 + a()
 
-        @test a()' == adag()
-        @test normal_form(a(:m)*adag(:m)) == adag(:m)*a(:m) + 1
-        @test normal_form((a(:m)*a(1))') == adag(1)*adag(:m)
-        @test normal_form((a(1,2,:k)*a(:m))') == normal_form(adag(1,2,:k)*adag(:m))
+        @test a()' == a'()
+        @test normal_form(a(:m)*a'(:m)) == a'(:m)*a(:m) + 1
+        @test normal_form((a(:m)*a(1))') == a'(1)*a'(:m)
+        @test normal_form((a(1,2,:k)*a(:m))') == normal_form(a'(1,2,:k)*a'(:m))
 
-        @test normal_form(fdag(:a)*f(:b) + f(:b)*fdag(:a)) == myδ(:a,:b)
+        @test normal_form(f'(:a)*f(:b) + f(:b)*f'(:a)) == myδ(:a,:b)
         @test iszero(normal_form(f(:a)*f(:b) + f(:b)*f(:a)))
-        @test iszero(normal_form(fdag(:a)*fdag(:b) + fdag(:b)*fdag(:a)))
+        @test iszero(normal_form(f'(:a)*f'(:b) + f'(:b)*f'(:a)))
 
-        @test f()' == fdag()
-        @test fdag()' == f()
-        @test (fdag()*f())' == fdag()*f()
-        @test comm(fdag(),f()) == -comm(f(),fdag())
+        @test f()' == f'()
+        @test f'()' == f()
+        @test (f'()*f())' == f'()*f()
+        @test comm(f'(),f()) == -comm(f(),f'())
 
         @test ∑(:j,a(:j))*∑(:i,a(:i)) == ∑(:i,∑(:j,a(:i)*a(:j)))
         @test ∑(:i,∑(:j,a(:i)*a(:j))) == ∑((:i,:j),a(:i)*a(:j))
         @test ∑(:i,∑(:j,∑(:k,a(:i)*a(:j)*a(:k)))) == ∑((:i,:j,:k),a(:i)*a(:j)*a(:k))
 
-        tmp = ∑(:i,adag(:i)*a(:i))
+        tmp = ∑(:i,a'(:i)*a(:i))
         @test tmp' == tmp
         @test normal_form(a(:i)*∑(:i,a(:i))) == normal_form(∑(:i_1,a(:i_1)*a(:i)))
-        @test normal_form(adag(:n)*tmp) == normal_form(∑(:i,adag(:n)*adag(:i)*a(:i)))
-        @test normal_form(a(:n)   *tmp) == normal_form(∑(:i,adag(:i)*a(:n)*a(:i)) + a(:n))
+        @test normal_form(a'(:n)*tmp) == normal_form(∑(:i,a'(:n)*a'(:i)*a(:i)))
+        @test normal_form(a(:n) *tmp) == normal_form(∑(:i,a'(:i)*a(:n)*a(:i)) + a(:n))
         @test normal_form(param(:g,'n',:i)*∑(:i,a(:i))) == normal_form(∑(:i_1,param(:g,'n',:i)*a(:i_1)))
         @test normal_form(param(:g,'n',:i_1)*a(:i)*∑(:i,a(:i))) == normal_form(∑(:i_2,param(:g,'n',:i_1)*a(:i)*a(:i_2)))
         @test normal_form(param(:g,'n',:n)*∑(:i,a(:i))) == normal_form(∑(:i,param(:g,'n',:n)*a(:i)))
@@ -185,22 +185,22 @@ end
             @test normal_form(σx(:i,:j)*σz(:i,:j)) == -1im*σy(:i,:j)
             @test normal_form(σx(:i,:j)*σz(:i,:j)) != -1im*σy(:i,:k)
 
-            @test normal_form(a(1) * (σy(1) * a(1))') == normal_form(a(1) * (adag(1) * σy(1))) == normal_form(adag(1)*a(1)*σy(1) + σy(1))
+            @test normal_form(a(1) * (σy(1) * a(1))') == normal_form(a(1) * (a'(1) * σy(1))) == normal_form(a'(1)*a(1)*σy(1) + σy(1))
 
             @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:i)) == σx(:i)
             @test normal_form(σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σy(:i)*σx(:j)) == σx(:j)
 
             @test_throws ArgumentError normal_form(QuExpr(TLSx(:σ)) * QuExpr(TLSCreate(:σ)))
 
-            tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*adag(5)*a(5))
+            tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*a'(5)*a(5))
             if QuantumAlgebra.using_σpm()
                 @test length(tmp1.terms) == 1
-                @test first(tmp1.terms)[1].bares == first((adag(5)*σp(:k)*a(5)).terms)[1].bares
+                @test first(tmp1.terms)[1].bares == first((a'(5)*σp(:k)*a(5)).terms)[1].bares
             else
                 @test length(tmp1.terms) == 4
             end
 
-            x1 = ∑(:i,∑(:j,a(:i)*a(:j))) + f(:j,:k,:l)*fdag(:j,:i,:m) + a(3,8,:i)*expval(a(:i)*adag(:k))*adag(:α,:μ,:ν)
+            x1 = ∑(:i,∑(:j,a(:i)*a(:j))) + f(:j,:k,:l)*f'(:j,:i,:m) + a(3,8,:i)*expval(a(:i)*a'(:k))*a'(:α,:μ,:ν)
             x2 = σp(:k) + σx(:m)
             @test normal_form(x1 + x2) == normal_form(x1) + normal_form(x2)
             @test normal_form(x1 * x2) == normal_form(normal_form(x1) * normal_form(x2))
@@ -208,7 +208,7 @@ end
 
             @testset "is_normal_form" begin
                 y = one(QuExpr)
-                for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α), expval(adag(:c)*a(:d)))
+                for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*a'(:c), a(:i)*a'(:j)*σz(:α)*σy(:β)*σx(:α), expval(a'(:c)*a(:d)))
                     @test_is_normal_form x
                     y *= x
                     @test_is_normal_form y
@@ -217,7 +217,7 @@ end
             end
 
             @testset "exponent" begin
-                for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α), expval(adag(:c)*a(:d)))
+                for x in (σx(:i)*σy(:i), a(1) * (σy(1) * a(1))', a(:d)*a'(:c), a(:i)*a'(:j)*σz(:α)*σy(:β)*σx(:α), expval(a'(:c)*a(:d)))
                     @test isone(x^0)
                     @test x^1 == x
                     @test x^2 == x*x
@@ -229,8 +229,8 @@ end
             end
 
             @testset "Commutation inside ExpVal/Corr" begin
-                for (x1,x2,s) in ((a(:d)*adag(:c), a(:i)*adag(:j)*σz(:α)*σy(:β)*σx(:α),  expval(adag(:c)*a(:d))),
-                                (f(:d)*fdag(:c), f(:i)*fdag(:j)*σz(:α)*σy(:β)*σx(:α), -expval(fdag(:c)*f(:d))))
+                for (x1,x2,s) in ((a(:d)*a'(:c), a(:i)*a'(:j)*σz(:α)*σy(:β)*σx(:α),  expval(a'(:c)*a(:d))),
+                                (f(:d)*f'(:c), f(:i)*f'(:j)*σz(:α)*σy(:β)*σx(:α), -expval(f'(:c)*f(:d))))
                     x = ∑(:c,∑(:i,∑(:α,3*expval(x1)*x2)))
                     @test normal_form(expval(x1)) == myδ(:c,:d) + s
                     @test normal_form(3*expval(x1)) == expval(normal_form(3*x1))
@@ -279,11 +279,11 @@ end
             @test iszero(normal_form(comm(a(5)+a(3),Pc"g")))
             @test iszero(normal_form(comm(a(5)*a(3),Pc"g")))
 
-            @test normal_form(comm(a(5)+a(3),adag(5))) == normal_form(comm(a(5),adag(5))+ comm(a(3),adag(5)))
-            @test normal_form(comm(a(5)+a(3),adag(5)*a(3))) == normal_form(comm(a(5),adag(5)*a(3))+ comm(a(3),adag(5)*a(3)))
+            @test normal_form(comm(a(5)+a(3),a'(5))) == normal_form(comm(a(5),a'(5))+ comm(a(3),a'(5)))
+            @test normal_form(comm(a(5)+a(3),a'(5)*a(3))) == normal_form(comm(a(5),a'(5)*a(3))+ comm(a(3),a'(5)*a(3)))
 
-            @test normal_form(adag(2)*σy(:i) - 14Pc"ω") == normal_form(-14Pc"ω" + σy(:i)*adag(2))
-            @test normal_form(adag(2)*σy(:i)) == normal_form(σy(:i)*adag(2))
+            @test normal_form(a'(2)*σy(:i) - 14Pc"ω") == normal_form(-14Pc"ω" + σy(:i)*a'(2))
+            @test normal_form(a'(2)*σy(:i)) == normal_form(σy(:i)*a'(2))
 
             @test normal_form(σp(1) * σm(1)) == normal_form(1//2*σz(1) + 1//2)
             @test normal_form(σm(1)*σp(1)) == normal_form(1 - σp(1)*σm(1))
@@ -293,18 +293,18 @@ end
             @test iszero(comm(σp(1),σp(1)))
             @test normal_form(comm(σp(:n),σm(:n))) == normal_form(σz(:n))
 
-            @test normal_form(comm(a(1),   adag(1)*a(1))) == a(1)
-            @test normal_form(comm(adag(1),adag(1)*a(1))) == -adag(1)
+            @test normal_form(comm(a(1),   a'(1)*a(1))) == a(1)
+            @test normal_form(comm(a'(1),a'(1)*a(1))) == -a'(1)
 
             @test expval(scal(3)) == scal(3)
             @test corr(scal(3)) == scal(3)
-            @test corr(3+adag(2)) == 3 + corr(adag(2))
+            @test corr(3+a'(2)) == 3 + corr(a'(2))
 
             @test expval_as_corrs(scal(3)) == scal(3)
             @test expval_as_corrs(a(2)) == corr(a(2))
             @test expval_as_corrs(3Pc"g") == 3Pc"g"
             @test expval_as_corrs(3a(2)) == 3corr(a(2))
-            @test expval_as_corrs(3+adag(2)) == 3 + corr(adag(2))
+            @test expval_as_corrs(3+a'(2)) == 3 + corr(a'(2))
 
             @test expval_as_corrs(a(2)*a(2)) == corr(a(2)*a(2)) + corr(a(2))*corr(a(2))
             @test expval_as_corrs(a(2)*a(:m)) == corr(a(2)*a(:m)) + corr(a(2))*corr(a(:m))
@@ -327,25 +327,25 @@ end
             tmpEVs = expval.(tmpas)
             @test corr_as_expvals(*(tmpas...)) == expval(*(tmpas...)) + 2 * *(tmpEVs...) - tmpEVs[1]*expval(tmpas[2]*tmpas[3]) - tmpEVs[2]*expval(tmpas[1]*tmpas[3]) - tmpEVs[3]*expval(tmpas[1]*tmpas[2])
 
-            H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
+            H = ∑(:i,param(:ω,'r',:i)*a'(:i)*a(:i))
             @test normal_form(comm(a(:i),H)) == param(:ω,'r',:i)*a(:i)
             @test normal_form(comm(a(:n),H)) == param(:ω,'r',:n)*a(:n)
             @test normal_form(comm(H,a(:n))) == -param(:ω,'r',:n)*a(:n)
-            @test normal_form(comm(adag(:n),H)) == -param(:ω,'r',:n)*adag(:n)
-            @test normal_form(comm(adag(:n)*a(:m),H)) == (param(:ω,'r',:m)-param(:ω,'r',:n))*adag(:n)*a(:m)
+            @test normal_form(comm(a'(:n),H)) == -param(:ω,'r',:n)*a'(:n)
+            @test normal_form(comm(a'(:n)*a(:m),H)) == (param(:ω,'r',:m)-param(:ω,'r',:n))*a'(:n)*a(:m)
 
-            @test normal_form(a()*H) == normal_form(∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a()))
-            @test normal_form(a(:k)*H) == normal_form(param(:ω,'r',:k)*a(:k) + ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i)*a(:k)))
-            HH = ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i))
-            @test normal_form(a(:k,:k)*HH) == normal_form(param(:ω,'r',:k,:k)*a(:k,:k) + ∑(:i,param(:ω,'r',:i,:i)*adag(:i,:i)*a(:i,:i)*a(:k,:k)))
+            @test normal_form(a()*H) == normal_form(∑(:i,param(:ω,'r',:i)*a'(:i)*a(:i)*a()))
+            @test normal_form(a(:k)*H) == normal_form(param(:ω,'r',:k)*a(:k) + ∑(:i,param(:ω,'r',:i)*a'(:i)*a(:i)*a(:k)))
+            HH = ∑(:i,param(:ω,'r',:i,:i)*a'(:i,:i)*a(:i,:i))
+            @test normal_form(a(:k,:k)*HH) == normal_form(param(:ω,'r',:k,:k)*a(:k,:k) + ∑(:i,param(:ω,'r',:i,:i)*a'(:i,:i)*a(:i,:i)*a(:k,:k)))
 
             @test iszero(Avac(H))
             @test iszero(vacA(H))
-            @test iszero(vacA(adag(3)*σp(1)*σm(1)))
-            @test iszero(vacA(fdag(:n)))
+            @test iszero(vacA(a'(3)*σp(1)*σm(1)))
+            @test iszero(vacA(f'(:n)))
             @test vacA(f(:n)) == f(:n)
             @test vacA(a(:n)) == a(:n)
-            @test Avac(fdag(:n)) == fdag(:n)
+            @test Avac(f'(:n)) == f'(:n)
             @test iszero(Avac(f(:n)))
             @test iszero(Avac(a(3)*σp(1)*σm(1)))
             @test isone(Avac(σm(1)*σp(1)))
@@ -366,29 +366,29 @@ end
             if QuantumAlgebra.using_σpm()
                 @test normal_form(σp(:i)*σm(:k)) == σp(:i)*σm(:k)
             end
-            @test normal_form(a(:n)*adag(:n)*a(:n)*adag(:n)) == scal(1) + 3adag(:n)*a(:n) + adag(:n)*adag(:n)*a(:n)*a(:n)
+            @test normal_form(a(:n)*a'(:n)*a(:n)*a'(:n)) == scal(1) + 3a'(:n)*a(:n) + a'(:n)*a'(:n)*a(:n)*a(:n)
 
-            S = (1/√(2*6))*adag(:n)*adag(:n)*adag(:n) + (1/√2)*adag(:m)
+            S = (1/√(2*6))*a'(:n)*a'(:n)*a'(:n) + (1/√2)*a'(:m)
             for (A,val) in [(scal(1),scal(1)),
-                            (adag(:n)*a(:n),scal(1.5) + 0.5 * myδ(:n,:m)),
-                            (adag(:n)*adag(:n)*a(:n)*a(:n),scal(3))]
+                            (a'(:n)*a(:n),scal(1.5) + 0.5 * myδ(:n,:m)),
+                            (a'(:n)*a'(:n)*a(:n)*a(:n),scal(3))]
                 @test vacExpVal(A,S) ≈ val
             end
 
-            H = Pr"ωc"*adag()*a() + Pr"ωe"*σz() + Pr"g"*σx()*(a()+adag())
+            H = Pr"ωc"*a'()*a() + Pr"ωe"*σz() + Pr"g"*σx()*(a()+a'())
             Ls = ((Pr"κ",a()),(Pr"γ",σm()))
             @test normal_form(heisenberg_eom(a(),H,Ls)) == -1im*Pr"g"*σx() - 1im*Pr"ωc"*a() - 1//2*Pr"κ"*a()
-            @test normal_form(heisenberg_eom(σz(),H,Ls)) == -Pr"γ"*(1+σz()) + 2Pr"g"*(σy()*a()+adag()*σy())
+            @test normal_form(heisenberg_eom(σz(),H,Ls)) == -Pr"γ"*(1+σz()) + 2Pr"g"*(σy()*a()+a'()*σy())
 
-            H = ∑(:i,∑(:j,Pr"ω_i,j"*adag(:i)*a(:j)))
+            H = ∑(:i,∑(:j,Pr"ω_i,j"*a'(:i)*a(:j)))
             Ls = ((:i,Pr"κ_i",a(:i)),)
             @test normal_form(heisenberg_eom(a(:i),H,Ls)) == -1im*∑(:j,Pr"ω_i,j"*a(:j)) - 1//2*Pr"κ_i"*a(:i)
 
-            H = ∑((:i,:j,:k,:l),Pr"ω_i,j,k,l"*adag(:i,:j)*a(:k,:l))
+            H = ∑((:i,:j,:k,:l),Pr"ω_i,j,k,l"*a'(:i,:j)*a(:k,:l))
             Ls = (((:k,:l),Pr"κ_k,l",a(:k,:l)),)
             @test normal_form(heisenberg_eom(a(:i,:j),H,Ls)) == -1im*∑((:k,:l),Pr"ω_i,j,k,l"*a(:k,:l)) - 1//2*Pr"κ_i,j"*a(:i,:j)
 
-            tmp = ∑(:i,expval_as_corrs(adag(:n)*a(:i)))
+            tmp = ∑(:i,expval_as_corrs(a'(:n)*a(:i)))
             tmplatex = raw"\sum_{\#_{1}} \langle {a}_{n}^\dagger\rangle_{c} \langle {a}_{\#_{1}}\rangle_{c}  + \sum_{\#_{1}} \langle {a}_{n}^\dagger {a}_{\#_{1}}\rangle_{c} "
             @test latex(tmp) == tmplatex
             @test expval_as_corrs(tmp) == tmp
@@ -396,8 +396,8 @@ end
 
             @test latex(a(:i_1,:i_2)) == raw"{a}_{i_{1}i_{2}}"
 
-            @test latex(normal_form(e(:i)*ddag(:j))) == " - {d}_{j}^\\dagger {e}_{i}"
-            @test latex(normal_form(f(:i)*ddag(:j))) == "{d}_{j}^\\dagger {f}_{i}"
+            @test latex(normal_form(e(:i)*d'(:j))) == " - {d}_{j}^\\dagger {e}_{i}"
+            @test latex(normal_form(f(:i)*d'(:j))) == "{d}_{j}^\\dagger {f}_{i}"
 
             lσp = latex(σp())
             lσz = latex(σz())
@@ -409,28 +409,28 @@ end
                 @test lσz == "{{\\sigma}}^z"
             end
 
-            @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]
+            @test QuantumAlgebra.symmetric_index_nums(a'(:i)*a'(:j)*a(:k)*a(:l)) == [2,2]
 
-            @test string(normal_form(f(:i) * ddag(:j))) == "d†(j) f(i)"
-            @test string(normal_form(e(:i) * ddag(:j))) == "-d†(j) e(i)"
+            @test string(normal_form(f(:i) * d'(:j))) == "d†(j) f(i)"
+            @test string(normal_form(e(:i) * d'(:j))) == "-d†(j) e(i)"
 
-            @test string(normal_form(∑(:i,a(:i)) * adag(:n))) == "1 + ∑₁ a†(n) a(#₁)"
-            @test string(5a(:i) + 3adag(:j) - 3f(1)) == "3 a†(j) - 3 f(1) + 5 a(i)"
-            @test string(5im*a(:i) + (3+2im)*adag(:j) - 3//2*f(1)) == "(3+2i) a†(j) - 3//2 f(1) + 5i a(i)"
+            @test string(normal_form(∑(:i,a(:i)) * a'(:n))) == "1 + ∑₁ a†(n) a(#₁)"
+            @test string(5a(:i) + 3a'(:j) - 3f(1)) == "3 a†(j) - 3 f(1) + 5 a(i)"
+            @test string(5im*a(:i) + (3+2im)*a'(:j) - 3//2*f(1)) == "(3+2i) a†(j) - 3//2 f(1) + 5i a(i)"
             if QuantumAlgebra.using_σpm()
-                @test string(normal_form(a(5)*adag(5)*σp(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) + ⟨a†(5i) a(5)⟩c σ⁺(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
+                @test string(normal_form(a(5)*a'(5)*σp(3)*expval_as_corrs(a'(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σ⁺(3) + ⟨a†(5i) a(5)⟩c σ⁺(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σ⁺(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σ⁺(3) a(5)"
             else
-                @test string(normal_form(a(5)*adag(5)*σz(3)*expval_as_corrs(adag(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σᶻ(3) + ⟨a†(5i) a(5)⟩c σᶻ(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σᶻ(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σᶻ(3) a(5)"
+                @test string(normal_form(a(5)*a'(5)*σz(3)*expval_as_corrs(a'(5,:i)*a(5)))) == "⟨a†(5i)⟩c ⟨a(5)⟩c σᶻ(3) + ⟨a†(5i) a(5)⟩c σᶻ(3) + ⟨a†(5i)⟩c ⟨a(5)⟩c a†(5) σᶻ(3) a(5) + ⟨a†(5i) a(5)⟩c a†(5) σᶻ(3) a(5)"
             end
 
             @test julia_expression(QuExpr()) == 0
             # an empty QuTerm is the identity operator!
             @test julia_expression(QuTerm()) == 1
 
-            @test julia_expression(expval(adag(:i)a(:j)),[:aᴴa]) == :(aᴴa[i, j])
-            @test_throws ArgumentError julia_expression(expval(adag(:i)a(:j)),[:aa])
+            @test julia_expression(expval(a'(:i)a(:j)),[:aᴴa]) == :(aᴴa[i, j])
+            @test_throws ArgumentError julia_expression(expval(a'(:i)a(:j)),[:aa])
 
-            x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*adag(:i_1,:J,:k)*σp(:i))
+            x = ∑(:i,Pc"g_i,k"*a(:i,:j_2,:K)*a'(:i_1,:J,:k)*σp(:i))
             ex = julia_expression(expval(normal_form(x)))
             if QuantumAlgebra.using_σpm()
                 @test ex == :(I[J, j₂] * I[K, k] * g[i₁, K] * σ⁺[i₁] + g[s̄₁, k] * aᴴσ⁺a[i₁, J, k, s̄₁, s̄₁, j₂, K])
