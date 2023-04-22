@@ -1,6 +1,13 @@
 using SnoopPrecompile
 
-@precompile_all_calls begin
+@precompile_all_calls let
+    @static if !_DEFINE_DEFAULT_OPS
+        @boson_ops a
+        @fermion_ops f
+        @tlspm_ops σ
+        @tlsxyz_ops σ
+    end
+
     param(:g,'n',:k,3)'
     Pr"ω_i,j,3"
 

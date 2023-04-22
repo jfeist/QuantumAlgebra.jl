@@ -2,7 +2,7 @@
 CurrentModule = QuantumAlgebra
 ```
 ```@meta
-DocTestSetup = :( using QuantumAlgebra )
+DocTestSetup = :( using QuantumAlgebra; QuantumAlgebra.auto_normal_form(false) )
 ```
 
 # [QuantumAlgebra.jl](https://github.com/jfeist/QuantumAlgebra.jl) - quantum operator algebra in Julia

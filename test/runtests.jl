@@ -31,7 +31,7 @@ end
     @testset "auto_normal_form($auto_norm)" for auto_norm in (false,true)
         QuantumAlgebra.auto_normal_form(auto_norm)
 
-        @test QuantumAlgebra._auto_normal_form[] == auto_norm
+        @test QuantumAlgebra.using_auto_normal_form() == auto_norm
 
         @boson_ops b
         @test normal_form(b(:i)*bdag(:j)) == bdag(:j)*b(:i) + myδ(:i,:j)

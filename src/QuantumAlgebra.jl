@@ -14,28 +14,17 @@ include("eqsofmotion.jl")
 include("precompile.jl")
 
 function __init__()
-    # WARNING: This does not work since using @eval in __init__ means the module
-    # cannot be used inside any other module. The error upon precompilation of
-    # the other module is:
-    # ERROR: LoadError: InitError: Evaluation into the closed module
-    # `QuantumAlgebra` breaks incremental compilation because the side effects
-    # will not be permanent. This is likely due to some other module mutating
-    # `QuantumAlgebra` with `eval` during precompilation - don't do this.
-
-    # default_ops = parse(Bool,get(ENV,"QUANTUMALGEBRA_DEFAULT_OPS","true"))
-    # if default_ops
-    #     @eval begin
-    #         @boson_ops a
-    #         @fermion_ops f
-    #         @tlspm_ops σ
-    #         @tlsxyz_ops σ
-    #         export σx, σy, σz, σp, σm
-    #         export a, adag, f, fdag
-    #     end
-    # end
-
-    auto_normal = parse(Bool,get(ENV,"QUANTUMALGEBRA_AUTO_NORMAL_FORM","false"))
+    auto_normal = @load_preference("auto_normal_form", false)
+    if haskey(ENV,"QUANTUMALGEBRA_AUTO_NORMAL_FORM")
+        val = parse(Bool,ENV["QUANTUMALGEBRA_AUTO_NORMAL_FORM"])
+        @warn "Environment variable QUANTUMALGEBRA_AUTO_NORMAL_FORM is set to $val. This is deprecated, please instead set it through Preferences.jl by calling `QuantumAlgebra.auto_normal_form($val; set_preference=true) or `Preferences.set_preferences!(QuantumAlgebra,\"auto_normal_form\"=>$val)."
+        if !@has_preference("auto_normal_form")
+            auto_normal = val
+        end
+    end
     auto_normal_form(auto_normal)
+
+    use_σpm(@load_preference("use_σpm", false))
 end
 
 end # module

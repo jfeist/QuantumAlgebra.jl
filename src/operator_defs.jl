@@ -1,3 +1,5 @@
+using Preferences
+
 export QuExpr
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops, @anticommuting_fermion_group
@@ -5,17 +7,32 @@ export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
-export σx, σy, σz, σp, σm
-export a, adag, f, fdag
 
-# externally changeable options
+# compile-time options
+const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", true)
+function set_define_default_ops(t::Bool)
+    @set_preferences!("define_default_ops" => t)
+    if t != _DEFINE_DEFAULT_OPS
+        @info("define_default_ops setting changed to $t; restart your Julia session for this change to take effect!")
+    end
+end
+
+# dynamically changeable options
 const _using_σpm = Ref(false)
-use_σpm(t::Bool=true) = (_using_σpm[] = t; nothing)
-use_σxyz() = use_σpm(false)
+function use_σpm(t::Bool=true; set_preference=false)
+    _using_σpm[] = t
+    set_preference && @set_preferences!("use_σpm" => t)
+    nothing
+end
+use_σxyz(;set_preference=false) = use_σpm(false;set_preference)
 using_σpm() = _using_σpm[]
 
 const _auto_normal_form = Ref(false)
-auto_normal_form(t::Bool=true) = (_auto_normal_form[] = t; nothing)
+function auto_normal_form(t::Bool=true; set_preference=false)
+    _auto_normal_form[] = t
+    set_preference && @set_preferences!("auto_normal_form" => t)
+    nothing
+end
 using_auto_normal_form() = _auto_normal_form[]
 
 const IndexInt = Int32
@@ -392,7 +409,12 @@ end
 
 const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr}
 
-@boson_ops a
-@fermion_ops f
-@tlspm_ops σ
-@tlsxyz_ops σ
+@static if _DEFINE_DEFAULT_OPS
+    @boson_ops a
+    @fermion_ops f
+    @tlspm_ops σ
+    @tlsxyz_ops σ
+
+    export σx, σy, σz, σp, σm
+    export a, adag, f, fdag
+end
