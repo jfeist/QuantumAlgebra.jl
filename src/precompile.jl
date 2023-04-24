@@ -1,6 +1,6 @@
-using SnoopPrecompile
+using PrecompileTools
 
-@precompile_all_calls let
+@compile_workload let
     @static if !_DEFINE_DEFAULT_OPS
         @boson_ops a
         @fermion_ops f
