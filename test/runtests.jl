@@ -363,11 +363,11 @@ end
             lσp = latex(σp())
             lσz = latex(σz())
             if QuantumAlgebra.using_σpm()
-                @test lσp == "{\\sigma}^+"
-                @test lσz == " - 1 + 2 {\\sigma}^+ {\\sigma}^-"
+                @test lσp == "{{\\sigma}}^+"
+                @test lσz == " - 1 + 2 {{\\sigma}}^+ {{\\sigma}}^-"
             else
-                @test lσp == "\\frac{1}{2} {\\sigma}^x + \\frac{1}{2}\\mathit{i} {\\sigma}^y"
-                @test lσz == "{\\sigma}^z"
+                @test lσp == "\\frac{1}{2} {{\\sigma}}^x + \\frac{1}{2}\\mathit{i} {{\\sigma}}^y"
+                @test lσz == "{{\\sigma}}^z"
             end
 
             @test QuantumAlgebra.symmetric_index_nums(adag(:i)*adag(:j)*a(:k)*a(:l)) == [2,2]

@@ -43,8 +43,7 @@ function Base.print(io::IO,ii::QuIndex)
     end
 end
 
-_print(io::IO,A::BaseOperator) = print(io,A.name,BaseOpType_sym[Int(A.t)],"(",A.inds...,")")
-Base.print(io::IO,A::BaseOperator) = _print(io, unalias(A))
+Base.print(io::IO,A::BaseOperator) = (B = unalias(A); print(io,B.name,BaseOpType_sym[Int(B.t)],"(",B.inds...,")"))
 Base.print(io::IO,A::δ) = print(io,"δ(",A.iA,A.iB,")")
 Base.print(io::IO,A::Param) = print(io, A.name, A.state=='c' ? "*" : "", length(A.inds)==0 ? "" : "($(A.inds...))")
 Base.print(io::IO,A::ExpVal) = print(io,"⟨", A.ops, "⟩")
@@ -143,7 +142,7 @@ end
 latexindstr(inds) = isempty(inds) ? "" : "_{$(latexify.(inds)...)}"
 @latexrecipe function f(A::BaseOperator)
     B = unalias(A)
-    return LaTeXString("{$(B.name)}$(latexindstr(B.inds))$(BaseOpType_latex[Int(B.t)])")
+    return LaTeXString("{$(unicode_to_latex(B.name))}$(latexindstr(B.inds))$(BaseOpType_latex[Int(B.t)])")
 end
 @latexrecipe function f(A::Param)
     return LaTeXString(string("$(unicode_to_latex(A.name))$(latexindstr(A.inds))", A.state=='c' ? "^{*}" : ""))
