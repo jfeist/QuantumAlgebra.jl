@@ -288,6 +288,10 @@ end
                 @test expval_as_corrs(∑(:i,σy(:i)*σy(:n))) == ∑(:i,corr(σy(:i)*σy(:n))) + ∑(:i,corr(σy(:i))*corr(σy(:n))) - corr(σy(:n))*corr(σy(:n))
             end
 
+            @test corr_as_expvals(a'(:i)a(:j)) == expval(a'(:i)a(:j)) - expval(a'(:i))*expval(a(:j))
+            tmpEVs = expval.(tmpas)
+            @test corr_as_expvals(*(tmpas...)) == expval(*(tmpas...)) + 2 * *(tmpEVs...) - tmpEVs[1]*expval(tmpas[2]*tmpas[3]) - tmpEVs[2]*expval(tmpas[1]*tmpas[3]) - tmpEVs[3]*expval(tmpas[1]*tmpas[2])
+
             H = ∑(:i,param(:ω,'r',:i)*adag(:i)*a(:i))
             @test normal_form(comm(a(:i),H)) == param(:ω,'r',:i)*a(:i)
             @test normal_form(comm(a(:n),H)) == param(:ω,'r',:n)*a(:n)
