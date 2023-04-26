@@ -277,11 +277,11 @@ function _normalize_without_commutation(A::QuTerm)::Union{QuTerm,Nothing}
             if issumindex(iB) # one sum disappears, and the delta does as well
                 replacements[iB] = iA
                 # we will later need to shift all larger sumindices down by one
-                push!(delsuminds,iB.num)
+                iB.num ∈ delsuminds || push!(delsuminds,iB.num)
             elseif issumindex(iA) # one sum disappears, and the delta does as well
                 replacements[iA] = iB
                 # we will later need to shift all larger sumindices down by one
-                push!(delsuminds,iA.num)
+                iA.num ∈ delsuminds || push!(delsuminds,iA.num)
             else
                 # otherwise, replace the larger index by the smaller one
                 replacements[iB] = iA

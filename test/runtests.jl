@@ -119,6 +119,11 @@ end
             X1 = ∑(:w,∑(:x,∑(:y,∑(:z,t1))))
             X2 = ∑(:w,∑(:x,∑(:y,∑(:z,normal_form(t1)))))
             @test normal_form(X1) == normal_form(X2)
+
+            s = a(:i,:j,:k)*a'(:j,:k,:i)
+            X1 = ∑((:i,:j),s)
+            X2 = ∑((:i,:j),normal_form(s))
+            @test normal_form(X1) == normal_form(X2)
         end
 
         @testset "use_σpm($with_σpm)" for with_σpm in (false,true)
