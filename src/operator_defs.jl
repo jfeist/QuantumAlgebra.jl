@@ -410,10 +410,11 @@ end
 const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr}
 
 @static if _DEFINE_DEFAULT_OPS
-    @boson_ops a
-    @fermion_ops f
-    @tlspm_ops σ
-    @tlsxyz_ops σ
+    # do not use the macros here so that we can define the constructors as const
+    const a, adag = boson_ops(:a)
+    const f, fdag = fermion_ops(:f)
+    const σx, σy, σz = tlsxyz_ops(:σ)
+    const σm, σp = tlspm_ops(:σ)
 
     export σx, σy, σz, σp, σm
     export a, adag, f, fdag
