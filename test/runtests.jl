@@ -20,6 +20,17 @@ end
 @time @testset "QuantumAlgebra.jl" begin
     doctest(QuantumAlgebra)
 
+    @testset "variables are consts" begin
+        for name in names(QuantumAlgebra,all=true)
+            startswith(string(name),"##meta#") && continue
+            try
+                QuantumAlgebra.eval(:($name = 5))
+            catch err
+                @test err isa ErrorException && startswith(err.msg,"invalid redefinition of constant")
+            end
+        end
+    end
+
     @test isbitstype(QuantumAlgebra.QuIndex)
     @test isbitstype(QuantumAlgebra.QuOpName)
     if isbitstype(QuantumAlgebra.QuIndices)
