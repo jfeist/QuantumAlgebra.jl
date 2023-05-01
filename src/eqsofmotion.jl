@@ -36,9 +36,9 @@ function (LT::SummedLindbladTerm{N,T})(A::QuExpr) where {N,T}
 end
 
 lindbladterm(L::QuExpr) = SingleLindbladTerm(1,L)
-lindbladterm(γ,L::QuExpr) = SingleLindbladTerm(γ,L)
+lindbladterm(γ::Union{Number,QuExpr},L::QuExpr) = SingleLindbladTerm(γ,L)
 lindbladterm(Ls::NTuple{2,QuExpr}) = MixedLindbladTerm(1,Ls)
-lindbladterm(γ,Ls::NTuple{2,QuExpr}) = MixedLindbladTerm(γ,Ls)
+lindbladterm(γ::Union{Number,QuExpr},Ls::NTuple{2,QuExpr}) = MixedLindbladTerm(γ,Ls)
 lindbladterm(ind::Union{Symbol,QuIndex},args...) = lindbladterm((ind,),args...)
 lindbladterm(inds::T,args...) where T<:NTuple{N,Union{Symbol,QuIndex}} where N = SummedLindbladTerm(QuIndex.(inds),lindbladterm(args...))
 
