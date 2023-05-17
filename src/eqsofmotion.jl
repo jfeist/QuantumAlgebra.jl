@@ -27,7 +27,7 @@ function (LT::MixedLindbladTerm{T})(A::QuExpr) where T
 end
 function (LT::SummedLindbladTerm{N,T})(A::QuExpr) where {N,T}
     inds = LT.inds
-    # make sure the sum indices do not appear in A by replacing any occurences with 
+    # make sure the sum indices do not appear in A by replacing any occurences with
     # temporary indices first, and then replacing the temporary indices back afterwards
     tmpinds = tmpindex.(1:length(inds))
     f1 = replace_inds(inds .=> tmpinds)

@@ -208,7 +208,6 @@ end
                     @test_throws ArgumentError x^-1
                     @test_throws ArgumentError x^-2
                 end
-                
             end
 
             @testset "Commutation inside ExpVal/Corr" begin
