@@ -124,6 +124,24 @@ end
         @test Pr"α_i_1,μ_2" == Pr"α_{i_1,μ_2}" == param(:α,'r',:i_1,:μ_2)
         @test Pr"α_◔,◔" == Pr"α_{◔,◔}" == param(:α,'r',:◔,:◔)
 
+        @testset "index_functions" begin
+            x = QuantumAlgebra.canon_inds_remember()
+            if auto_norm
+                @test QuantumAlgebra.canon_inds()(f(5)*f(2)*a(9,:k,:m) + a(10)) == -f(:i)*f(:j)*a(:k,:l,:m) + a(:i)
+            else
+                @test QuantumAlgebra.canon_inds()(f(5)*f(2)*a(9,:k,:m) + a(10)) == f(:i)*f(:j)*a(:k,:l,:m) + a(:i)
+            end
+            t1, _ = only((f(5)*f(2)*a(9,:k,:m)).terms)
+            t2, _ = only((f(:i)*f(:j)*a(:k,:l,:m)).terms)
+            indf = QuantumAlgebra.canon_inds_remember()
+            @test indf(t1) == t2
+            @test indf.replacements == Dict(QuIndex(:i) => auto_norm ? QuIndex(2) : QuIndex(5),
+                                            QuIndex(:j) => auto_norm ? QuIndex(5) : QuIndex(2),
+                                            QuIndex(:k) => QuIndex(9), QuIndex(:l) => QuIndex(:k),
+                                            QuIndex(:m) => QuIndex(:m))
+            @test_throws ErrorException indf(a())
+    end
+
         @testset "normal_form with sums" begin
             # bug report from FJ Matute
             t1 = Pc"a_w"*Pc"B_x"*Pc"C_y"*Pc"D_z"*f(:w)*f(:x)'*f(:y)*f(:z)'
