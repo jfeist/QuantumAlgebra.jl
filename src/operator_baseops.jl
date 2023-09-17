@@ -362,7 +362,7 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         return (1,nothing)
     end
 
-    # a(i) adag(j) = adag(j) a(i) + δij
+    # a(i) a'(j) = a'(j) a(i) + δij
     if A.t == BosonCreate_ && B.t == BosonDestroy_
         if A.name == B.name && (dd = δ(A.inds,B.inds)) !== nothing
             return (1, ExchangeResult(1,dd,nothing))
@@ -371,7 +371,7 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
         end
     end
 
-    # f(i) fdag(j) = -fdag(j) f(i) + δij
+    # f(i) f'(j) = -f'(j) f(i) + δij
     if A.t == FermionCreate_ && B.t == FermionDestroy_
         if A.name == B.name
             dd = δ(A.inds,B.inds)

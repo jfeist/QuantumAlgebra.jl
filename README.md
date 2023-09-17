@@ -52,9 +52,9 @@ expressions, and the interface has been cleaned up in several places.
 
 The basic functions to create QuantumAlgebra expressions (which are of type
 `QuExpr`) are
-- `a(inds...)` and `adag(inds...)` for _a_ and _a<sup>†</sup>_, the annihilation
+- `a(inds...)` and `a'(inds...)` for _a_ and _a<sup>†</sup>_, the annihilation
   and creation operators for a bosonic mode.
-- `f(inds...)` and `fdag(inds...)` for _f_ and _f<sup>†</sup>_, the annihilation
+- `f(inds...)` and `f'(inds...)` for _f_ and _f<sup>†</sup>_, the annihilation
   and creation operators for a fermionic mode.
 - `σx(inds...)`, `σy(inds...)`, `σz(inds...)` for the Pauli matrices
   _σ<sup>x,y,z</sup>_ for a two-level system (TLS).
@@ -70,10 +70,10 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   julia> a()
   a()
 
-  julia> adag(:i)
+  julia> a'(:i)
   a†(i)
 
-  julia> fdag(1,2,:i_9)
+  julia> f'(1,2,:i_9)
   f†(12i₉)
 
   julia> σx(:i_1, 1, :j, :k_2, :μ_2, :◔_1, :😄_121)
@@ -91,11 +91,16 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   - `@tlspm_ops name` defines new functions `$(name)p()` and `$(name)m()` for
     the two-level system excitation and deexcitation operators for species
     `name`.
+  
+  Note that for `@boson_ops` and `@fermion_ops`, deprecated `$(name)dag()`
+  functions are defined for backward compatibility. These will be removed in a
+  future version, as `$(name)'()` is now the preferred syntax for creating an
+  adjoint.
   ```julia
   julia> @boson_ops b
-  (QuantumAlgebra.OpConstructors.b, QuantumAlgebra.OpConstructors.bdag)
+  (b (QuExpr constructor), b† (QuExpr constructor))
 
-  julia> bdag(:k)*b(:i)
+  julia> b'(:k)*b(:i)
   b†(k) b(i)
   ```
   Operators with different names are assumed to belong to different "species"
@@ -131,10 +136,10 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   (exponents must be nonnegative integers), with any `Number` types integrating
   automatically.
   ```julia
-  julia> 5*adag(:k)*f(3)*σx(3)
+  julia> 5*a'(:k)*f(3)*σx(3)
   5 a†(k) f(3) σˣ(3)
 
-  julia> (5//3+4im) * adag(:k)*f(3)*σx(3) + 9.4
+  julia> (5//3+4im) * a'(:k)*f(3)*σx(3) + 9.4
   9.4 + (5//3+4i) a†(k) f(3) σˣ(3)
 
   julia> (a(:i)*f(:k))'
@@ -163,29 +168,29 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any value that
   `parse(Bool,value)` parses as `true`) before `using QuantumAlgebra`.
   ```julia
-  julia> normal_form(a(:i)*adag(:j))
+  julia> normal_form(a(:i)*a'(:j))
   δ(ij)  + a†(j) a(i)
   ```
 
 - `expval(A::QuExpr)` to represent an expectation value.
   ```julia
-  julia> expval(adag(:j)*a(:i))
+  julia> expval(a'(:j)*a(:i))
   ⟨a†(j) a(i)⟩
   ```
 
 - `expval_as_corrs(A::QuExpr)` to represent an expectation value through its
   correlators, i.e., a cumulant expansion.
   ```julia
-  julia> expval_as_corrs(adag(:j)*a(:i))
+  julia> expval_as_corrs(a'(:j)*a(:i))
   ⟨a†(j)⟩c ⟨a(i)⟩c  + ⟨a†(j) a(i)⟩c
   ```
 
 - `comm(A::QuExpr,B::QuExpr)` to calculate the commutator [_A,B_] = _AB - BA_.
   ```julia
-  julia> comm(a(),adag())
+  julia> comm(a(),a'())
   -a†() a() + a() a†()
 
-  julia> normal_form(comm(a(),adag()))
+  julia> normal_form(comm(a(),a'()))
   1
   ```
 
@@ -199,13 +204,13 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   julia> Avac(a())
   0
 
-  julia> Avac(a(:i)*adag(:j))
+  julia> Avac(a(:i)*a'(:j))
   δ(ij)
 
-  julia> Avac(a()*adag()*adag())
+  julia> Avac(a()*a'()*a'())
   2 a†()
 
-  julia> vacA(a()*adag()*adag())
+  julia> vacA(a()*a'()*a'())
   0
 
   julia> Avac(σx())
@@ -219,13 +224,13 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   ⟨0|_S<sup>†</sup>AS_|0⟩, i.e., the expectation value ⟨ψ|_A_|ψ⟩ for the state
   defined by |ψ⟩=_S_|0⟩. The result is guaranteed to not contain any operators.
   ```julia
-  julia> vacExpVal(adag()*a())
+  julia> vacExpVal(a'()*a())
   0
 
-  julia> vacExpVal(adag()*a(), adag()^4/sqrt(factorial(4)))
+  julia> vacExpVal(a'()*a(), a'()^4/sqrt(factorial(4)))
   4.000000000000001
 
-  julia> vacExpVal(adag()*a(), adag()^4/sqrt(factorial(big(4))))
+  julia> vacExpVal(a'()*a(), a'()^4/sqrt(factorial(big(4))))
   4
 
   julia> vacExpVal(σx())
@@ -239,7 +244,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   array names. Note that expectation values and correlators are not
   distinguished, so it is best to have all expressions use the same kind.
   ```julia
-  julia> julia_expression(expval_as_corrs(adag(:j)*a(:i)))
+  julia> julia_expression(expval_as_corrs(a'(:j)*a(:i)))
   :(aᴴ[j] * a[i] + aᴴa[j, i])
   ```
   Also note that expressions are always treated as arrays, even if they have no
@@ -247,7 +252,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   quantities exclusively, it might be useful to clean up the resulting
   expression (e.g., use `MacroTools` to remove the `[]`).
   ```julia
-  julia> julia_expression(expval(adag()*a()*σx()))
+  julia> julia_expression(expval(a'()*a()*σx()))
   :(aᴴaσˣ[])
   ```
 

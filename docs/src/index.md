@@ -91,6 +91,11 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   - `@tlspm_ops name` defines new functions `$(name)p()` and `$(name)m()` for
     the two-level system excitation and deexcitation operators for species
     `name`.
+  
+  Note that for `@boson_ops` and `@fermion_ops`, deprecated `$(name)dag()`
+  functions are defined for backward compatibility. These will be removed in a
+  future version, as `$(name)'()` is now the preferred syntax for creating an
+  adjoint.
   ```jldoctest
   julia> @boson_ops b
   (b (QuExpr constructor), b† (QuExpr constructor))
