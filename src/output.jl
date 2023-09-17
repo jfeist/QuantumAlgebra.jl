@@ -123,13 +123,13 @@ function _push_exponents!(ex,itr)
         if O==prevO
             exponent += 1
         else
-            exponent>0 && push!(ex.args,exponent==1 ? prevO : LaTeXString("{$(latexify(prevO))}^{$exponent}"))
+            exponent>0 && push!(ex.args,exponent==1 ? prevO : LaTeXString("{$(latexify(prevO,env=:raw))}^{$exponent}"))
             exponent = 1
             prevO = O
         end
     end
     # last object
-    exponent>0 && push!(ex.args,exponent==1 ? prevO : LaTeXString("{$(latexify(prevO))}^{$exponent}"))
+    exponent>0 && push!(ex.args,exponent==1 ? prevO : LaTeXString("{$(latexify(prevO,env=:raw))}^{$exponent}"))
 end
 
 @latexrecipe function f(ii::QuIndex)
