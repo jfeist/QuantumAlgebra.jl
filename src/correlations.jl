@@ -202,11 +202,11 @@ function corr_as_expvals(A::QuExpr)
                     f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
                     tb = f(t.bares)
                     tbc = noaliascopy(tb)
-                    normal_order!(tb,corrterms)
+                    fac = normal_order!(tb,corrterms)
                     @assert isempty(corrterms)
                     if tb != tbc
                         tright = _normalize_without_commutation(QuTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
-                        _add_expvs!(newA,tright,s)
+                        _add_expvs!(newA,tright,fac*s)
                         twrong = QuTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
                         _add_expvs!(newA,twrong,-s,_add_with_normal_order!)
                     end

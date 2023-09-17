@@ -298,9 +298,11 @@ end
             if QuantumAlgebra.using_σpm()
                 @test expval_as_corrs(-param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*corr(σp(1))
                 @test expval_as_corrs(∑(:i,σp(:i)*σm(:n))) == ∑(:i,corr(σp(:i)*σm(:n))) + ∑(:i,corr(σp(:i))*corr(σm(:n)))
+                @test corr_as_expvals(∑(:i,σp(:i)*σp(:j))) == ∑(:i,expval(σp(:i)*σp(:j))) - ∑(:i,expval(σp(:i))*expval(σp(:j)))
             else
                 @test expval_as_corrs(-param(:g,'r',1)*σz(1)) == -param(:g,'r',1)*corr(σz(1))
                 @test expval_as_corrs(∑(:i,σy(:i)*σy(:n))) == ∑(:i,corr(σy(:i)*σy(:n))) + ∑(:i,corr(σy(:i))*corr(σy(:n))) - corr(σy(:n))*corr(σy(:n))
+                @test corr_as_expvals(∑(:i,σx(:i)*σy(:j))) == ∑(:i,expval(σx(:i)*σy(:j))) - ∑(:i,expval(σx(:i))*expval(σy(:j))) + expval(σx(:j))*expval(σy(:j))
             end
 
             @test corr_as_expvals(a'(:i)a(:j)) == expval(a'(:i)a(:j)) - expval(a'(:i))*expval(a(:j))
