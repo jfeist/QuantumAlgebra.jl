@@ -256,6 +256,8 @@ Base.print(io::IO, q::QuExprConstructor) = print(io, q.name, " (QuExpr construct
 Base.show(io::IO, q::QuExprConstructor) = print(io, q)
 Base.show(io::IO, ::MIME"text/plain", q::QuExprConstructor) = show(io, q)
 
+wrapdagdeprecated(f) = (args...) -> (Base.depwarn("`xdag()` constructors are deprecated, use `x'()` instead", :xdag; force=true); f(args...))
+
 #################################################################
 ## "external" functions that always construct QuExpr           ##
 #################################################################
@@ -264,7 +266,8 @@ function boson_ops(name::Symbol)
     op_name = QuOpName(name)
     c = QuExprConstructor(string(name),     (args...) -> QuExpr(BosonDestroy(op_name,args...)),
                           string(name,"†"), (args...) -> QuExpr(BosonCreate( op_name,args...)))
-    c, c'
+    cdag = QuExprConstructor(c.namedag, wrapdagdeprecated(c.fdag), c.name, wrapdagdeprecated(c.f))
+    c, cdag
 end
 
 "`fermion_ops(name::Symbol)`: return function for creating fermionic annihilation and creation operators with name `name` (i.e., wrappers of [`FermionDestroy`](@ref) and [`FermionCreate`](@ref))"
@@ -272,7 +275,8 @@ function fermion_ops(name::Symbol)
     op_name = QuOpName(name)
     c = QuExprConstructor(string(name),     (args...) -> QuExpr(FermionDestroy(op_name,args...)),
                           string(name,"†"), (args...) -> QuExpr(FermionCreate( op_name,args...)))
-    c, c'
+    cdag = QuExprConstructor(c.namedag, wrapdagdeprecated(c.fdag), c.name, wrapdagdeprecated(c.f))
+    c, cdag
 end
 
 "`tlspm_ops(name::Symbol)`: return functions for creating jump operators for a two-level system with name `name`. The output of these functions depends on setting of use_σpm."
@@ -297,12 +301,12 @@ function tlsxyz_ops(name::Symbol)
     tlsx, tlsy, tlsz
 end
 
-"`@boson_ops name`: define functions `\$name` and `\$(name)dag` for creating bosonic annihilation and creation operators with name `name`"
+"`@boson_ops name`: define function `\$name` for creating bosonic annihilation operators with name `name` (also defines deprecated `\$(name)dag`, use `\$(name)'` instead) "
 macro boson_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = boson_ops($(Meta.quot(name))) )
 end
 
-"`@fermion_ops name`: define functions `\$name` and `\$(name)dag` for creating fermionic annihilation and creation operators with name `name`"
+"`@fermion_ops name`: define function `\$name` for creating fermionic annihilation operators with name `name` (also defines deprecated `\$(name)dag`, use `\$(name)'` instead)"
 macro fermion_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = fermion_ops($(Meta.quot(name))) )
 end

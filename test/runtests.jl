@@ -31,6 +31,9 @@ end
         end
     end
 
+    @test (@test_deprecated adag()) == a'()
+    @test (@test_deprecated fdag()) == f'()
+
     @test isbitstype(QuantumAlgebra.QuIndex)
     @test isbitstype(QuantumAlgebra.QuOpName)
     if isbitstype(QuantumAlgebra.QuIndices)
