@@ -17,6 +17,16 @@ macro test_is_normal_form(x)
     end
 end
 
+"""Lenient comparison operator for `struct`, both mutable and immutable.
+Adapted from https://discourse.julialang.org/t/what-general-purpose-commands-do-you-usually-end-up-adding-to-your-projects/4889/2"""
+@generated function struct_equal(x, y)
+    if !isempty(fieldnames(x)) && x == y
+        mapreduce(n -> :(x.$n == y.$n), (a,b)->:($a && $b), fieldnames(x))
+    else
+        :(x == y)
+    end
+end
+
 @time @testset "QuantumAlgebra.jl" begin
     doctest(QuantumAlgebra)
 
@@ -143,7 +153,14 @@ end
                                             QuIndex(:k) => QuIndex(9), QuIndex(:l) => QuIndex(:k),
                                             QuIndex(:m) => QuIndex(:m))
             @test_throws ErrorException indf(a())
-    end
+
+            H = ∑((:i,:j,:k,:l),Pr"ω_i,j,k,l"*a'(:i,:j)*a(:k,:l))
+            indf = QuantumAlgebra.popped_out_suminds(QuantumAlgebra.sumindex(1))
+            @test indf(first(only(H.terms))) == first(only(∑((:x,:y,:z,:w), Pr"ω_x,i,j,k"*a'(:x,:l)*a(:m,:n)).terms))
+            @test indf.icurr == 6
+            @test indf.suminds == QuantumAlgebra.sumindex.([2,3,4,2,3,4])
+            @test_throws ErrorException indf(a())
+        end
 
         @testset "normal_form with sums" begin
             # bug report from FJ Matute
@@ -378,6 +395,15 @@ end
                 @test vacExpVal(A,S) ≈ val
             end
 
+            @test struct_equal(QuantumAlgebra.lindbladterm(a()), QuantumAlgebra.lindbladterm(1,a()))
+            @test struct_equal(QuantumAlgebra.lindbladterm((a(1),a(2))), QuantumAlgebra.lindbladterm(1,(a(1),a(2))))
+
+            @test normal_form(heisenberg_eom(a(),QuExpr(),())) == QuExpr()
+            @test normal_form(heisenberg_eom(a(),QuExpr(),((a(),),))) == -1//2*a()
+            @test normal_form(heisenberg_eom(a(),QuExpr(),(QuantumAlgebra.lindbladterm(a()),))) == -1//2*a()
+            @test normal_form(heisenberg_eom(a(),QuExpr(),((Pr"κ",a()),))) == -1//2*Pr"κ"*a()
+            @test normal_form(heisenberg_eom(a(1),QuExpr(),((Pr"κ",(a(1),a(2))),))) == -1//4*Pr"κ"*a(2)
+
             H = Pr"ωc"*a'()*a() + Pr"ωe"*σz() + Pr"g"*σx()*(a()+a'())
             Ls = ((Pr"κ",a()),(Pr"γ",σm()))
             @test normal_form(heisenberg_eom(a(),H,Ls)) == -1im*Pr"g"*σx() - 1im*Pr"ωc"*a() - 1//2*Pr"κ"*a()
@@ -412,7 +438,10 @@ end
                 @test lσz == "{{\\sigma}}^z"
             end
 
-            @test QuantumAlgebra.symmetric_index_nums(a'(:i)*a'(:j)*a(:k)*a(:l)) == [2,2]
+            A = a'(:i)*a'(:j)*a(:k)*a(:l)
+            At, _ = only(A.terms)
+            @test QuantumAlgebra.symmetric_index_nums(A) == [2,2]
+            @test QuantumAlgebra.symmetric_index_nums(At) == [2,2]
 
             @test string(normal_form(f(:i) * d'(:j))) == "d†(j) f(i)"
             @test string(normal_form(e(:i) * d'(:j))) == "-d†(j) e(i)"
