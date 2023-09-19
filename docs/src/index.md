@@ -21,34 +21,10 @@ notebooks in the `examples` folder, which can be viewed online with
 and tried out interactively with
 [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/main?filepath=examples).
 
-# Updates in v1.0.0
-This is a major revision with some breaking changes. The backend has been almost
-completely rewritten to make the code more efficient when dealing with large
-expressions, and the interface has been cleaned up in several places.
+## Release notes / changelog
+Please see the [release notes](release_notes) for a summary of changes in each version.
 
-### Important changes:
-- Canonical normal form is **not** automatically enforced by default. In order
-  to transform expressions to normal form, use `normal_form(x)`. Since automatic
-  conversion to normal form can be convenient for interactive work, it can be
-  enabled with `QuantumAlgebra.auto_normal_form(true)`, or alternatively by
-  setting the environment variable `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"`
-  (or any value that `parse(Bool,value)` parses as `true`) before `using
-  QuantumAlgebra`.
-- The function to obtain expectation values is now `expval(A)` (instead of
-  `ExpVal`), and `expval_as_corrs(A)` to express an expectation value through a
-  correlator / cumulant expansion, e.g., ``⟨AB⟩ = ⟨AB⟩_{c}`` - ``⟨A⟩_{c}
-  ⟨B⟩_{c}``, with corresponding extensions for products of more operators. Note
-  that for a single operator, ``⟨A⟩_{c} = ⟨A⟩``, but we distinguish the two
-  formally for clarity.
-- There is a new function `julia_expression(A)` that converts a QuantumAlgebra
-  object to a julia expression, which helps in using QuantumAlgebra to
-  programatically derive codes for numerical implementation. The object `A`
-  cannot contain any "bare" operators, but only expectation values or
-  correlators. See the documentation for more details.
-- QuantumAlgebra expressions are now printed in pretty format in the terminal
-  etc.
-
-# Overview
+## Overview
 
 The basic functions to create QuantumAlgebra expressions (which are of type
 `QuExpr`) are
@@ -91,7 +67,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   - `@tlspm_ops name` defines new functions `$(name)p()` and `$(name)m()` for
     the two-level system excitation and deexcitation operators for species
     `name`.
-  
+
   Note that for `@boson_ops` and `@fermion_ops`, deprecated `$(name)dag()`
   functions are defined for backward compatibility. These will be removed in a
   future version, as `$(name)'()` is now the preferred syntax for creating an
@@ -163,10 +139,10 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   operators, with σˣʸᶻ in the middle), with some additional conventions to make
   the normal form (hopefully) unique. In some contexts (e.g., interactive work),
   it can be convenient to automatically transform all expressions to normal
-  form. This can be enabled by calling `QuantumAlgebra.auto_normal_form(true)`,
-  or alternatively by setting the environment variable
-  `QUANTUMALGEBRA_AUTO_NORMAL_FORM` to `"true"` (or any value that
-  `parse(Bool,value)` parses as `true`) before `using QuantumAlgebra`.
+  form. This can be enabled by calling `QuantumAlgebra.auto_normal_form(true)`.
+  To make the setting permanent, call `QuantumAlgebra.auto_normal_form(true; set_preference=true)`
+  or alternatively use [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl) directly,
+  i.e., call `Preferences.set_preferences!(QuantumAlgebra,"auto_normal_form"=>true/false)`.
   ```jldoctest
   julia> normal_form(a(:i)*a'(:j))
   δ(ij)  + a†(j) a(i)
@@ -257,7 +233,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   ```
 
 - By default, two-level system operators are represented by the Pauli
-  matrices `σˣʸᶻ`, and calling `σp()` and `σm()` will give results expressed through them:
+  matrices ``σ^{xyz}``, and calling `σp()` and `σm()` will give results expressed through them:
   ```jldoctest
   julia> σp()
   1//2 σˣ() + 1//2i σʸ()
@@ -265,8 +241,12 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   julia> σm()
   1//2 σˣ() - 1//2i σʸ()
   ```
-  This can be changed by calling `QuantumAlgebra.use_σpm(true)`. In this mode,
-  `σ⁺` and `σ⁻` are the "fundamental" operators, and all expressions are written in terms of them. Note that mixing conventions within the same expression is not supported, so it is suggested to set this flag once at the beginning of any calculation.
+  This can be changed by calling `QuantumAlgebra.use_σpm(true; set_preference=true/false)`
+  (where the value of `set_preference` determines whether this is stored
+  permanently using Preferences.jl). In this mode, ``σ^{+}`` and ``σ^{-}`` are the
+  "fundamental" operators, and all expressions are written in terms of them.
+  Note that mixing conventions within the same expression is not supported, so
+  it is suggested to set this flag once at the beginning of any calculation.
   ```jldoctest
   julia> QuantumAlgebra.use_σpm(true)
 
@@ -279,6 +259,33 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   julia> σz()
   -1 + 2 σ⁺() σ⁻()
   ```
+
+### Preferences
+Several preferences changing the behavior of QuantumAlgebra can be set
+permanently (this uses [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl)):
+  - `"define_default_ops"`: if this is set to `false` (default is `true`), the
+    "default" operators `a, adag, f, fdag, σx, σy, σz, σp, σm` are not defined
+    upon import. Note that changing this value requires restarting the Julia
+    session to take effect. The setting can be changed with
+    `QuantumAlgebra.set_define_default_ops(true/false)` (which will inform you
+    whether a restart is required) or with
+    `Preferences.set_preferences!(QuantumAlgebra,"define_default_ops"=>true/false).`
+  - `"auto_normal_form"`: Choose whether all expressions are automatically
+    converted to normal form upon creation. The default is `false`. It can be
+    changed for a single session with
+    `QuantumAlgebra.auto_normal_form(true/false)`, and can be made permanent
+    with `QuantumAlgebra.auto_normal_form(true/false; set_preference=true)` or
+    with
+    `Preferences.set_preferences!(QuantumAlgebra,"auto_normal_form"=>true/false)`.
+    Note that this could previously be set by defining an environment variable
+    `"QUANTUMALGEBRA_AUTO_NORMAL_FORM"`, but this usage has been deprecated and
+    will be removed in a future version.
+  - `"use_σpm"`: Choose whether for two-level systems, the "basic" operators are
+    excitation/deexcitation operators ``σ^{±}`` or the Pauli matrices
+    ```σ^{xyz}``. This can be changed in a single session by calling
+    `QuantumAlgebra.use_σpm(true/false)`, and can be made permanent with
+    `QuantumAlgebra.use_σpm(true/false; set_preference=true)` or with
+    `Preferences.set_preferences!(QuantumAlgebra,"use_σpm"=>true/false)`.
 
 ## Citing
 
