@@ -163,6 +163,8 @@ end
     return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle_{c}")
 end
 @latexrecipe function f(A::QuTerm)
+    cdot --> false
+
     isempty(A) && return
     ex = Expr(:call,:*)
     A.nsuminds > 0 && push!(ex.args,LaTeXString("\\sum_{$(latexify.(sumindex.(1:A.nsuminds))...)}"))
