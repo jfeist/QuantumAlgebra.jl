@@ -63,9 +63,11 @@ function Base.hash(v::Vector{T},h::UInt) where T <: QuantumObject
     h
 end
 function Base.hash(ind::QuIndex,h::UInt)
-    h = hash(ind.sym,h)
-    h = hash(ind.num,h)
-    h
+    ### CAREFUL: This relies on the fact that QuIndex has two 32-bit components
+    ### and is the same size as a UInt64
+    GC.@preserve ind begin
+        hash(Base.unsafe_load(Ptr{UInt64}(Base.unsafe_convert(Ptr{Cvoid},Ref(ind)))), h)
+    end
 end
 function Base.hash(name::QuOpName,h::UInt)
     h = hash(name.i,h)

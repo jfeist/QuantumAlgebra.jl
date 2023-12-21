@@ -104,6 +104,14 @@ expectation value ``⟨ψ|A|ψ⟩`` for the state defined by ``|ψ⟩= S|0⟩```
 function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()))
     # simplify down as much as possible by applying vacuum from left and right
     # convert TLSx/y/z operators to TLSCreate/TLSDestroy to ensure that no bare operators survive
-    vsAsv = vacA(Avac(_TLS_to_pm_normal(stateop' * A * stateop)))
-    _map_quexpr_ops(t -> (@assert isempty(t.bares); t), vsAsv)
+    x = normal_form(A * stateop)
+    x = _TLS_to_pm_normal(stateop' * x)
+
+    vAv = QuExpr()
+    for (t,s) in x.terms
+        tn,sn = Avac(vacA(t,s)...)
+        @assert sn==0 || isempty(tn.bares)
+        _add_sum_term!(vAv,tn,simplify_number(sn))
+    end
+    vAv
 end
