@@ -2,7 +2,17 @@
 CurrentModule = QuantumAlgebra
 ```
 ```@meta
-DocTestSetup = :( using QuantumAlgebra; QuantumAlgebra.auto_normal_form(false); QuantumAlgebra.use_σxyz() )
+DocTestSetup = quote
+    using QuantumAlgebra
+    QuantumAlgebra.auto_normal_form(false)
+    QuantumAlgebra.use_σxyz()
+    @static if !QuantumAlgebra._DEFINE_DEFAULT_OPS
+        @boson_ops a
+        @fermion_ops f
+        @tlsxyz_ops σ
+        @tlspm_ops σ
+    end
+end
 ```
 
 # [QuantumAlgebra.jl](https://github.com/jfeist/QuantumAlgebra.jl) - quantum operator algebra in Julia

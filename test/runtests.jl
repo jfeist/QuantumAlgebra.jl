@@ -2,6 +2,13 @@ using QuantumAlgebra
 using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
 using Test, Documenter
 
+@static if !QuantumAlgebra._DEFINE_DEFAULT_OPS
+    @boson_ops a
+    @fermion_ops f
+    @tlsxyz_ops σ
+    @tlspm_ops σ
+end
+
 function myδ(i,j)
     iA,iB = QuIndex.((i,j))
     QuExpr(QuTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
