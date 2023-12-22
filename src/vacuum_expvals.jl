@@ -65,7 +65,7 @@ function _TLS_to_pm_normal(A::QuExpr)
         v = t.bares.v
         iTLS = findfirst(A->A.t ∈ (TLSx_,TLSy_,TLSz_), v)
         if iTLS === nothing
-            _add_with_normal_order!(An,t,s)
+            _add_with_normal_order!(An,t,s,true) # last argument is shortcut_vacA_zero
         else
             O = v[iTLS]
             if O.t == TLSx_
@@ -104,8 +104,14 @@ expectation value ``⟨ψ|A|ψ⟩`` for the state defined by ``|ψ⟩= S|0⟩```
 function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()))
     # simplify down as much as possible by applying vacuum from left and right
     # convert TLSx/y/z operators to TLSCreate/TLSDestroy to ensure that no bare operators survive
-    x = normal_form(A * stateop)
-    x = _TLS_to_pm_normal(stateop' * x)
+
+    # since we will have <vac|stateop' * A * stateop|vac>, we can simplify
+    # stateop by applying vacuum from right
+    stateop = Avac(stateop)
+    x = normal_form(stateop' * A, true) # second argument is shortcut_vacA_zero
+    # same here, simplify since we will have <vac|stateop' * A
+    x = vacA(x)
+    x = _TLS_to_pm_normal(x*stateop)
 
     vAv = QuExpr()
     for (t,s) in x.terms

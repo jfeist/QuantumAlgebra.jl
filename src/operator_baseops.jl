@@ -442,7 +442,7 @@ function _contract(A::BaseOperator,B::BaseOperator)::Tuple{Bool,ComplexInt,Union
     end
 end
 
-function normal_order!(ops::BaseOpProduct,term_collector)
+function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=false)
     # do an insertion sort to get to normal ordering
     # reference: https://en.wikipedia.org/wiki/Insertion_sort
     A = ops.v
@@ -478,6 +478,9 @@ function normal_order!(ops::BaseOpProduct,term_collector)
             # now finally exchange the two
             A[j-1], A[j] = A[j], A[j-1]
             j -= 1
+        end
+        if shortcut_vacA_zero && A[1].t in (BosonCreate_,FermionCreate_,TLSCreate_)
+            return zero(prefactor)
         end
     end
     # check if we have any products that simplify
@@ -564,7 +567,7 @@ end
 termsumiter(t::QuTerm,s,sum::QuExpr) = Base.Iterators.flatten((((t,s),), sum.terms))
 termsumiter(t,s,sum::QuExpr) = termsumiter(QuTerm(t),s,sum)
 
-function _add_with_normal_order!(A::QuExpr,t::QuTerm,s)
+function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
     # no need to do anything since everything is in normal order
     # in particular, no copy necessary!
     if is_normal_form(t)
@@ -577,7 +580,7 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s)
     newbareterms = QuExpr()
     newexpvterms = QuExpr()
     newcorrterms = QuExpr()
-    prefbare = normal_order!(t.bares,   newbareterms)
+    prefbare = normal_order!(t.bares,   newbareterms, shortcut_vacA_zero)
     prefexpv = normal_order!(t.expvals, newexpvterms)
     prefcorr = normal_order!(t.corrs,   newcorrterms)
 
@@ -592,7 +595,7 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s)
             # might need to reorder sum indices, which can "break" our normal order
             tn = reorder_suminds()(t)
             # this will check again if it is in normal form to make sure
-            _add_with_normal_order!(A,tn,s*pref)
+            _add_with_normal_order!(A,tn,s*pref,shortcut_vacA_zero)
         end
     end
 
@@ -617,16 +620,16 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s)
                 # IMPTE: nt is cleaned afterwards with _normalize_without_commutation,
                 # which creates copies of everything, so we can reuse arrays here
                 nt = QuTerm(t.nsuminds,[t.δs;tev.δs;tco.δs;tba.δs],t.params,tev.expvals,tco.corrs,tba.bares)
-                _add_with_normal_order!(A,nt,s*pref)
+                _add_with_normal_order!(A,nt,s*pref,shortcut_vacA_zero)
             end
         end
     end
 end
 
-function normal_form(A::QuExpr)
+function normal_form(A::QuExpr,shortcut_vacA_zero=false)
     An = QuExpr()
     for (t,s) in A.terms
-        _add_with_normal_order!(An,t,s)
+        _add_with_normal_order!(An,t,s,shortcut_vacA_zero)
     end
     An
 end
