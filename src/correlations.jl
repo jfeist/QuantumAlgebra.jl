@@ -122,7 +122,7 @@ function expval2corrs_inds(N::Int)
         for n = 2:N-1
             append!(terms,ncomb_inds(n,1:N))
         end
-        [(tuple(1:N...),),sort!(terms,lt=CorrPerm_isless)...]
+        Any[(tuple(1:N...),),sort!(terms,lt=CorrPerm_isless)...]
     end
 end
 # preload the cache for N=0 and N=1 so we do not have to special-case those above
