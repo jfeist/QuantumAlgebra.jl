@@ -322,7 +322,7 @@ macro anticommuting_fermion_group(names...)
     end
     for (ii,name) in enumerate(names)
         push!(code.args,:( $(esc(name)) = QuExprConstructor($(string(name)), (args...) -> ann($ii,args...),
-                                                            $(string(name,"†")), (args...) -> cre($ii,args... )) ))
+                                                            $(string(name,"†")), (args...) -> ann'($ii,args... )) ))
         push!(code.args,:( $(esc(Symbol(name,:dag))) = ($(esc(name)))' ))
     end
     push!(code.args, :( nothing ))
