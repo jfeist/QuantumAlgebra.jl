@@ -1,5 +1,6 @@
 using QuantumAlgebra
 using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
+using QuantumAlgebra: expheis, corrheis, _lindbladterm, ExpVal, Corr
 using Test, Documenter
 import Symbolics
 import SymPyPythonCall
@@ -530,5 +531,51 @@ end
                 @test julia_expression(expval(sin(x)*a())) == :( sin(x) * a[] )
             end
         end
+    end
+
+    @testset "EqSys" begin
+        QuantumAlgebra.auto_normal_form(true)
+
+        H = ∑(:i,Pr"ω_i"*a'(:i)*a(:i))
+        for (func,op) in ((expheis,expval), (corrheis,corr))
+            @test func(a(:j),H) == -1im * Pr"ω_j" * op(a(:j))
+            @test func(a'(:j),H) == 1im * Pr"ω_j" * op(a'(:j))
+            @test func(a'(:j)*a(:k),H) == 1im*(Pr"ω_j" - Pr"ω_k") * op(a'(:j)*a(:k))
+        end
+
+        Ls = _lindbladterm.(((:i,Pr"γ_i",a(:i)),))
+        ωeff = ind -> param(:ω,'r',ind) - 1im//2*param(:γ,'r',ind)
+        for (func,op) in ((expheis,expval), (corrheis,corr))
+            @test func(a(:j),H,Ls) == -1im * ωeff(:j) * op(a(:j))
+            @test func(a'(:j),H,Ls) == 1im * ωeff(:j)' * op(a'(:j))
+            @test func(a'(:j)*a(:k),H,Ls) == 1im*(ωeff(:j)' - ωeff(:k)) * op(a'(:j)*a(:k))
+        end
+
+        Ls = _lindbladterm.(((:i,Pr"γ_i",a(:i)), (:i,Pr"κ_i",a'(:i))))
+        ωeff = ind -> param(:ω,'r',ind) - 1im//2*(param(:γ,'r',ind)-param(:κ,'r',ind))
+        for (func,op) in ((expheis,expval), (corrheis,corr))
+            @test func(a(:j),H,Ls) == -1im * ωeff(:j) * op(a(:j))
+            @test func(a'(:j),H,Ls) == 1im * ωeff(:j)' * op(a'(:j))
+            @test func(a'(:j)*a(:k),H,Ls) == myδ(:j,:k)*Pr"κ_j" + 1im*(ωeff(:j)' - ωeff(:k)) * op(a'(:j)*a(:k))
+        end
+
+        lhs = a'(:j)*a'(:k)*a(:l)
+        rhs1 = 1im*(ωeff(:j)' + ωeff(:k)' - ωeff(:l)) * lhs
+        @test expheis(lhs,H,Ls) == normal_form(expval(rhs1) + Pr"κ_l"*expval(myδ(:k,:l)*a'(:j) + myδ(:j,:l)*a'(:k)))
+        @test corrheis(lhs,H,Ls) == corr(rhs1)
+
+        QuantumAlgebra.use_σxyz()
+
+        H = ∑(:i,Pr"ω_i"*a'(:i)*a(:i)) + ∑(:α,1//2*Pr"ωe_α"*σz(:α)) + ∑(:α,∑(:i,Pr"g_i,α"*(a'(:i)+a(:i))*σx(:α)))
+        Ls = ((:α,Pr"γe_α",σm(:α)),)
+
+        maxord = 2
+        EQ = EqSys{ExpVal}(H,maxord,Ls,σz(:α))
+        @test length(EQ.eqs) == 6
+
+        EQ = EqSys{Corr}(H,maxord,Ls)
+        @test length(EQ.eqs) == 15
+
+        QuantumAlgebra.auto_normal_form(false)
     end
 end
