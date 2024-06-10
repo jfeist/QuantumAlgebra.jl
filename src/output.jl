@@ -151,15 +151,21 @@ end
     return LaTeXString("\\delta$(latexindstr((A.iA,A.iB)))")
 end
 @latexrecipe function f(A::BaseOpProduct)
+    cdot --> false
+
     isempty(A.v) && return
     ex = Expr(:call,:*)
     _push_exponents!(ex,A.v)
     return ex
 end
 @latexrecipe function f(A::ExpVal)
+    cdot --> false
+
     return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle")
 end
 @latexrecipe function f(A::Corr)
+    cdot --> false
+
     return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle_{c}")
 end
 @latexrecipe function f(A::QuTerm)
