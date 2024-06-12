@@ -93,7 +93,7 @@ end
 
 numstring(x::Number) = @sprintf "%g" x
 numstring(x::Rational) = denominator(x)==1 ? string(numerator(x)) : string(x)
-numstring(x::Complex) = ((r,i) = reim(x); iszero(i) ? numstring(r) : (iszero(r) ? numstring(i)*"i" : "($(numstring(r))$(i<0 ? '-' : '+')$(numstring(abs(i)))i)"))
+numstring(x::Complex) = ((r,i) = reim(x); iszero(i) ? numstring(r) : (iszero(r) ? numstring(i)*"i" : "($(numstring(r))$((i<0)===true ? '-' : '+')$(numstring(abs(i)))i)"))
 
 function Base.print(io::IO,A::QuExpr)
     if isempty(A.terms)
