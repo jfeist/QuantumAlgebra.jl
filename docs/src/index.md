@@ -214,7 +214,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   0
 
   julia> vacExpVal(a'()*a(), a'()^4/sqrt(factorial(4)))
-  4.000000000000001
+  4
 
   julia> vacExpVal(a'()*a(), a'()^4/sqrt(factorial(big(4))))
   4
