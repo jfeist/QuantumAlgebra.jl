@@ -78,11 +78,11 @@ end
 
 function print_term_scalar(io::IO,t::QuTerm,s::Number, print_connector::Bool)
     if isempty(t)
-        print_as_connector(io,string(s),print_connector)
+        print_as_connector(io,numstring(s),print_connector)
         return
-    elseif s == -one(s)
+    elseif isequal(s, -one(s))
         str = "-"
-    elseif s == 1
+    elseif isequal(s, 1)
         str = ""
     else
         str = numstring(s)*" "
@@ -115,6 +115,9 @@ Base.show(io::IO, m::MIME"text/latex", A::NTuple{N,<:QuantumObject}) where N = B
 const _unicode_to_latex = Dict(v[1]=>"{$k}" for (k,v) in REPL.REPLCompletions.latex_symbols if length(v)==1)
 unicode_to_latex(s::AbstractString) = join(map(c -> get(_unicode_to_latex,c,string(c)), collect(s)))
 unicode_to_latex(s::QuOpName) = unicode_to_latex(string(s))
+
+# this is just to serve as an easily overloaded function to deal with "strange" Number subtypes from, e.g., Symbolics or SymPy
+numlatex(x) = x
 
 function _push_exponents!(ex,itr)
     prevO = nothing
@@ -184,8 +187,11 @@ end
     ex = 0
     # convert to tuples so sorting ignores the numbers if terms are different (which they are)
     for (t,s) in sort!(Tuple.(collect(A.terms)))
-        sign, s = isreal(s) && s<0 ? (-1,-s) : (1,s)
-        x = isone(s) ? (isempty(t) ? s : t) : :($s*$t)
+        # do the "weird" identity comparison ===true to guard against the case where s is a
+        # Number type that does not return a boolean for the < operator (e.g., Symbolics.Num)
+        sign, s = isreal(s) && (s<0)===true ? (-1,-s) : (1,s)
+        # use numlatex in case we have to treat s specially (e.g., add parenthesis for Symbolics.Num sums)
+        x = isone(s) ? (isempty(t) ? numlatex(s) : t) : Expr(:call,:*,numlatex(s),t)
         if ex === 0
             ex = isone(sign) ? x : :(-$x)
         else
