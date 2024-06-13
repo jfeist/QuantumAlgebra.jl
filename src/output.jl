@@ -106,6 +106,12 @@ function Base.print(io::IO,A::QuExpr)
     end
 end
 
+function Base.print(io::IO, eqsys::EqSys)
+    for (A,dAdt) in eqsys.eqs
+        println(io,"dₜ", A," = ", dAdt)
+    end
+end
+
 Base.show(io::IO, A::QuantumObject) = print(io,A)
 Base.show(io::IO, m::MIME"text/latex", A::QuantumObject) = Base.show(io::IO, m, latexify(A))
 Base.show(io::IO, m::MIME"text/latex", A::Vector{<:QuantumObject}) = Base.show(io::IO, m, latexify(A))
@@ -202,6 +208,13 @@ end
         end
     end
     return ex isa Expr ? ex : Expr(:latexifymerge,ex)
+end
+@latexrecipe function f(eqsys::EqSys)
+    env --> :align
+
+    # for align, we can return two vectors for the lhs and rhs of each equation
+    dAs = Expr.(:latexifymerge, "\\frac{\\mathrm{d}}{\\mathrm{d}t}", keys(eqsys.eqs))
+    return dAs, values(eqsys.eqs)
 end
 
 latex(A::QuantumObject) = latexify(A,env=:raw).s

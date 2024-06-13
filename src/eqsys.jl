@@ -1,5 +1,4 @@
-using OrderedCollections
-export EqSys, droplen, dropcorr
+export droplen, dropcorr
 
 # equation systems (EqSys)
 
@@ -79,12 +78,6 @@ function dropcorr(n,A::QuExpr)
     Anew
 end
 
-const EqDict{T<:Union{ExpVal,Corr}} = OrderedDict{T,QuExpr}
-
-struct EqSys{T<:Union{ExpVal,Corr}}
-    eqs::EqDict{T}
-end
-
 function get_opstodo(ops::Nothing,H)
     opstodo = BaseOperator[]
     for t in keys(H.terms)
@@ -135,11 +128,3 @@ function EqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
 end
 
 nicety(A::Union{ExpVal,Corr}) = count(A->A.t ∈ (BosonDestroy_,FermionDestroy_,TLSDestroy_), A.ops.v)
-
-function Base.show(io::IO, ::MIME"text/latex", eqsys::EqSys)
-    print(io,"\\begin{align}")
-    for (A,dAdt) in eqsys.eqs
-        print(io,"&\\frac{d}{dt}",latex(A)," = ",latex(dAdt),"\\\\")
-    end
-    print(io,"\\end{align}")
-end
