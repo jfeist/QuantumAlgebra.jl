@@ -12,6 +12,7 @@ include("correlations.jl")
 include("vacuum_expvals.jl")
 include("convert_to_expression.jl")
 include("eqsofmotion.jl")
+include("eqsys.jl")
 
 include("precompile.jl")
 
