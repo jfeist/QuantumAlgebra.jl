@@ -7,6 +7,7 @@ export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
+export map_scalar_function
 
 # compile-time options
 const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", true)
@@ -241,6 +242,8 @@ function _add_sum_term!(A::QuExpr,oB::QuTerm,sB,sold)
     A
 end
 _map_quexpr_ops(f,A::QuExpr) = QuExpr((f(t),s) for (t,s) in A.terms)
+
+map_scalar_function(f,A::QuExpr) = QuExpr((t,f(s)) for (t,s) in A.terms)
 
 struct QuExprConstructor{F,Fdag} <: Function
     name::String
