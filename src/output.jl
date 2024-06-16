@@ -187,9 +187,12 @@ end
     ex = 0
     # convert to tuples so sorting ignores the numbers if terms are different (which they are)
     for (t,s) in sort!(Tuple.(collect(A.terms)))
-        # do the "weird" identity comparison ===true to guard against the case where s is a
-        # Number type that does not return a boolean for the < operator (e.g., Symbolics.Num)
-        sign, s = isreal(s) && (s<0)===true ? (-1,-s) : (1,s)
+        # wrap in try/catch to handle "strange" Number subtypes from, e.g., Symbolics or SymPy
+        sign, s = try
+            isreal(s) && (s<0) ? (-1,-s) : (1,s)
+        catch
+            (1,s)
+        end
         # use numlatex in case we have to treat s specially (e.g., add parenthesis for Symbolics.Num sums)
         x = isone(s) ? (isempty(t) ? numlatex(s) : t) : Expr(:call,:*,numlatex(s),t)
         if ex === 0
