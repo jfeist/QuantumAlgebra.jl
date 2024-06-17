@@ -8,10 +8,11 @@ export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
+export @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @param
 export map_scalar_function
 
 # compile-time options
-const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", true)
+const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", false)
 function set_define_default_ops(t::Bool)
     @set_preferences!("define_default_ops" => t)
     if t != _DEFINE_DEFAULT_OPS
@@ -382,6 +383,94 @@ end
 "`@tlsxyz_ops name`: define functions `\$(name)x`, `\$(name)y`, and `\$(name)z` creating Pauli operators for a two-level system with name `name`."
 macro tlsxyz_ops(name)
     :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
+end
+
+struct QuExprCstrctArrAlias{T}
+    constructor::T
+    numdims::Int
+end
+function Base.getindex(q::QuExprCstrctArrAlias,is...)
+    length(is) == q.numdims || throw(ArgumentError("Expected $(q.numdims) indices, got $(length(is))."))
+    q.constructor(is...)
+end
+Base.adjoint(q::QuExprCstrctArrAlias) = QuExprCstrctArrAlias(q.constructor',q.numdims)
+
+function parse_name_array(expr)
+    if expr isa Symbol
+        expr, 0
+    elseif expr isa Expr && expr.head == :ref
+        name, args = expr.args[1], expr.args[2:end]
+        name isa Symbol || throw(ArgumentError("Expected symbol, got $(name)."))
+        all(args .== :(:)) || throw(ArgumentError("Expected all indices to be `:`, got $(args)."))
+        name, length(args)
+    else
+        throw(ArgumentError("Expected symbol or array statement, got $(expr)."))
+    end
+end
+
+function quexpr_variable_code(expr, opfunc, postfixes=(Symbol(),))
+    name, ndims = parse_name_array(expr)
+    funs = ntuple(i->gensym(), length(postfixes))
+    vars = esc.(Symbol.(name,postfixes))
+    code = Expr(:block, :( ($(funs...),) = $(opfunc)($(Meta.quot(name))) ))
+    for (var,fun) in zip(vars,funs)
+        rhs = iszero(ndims) ? :( $fun() ) : :( QuExprCstrctArrAlias($fun,$ndims) )
+        push!(code.args, :( $var = $rhs ))
+    end
+    push!(code.args, :( ($(vars...),) ))
+    code
+end
+
+macro boson(name) quexpr_variable_code(name, boson_ops) end
+macro fermion(name) quexpr_variable_code(name, fermion_ops) end
+macro tls(name) quexpr_variable_code(name, tlspm_ops) end
+macro tlsxyz(name) quexpr_variable_code(name, tlsxyz_ops, (:x,:y,:z)) end
+
+macro anticommuting_fermions(exprs...)
+    namesndims = parse_name_array.(exprs)
+    names = first.(namesndims)
+    # start the groupname (which is the "internal" species name) by concatenating all names,
+    # to ensure reasonable sorting relative to other fermionic species
+    code = quote
+        groupname = Symbol($names...,gensym())
+        add_groupaliases(groupname,$names)
+        ann, cre = fermion_ops(groupname)
+    end
+    ndims = -1
+    for (ii,(name,ndims_i)) in enumerate(namesndims)
+        ann_i = Symbol(:ann,ii)
+        ndims == -1 && (ndims = ndims_i)
+        ndims_i == ndims || throw(ArgumentError("All fermionic species in a group must have the same number of indices, got $(ndims_i) for $(name), expected $(ndims)."))
+        push!(code.args,:( $ann_i = QuExprConstructor($(string(name)), (args...) -> ann($ii,args...), $(string(name,"†")), (args...) -> ann'($ii,args... )) ))
+        if ndims==0
+            push!(code.args, :( $(esc(Symbol(name))) = $(ann_i)() ))
+        else
+            push!(code.args, :( $(esc(Symbol(name))) = QuExprCstrctArrAlias($(ann_i),$ndims) ))
+        end
+    end
+    push!(code.args, :( nothing ))
+    code
+end
+
+macro param(name)
+    partype = :Real
+    if name isa Expr && name.head == :(::)
+        @assert length(name.args) == 2
+        name, partype = name.args
+        partype ∈ (:Real, :Complex) || throw(ArgumentError("Expected `::Complex` or `::Real`, got `::$(partype)`."))
+    end
+    name, ndims = parse_name_array(name)
+    state = partype == :Complex ? 'n' : 'r'
+    if ndims == 0
+        :( $(esc(Symbol(name))) = param($(Meta.quot(name)),$state) )
+    else
+        cstrctfun(state) = :( (args...) -> param($(Meta.quot(name)), $state,  args...) )
+        cstrctargs = (string(name), cstrctfun(state))
+        if state == 'n'
+            cstrctargs = (cstrctargs..., string(name,"*"), cstrctfun('c'))
+        end
+        :( $(esc(Symbol(name))) = QuExprCstrctArrAlias(QuExprConstructor($(cstrctargs...)),$ndims) )
+    end
 end
 
 ## functions for constructing `param`s with string macros,
