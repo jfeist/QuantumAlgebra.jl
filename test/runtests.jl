@@ -2,7 +2,7 @@ using QuantumAlgebra
 using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
 using Test, Documenter
 import Symbolics
-import SymPy
+import SymPyPythonCall
 
 @static if !QuantumAlgebra._DEFINE_DEFAULT_OPS
     @boson_ops a
@@ -496,8 +496,8 @@ end
                 @test julia_expression(expval(sin(x)*a())) == Expr(:call, :*, Expr(:call, sin, :x), :(a[]))
             end
 
-            @testset "SymPy.jl interop" begin
-                SymPy.@syms w x
+            @testset "SymPyPythonCall.jl interop" begin
+                SymPyPythonCall.@syms w x
                 ex = x * a'() * a() * w
                 @test string(ex) == "w*x a†() a()"
                 @test latex(ex) == "w x {a}^\\dagger {a}"
@@ -509,7 +509,7 @@ end
                 ex = -cos(x)^2 * a() + sin(x)^2 * a()
                 @test string(ex) == "(sin(x)^2 - cos(x)^2) a()"
                 @test latex(ex) == raw"\left(\sin^{2}\left( x \right) - \cos^{2}\left( x \right)\right) {a}"
-                @test map_scalar_function(SymPy.simplify, ex) == -cos(2x)*a()
+                @test map_scalar_function(SymPyPythonCall.simplify, ex) == -cos(2x)*a()
 
                 @test julia_expression(expval(sin(x)*a())) == :( sin(x) * a[] )
             end
