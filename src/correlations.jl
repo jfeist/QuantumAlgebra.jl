@@ -62,6 +62,7 @@ function expval_as_corrs(A::QuExpr)
     end
     newA
 end
+expval_as_corrs(A::Number) = expval_as_corrs(QuExpr(A))
 
 function _add_corrs!(A,t,s,addfun! = _add_sum_term!)
     if isempty(t.bares)
@@ -216,3 +217,5 @@ function corr_as_expvals(A::QuExpr)
     end
     newA
 end
+
+corr_as_expvals(A::Number) = corr_as_expvals(QuExpr(A))

@@ -633,6 +633,7 @@ function normal_form(A::QuExpr,shortcut_vacA_zero=false)
     end
     An
 end
+normal_form(A::Number) = QuExpr(A)
 
 function *(A::QuTerm,B::QuTerm)
     nsuminds = A.nsuminds + B.nsuminds

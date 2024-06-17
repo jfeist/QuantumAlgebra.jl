@@ -48,6 +48,9 @@ end
 
 Avac(A::QuExpr) = QuExpr(Avac(t,s) for (t,s) in normal_form(A).terms)
 vacA(A::QuExpr) = QuExpr(vacA(t,s) for (t,s) in normal_form(A).terms)
+Avac(s::Number) = QuExpr(s)
+vacA(s::Number) = QuExpr(s)
+
 
 """
     Avac(A::QuExpr), vacA(A::QuExpr)
@@ -121,3 +124,6 @@ function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()))
     end
     vAv
 end
+
+vacExpVal(A::QuExpr,stateop::Number) = vacExpVal(A,QuExpr(stateop))
+vacExpVal(A::Number,stateop=1) = vacExpVal(QuExpr(A),stateop)

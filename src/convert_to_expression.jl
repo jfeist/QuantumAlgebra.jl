@@ -52,3 +52,4 @@ function julia_expression(A::QuExpr,varnames=nothing)
     exprs = [julia_expression(term,varnames,s) for (term,s) in sort!(Tuple.(collect(A.terms)))]
     length(exprs)==1 ? exprs[1] : :( +($(exprs...)) )
 end
+julia_expression(A::Number,varnames=nothing) = julia_expression(QuExpr(A),varnames)

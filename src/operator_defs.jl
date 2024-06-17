@@ -221,6 +221,7 @@ function QuExpr(itr)
 end
 QuExpr(A::Union{BaseOperator,Param,Corr,ExpVal}) = QuExpr(QuTerm(A))
 QuExpr(A::QuTerm) = QuExpr(((A,1),))
+QuExpr(s::Number) = QuExpr(((QuTerm(),s),))
 Base.isempty(A::QuExpr) = isempty(A.terms)
 Base.copy(A::QuExpr) = QuExpr(copy(A.terms))
 
@@ -400,6 +401,9 @@ expval(A::QuExpr) = _map_quexpr_ops(expval,A)
 "`expval(A::QuExpr)`: replace expression A by its (formal) correlator ⟨A⟩c."
 corr(A::QuExpr) = _map_quexpr_ops(corr,A)
 
+expval(A::Number) = QuExpr(A)
+corr(A::Number) = QuExpr(A)
+
 "`∑(ind,A::QuExpr)`: return (formal) sum of expression A over index ind."
 function ∑(ind::QuIndex,A::QuTerm)
     (issumindex(ind) || isintindex(ind)) && error("Index $ind to be summed over needs to be symbolic!")
@@ -413,6 +417,7 @@ end
 ∑(ind::Symbol,A::QuExpr) = ∑(QuIndex(ind),A)
 # foldr calculates ∑(i1,∑(i2,∑(i3,A))), i.e., the sum over all indices in inds
 ∑(inds::T,A::QuExpr) where T<:NTuple{N,Union{Symbol,QuIndex}} where N = foldr(∑,inds,init=A)
+∑(ind,A::Number) = ∑(ind,QuExpr(A))
 
 const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr}
 
