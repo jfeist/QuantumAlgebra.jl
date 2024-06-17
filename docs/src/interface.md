@@ -7,5 +7,5 @@ not be relevant to most users.
 ```
 
 ```@autodocs
-Modules = [QuantumAlgebra, QuantumAlgebra.OpConstructors]
+Modules = [QuantumAlgebra]
 ```

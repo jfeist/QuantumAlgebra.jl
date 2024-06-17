@@ -32,7 +32,7 @@ and tried out interactively with
 [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/main?filepath=examples).
 
 ## Release notes / changelog
-Please see the [release notes](release_notes) for a summary of changes in each version.
+Please see the [release notes](release_notes.md) for a summary of changes in each version.
 
 ## Overview
 
