@@ -15,7 +15,6 @@ function myδ(i,j)
     iA,iB = QuIndex.((i,j))
     QuExpr(QuTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
 end
-scal(x) = x*one(QuExpr)
 
 macro test_is_normal_form(x)
     x = esc(x)
@@ -66,6 +65,8 @@ end
 
         @test QuantumAlgebra.using_auto_normal_form() == auto_norm
 
+        @test normal_form(5) == QuExpr(5)
+
         @boson_ops b
         @test normal_form(b(:i)*b'(:j)) == b'(:j)*b(:i) + myδ(:i,:j)
         @test normal_form(b(:i)*a'(:j)) == a'(:j)*b(:i)
@@ -86,7 +87,7 @@ end
         # all equal numbers should be equal scalars (ignore type)
         @test a() + 0 == a() + 0.0
         @test a() + 1 == a() + (1//1 + 0im)
-        @test scal(1.5) == scal(3//2)
+        @test QuExpr(1.5) == QuExpr(3//2)
 
         # test params and their complex conjugation
         @test Pc"ω" == param(:ω,'n')
@@ -130,6 +131,8 @@ end
         @test ∑(:j,a(:j))*∑(:i,a(:i)) == ∑(:i,∑(:j,a(:i)*a(:j)))
         @test ∑(:i,∑(:j,a(:i)*a(:j))) == ∑((:i,:j),a(:i)*a(:j))
         @test ∑(:i,∑(:j,∑(:k,a(:i)*a(:j)*a(:k)))) == ∑((:i,:j,:k),a(:i)*a(:j)*a(:k))
+
+        @test ∑(:i, 3) == ∑(:i, QuExpr(3))
 
         tmp = ∑(:i,a'(:i)*a(:i))
         @test tmp' == tmp
@@ -319,17 +322,18 @@ end
             @test normal_form(σm(1)*σp(1)) == normal_form(σp(1)*σm(1) + comm(σm(1),σp(1)))
             @test normal_form(σz(1)) == normal_form(σp(1)*σm(1) - σm(1)*σp(1))
 
+            @test iszero(comm(a(:i),1))
             @test iszero(comm(σp(1),σp(1)))
             @test normal_form(comm(σp(:n),σm(:n))) == normal_form(σz(:n))
 
             @test normal_form(comm(a(1),   a'(1)*a(1))) == a(1)
             @test normal_form(comm(a'(1),a'(1)*a(1))) == -a'(1)
 
-            @test expval(scal(3)) == scal(3)
-            @test corr(scal(3)) == scal(3)
+            @test expval(3) == QuExpr(3)
+            @test corr(3) == QuExpr(3)
             @test corr(3+a'(2)) == 3 + corr(a'(2))
 
-            @test expval_as_corrs(scal(3)) == scal(3)
+            @test expval_as_corrs(3) == QuExpr(3)
             @test expval_as_corrs(a(2)) == corr(a(2))
             @test expval_as_corrs(3Pc"g") == 3Pc"g"
             @test expval_as_corrs(3a(2)) == 3corr(a(2))
@@ -352,6 +356,7 @@ end
                 @test corr_as_expvals(∑(:i,σx(:i)*σy(:j))) == ∑(:i,expval(σx(:i)*σy(:j))) - ∑(:i,expval(σx(:i))*expval(σy(:j))) + expval(σx(:j))*expval(σy(:j))
             end
 
+            @test corr_as_expvals(3) == QuExpr(3)
             @test corr_as_expvals(a'(:i)a(:j)) == expval(a'(:i)a(:j)) - expval(a'(:i))*expval(a(:j))
             tmpEVs = expval.(tmpas)
             @test corr_as_expvals(*(tmpas...)) == expval(*(tmpas...)) + 2 * *(tmpEVs...) - tmpEVs[1]*expval(tmpas[2]*tmpas[3]) - tmpEVs[2]*expval(tmpas[1]*tmpas[3]) - tmpEVs[3]*expval(tmpas[1]*tmpas[2])
@@ -368,6 +373,10 @@ end
             HH = ∑(:i,param(:ω,'r',:i,:i)*a'(:i,:i)*a(:i,:i))
             @test normal_form(a(:k,:k)*HH) == normal_form(param(:ω,'r',:k,:k)*a(:k,:k) + ∑(:i,param(:ω,'r',:i,:i)*a'(:i,:i)*a(:i,:i)*a(:k,:k)))
 
+            @test isone(Avac(1))
+            @test isone(vacA(1))
+            @test isone(vacExpVal(1))
+            @test vacExpVal(1,2) == QuExpr(4)
             @test iszero(Avac(H))
             @test iszero(vacA(H))
             @test iszero(vacA(a'(3)*σp(1)*σm(1)))
@@ -395,12 +404,12 @@ end
             if QuantumAlgebra.using_σpm()
                 @test normal_form(σp(:i)*σm(:k)) == σp(:i)*σm(:k)
             end
-            @test normal_form(a(:n)*a'(:n)*a(:n)*a'(:n)) == scal(1) + 3a'(:n)*a(:n) + a'(:n)*a'(:n)*a(:n)*a(:n)
+            @test normal_form(a(:n)*a'(:n)*a(:n)*a'(:n)) == 1 + 3a'(:n)*a(:n) + a'(:n)*a'(:n)*a(:n)*a(:n)
 
             S = (1/√(2*6))*a'(:n)*a'(:n)*a'(:n) + (1/√2)*a'(:m)
-            for (A,val) in [(scal(1),scal(1)),
-                            (a'(:n)*a(:n),scal(1.5) + 0.5 * myδ(:n,:m)),
-                            (a'(:n)*a'(:n)*a(:n)*a(:n),scal(3))]
+            for (A,val) in [(QuExpr(1),QuExpr(1)),
+                            (a'(:n)*a(:n),QuExpr(1.5) + 0.5 * myδ(:n,:m)),
+                            (a'(:n)*a'(:n)*a(:n)*a(:n),QuExpr(3))]
                 @test vacExpVal(A,S) ≈ val
             end
 
