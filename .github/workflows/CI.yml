@@ -19,7 +19,6 @@ jobs:
           - windows-latest
         arch:
           - x64
-          - x86
         exclude:
           - os: macOS-latest
             arch: x86
