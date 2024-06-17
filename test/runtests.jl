@@ -489,8 +489,10 @@ end
                 @test julia_expression(expval(normal_form(ex))) == Expr(:call,:*,Expr(:call,*,:w,:x),Expr(:ref,:aᴴa))
 
                 ex = cos(x)^2 * a() + sin(x)^2 * a()
-                @test string(ex) == "(sin(x)^2 + cos(x)^2) a()"
-                @test latex(ex) == raw"\left(\sin^{2}\left( x \right) + \cos^{2}\left( x \right)\right) {a}"
+                @test string(ex) ∈ ("(sin(x)^2 + cos(x)^2) a()", "(cos(x)^2 + sin(x)^2) a()")
+                lstrs = (raw"\left(\sin^{2}\left( x \right) + \cos^{2}\left( x \right)\right) {a}",
+                         raw"\left(\cos^{2}\left( x \right) + \sin^{2}\left( x \right)\right) {a}")
+                @test latex(ex) ∈ lstrs
                 @test map_scalar_function(Symbolics.simplify, ex) == a()
 
                 @test julia_expression(expval(sin(x)*a())) == Expr(:call, :*, Expr(:call, sin, :x), :(a[]))
