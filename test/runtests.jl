@@ -1,6 +1,8 @@
 using QuantumAlgebra
 using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
 using Test, Documenter
+import Symbolics
+import SymPy
 
 @static if !QuantumAlgebra._DEFINE_DEFAULT_OPS
     @boson_ops a
@@ -477,6 +479,39 @@ end
                 # julia_expression interpolates complex numbers directly as complex, not as expressions. so make sure to do the same here
                 halfim = 0.5im
                 @test ex == :(0.5 * I[J, j₂] * I[K, k] * g[i₁, K] * σˣ[i₁] + $halfim * I[J, j₂] * I[K, k] * g[i₁, K] * σʸ[i₁] + 0.5 * g[s̄₁, k] * aᴴσˣa[i₁, J, k, s̄₁, s̄₁, j₂, K] + $halfim * g[s̄₁, k] * aᴴσʸa[i₁, J, k, s̄₁, s̄₁, j₂, K])
+            end
+
+            @testset "Symbolics.jl interop" begin
+                Symbolics.@variables w x
+                ex = x * a'() * a() * w
+                @test string(ex) == "w*x a†() a()"
+                @test latex(ex) == "w x {a}^\\dagger {a}"
+                @test julia_expression(expval(normal_form(ex))) == Expr(:call,:*,Expr(:call,*,:w,:x),Expr(:ref,:aᴴa))
+
+                ex = cos(x)^2 * a() + sin(x)^2 * a()
+                @test string(ex) == "(sin(x)^2 + cos(x)^2) a()"
+                @test latex(ex) == raw"\left(\sin^{2}\left( x \right) + \cos^{2}\left( x \right)\right) {a}"
+                @test map_scalar_function(Symbolics.simplify, ex) == a()
+
+                @test julia_expression(expval(sin(x)*a())) == Expr(:call, :*, Expr(:call, sin, :x), :(a[]))
+            end
+
+            @testset "SymPy.jl interop" begin
+                SymPy.@syms w x
+                ex = x * a'() * a() * w
+                @test string(ex) == "w*x a†() a()"
+                @test latex(ex) == "w x {a}^\\dagger {a}"
+                @test julia_expression(expval(normal_form(ex))) == :((w*x)*aᴴa[])
+
+                ex = cos(x)^2 * a() + sin(x)^2 * a()
+                @test ex == a()
+
+                ex = -cos(x)^2 * a() + sin(x)^2 * a()
+                @test string(ex) == "(sin(x)^2 - cos(x)^2) a()"
+                @test latex(ex) == raw"\left(\sin^{2}\left( x \right) - \cos^{2}\left( x \right)\right) {a}"
+                @test map_scalar_function(SymPy.simplify, ex) == -cos(2x)*a()
+
+                @test julia_expression(expval(sin(x)*a())) == :( sin(x) * a[] )
             end
         end
     end
