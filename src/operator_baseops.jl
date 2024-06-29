@@ -42,7 +42,7 @@ noaliascopy(A::QuExpr) = QuExpr(Dict{QuTerm,Number}(noaliascopy(t) => s for (t,s
 ==(A::T,B::T) where T<:Union{ExpVal,Corr} = A.ops == B.ops
 ==(A::QuTerm,B::QuTerm) = (A.nsuminds == B.nsuminds && A.δs == B.δs && A.params == B.params &&
                            A.expvals == B.expvals && A.corrs == B.corrs && A.bares == B.bares)
-==(A::QuExpr,B::QuExpr) = A.terms == B.terms
+==(A::QuExpr,B::QuExpr) = isequal(A.terms, B.terms)
 
 function ≈(A::QuExpr,B::QuExpr)
     length(A.terms) != length(B.terms) && return false
