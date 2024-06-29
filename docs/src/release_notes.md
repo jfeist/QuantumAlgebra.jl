@@ -25,10 +25,10 @@ This is a minor release with some bug fixes and new features:
 
    julia> Symbolics.substitute(H, x => y)
    sin(y)^2 a†() a() + cos(y)^2 a() a†()
- 
+
    julia> Symbolics.substitute(H, x => 2)
    0.826821810431806 a†() a() + 0.17317818956819406 a() a†()
- 
+
    julia> Symbolics.substitute(H, x => 2; fold=false)
    sin(2)^2 a†() a() + cos(2)^2 a() a†()
    ```
@@ -45,7 +45,7 @@ This is a minor release with some bug fixes and new features:
 
    In order not to add dependencies on several CAS packages to QuantumAlgebra,
    the interoperability helpers are defined in extension modules, using
-   [https://github.com/cjdoris/PackageExtensionCompat.jl](PackageExtensionCompat.jl)
+   [PackageExtensionCompat.jl](https://github.com/cjdoris/PackageExtensionCompat.jl)
    to maintain compatibility with Julia versions before v1.9.
 
 ## v1.3.1 (2023-12-22)
