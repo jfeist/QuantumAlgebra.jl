@@ -23,10 +23,21 @@ operators, with arbitrary names and indices, as well as sums over any of the
 indices. It defines an opinionated canonical form (normal ordering plus some
 additional rules) to automatically simplify expressions. It is recommended to
 use an interface that can display LaTeX formulas (e.g., Jupyter notebooks) for
-convenient output formatting. While there is some documentation, it is not
-always kept fully up to date, and it is recommended to look at the latest commit
-messages to get an idea about new features etc. You can also check out the
-notebooks in the `examples` folder, which can be viewed online with
+convenient output formatting. 
+
+Starting from v1.4, QuantumAlgebra also interoperates with computer algebra
+systems (CAS) such as
+[Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl) or
+[SymPy.jl](https://github.com/JuliaPy/SymPy.jl) /
+[SymPyPythonCall.jl](https://github.com/jverzani/SymPyPythonCall.jl), as the
+"scalar" prefactors of each quantum term can be arbitrary expressions provided
+by these systems. While such expressions do not support symbolic indices in the
+same way as QuantumAlgebra, they provide much more flexibility in terms of the
+mathematical operations and powerful manipulation functions possible on the
+parameters.
+
+Example jupyter notebooks are available in the `examples` folder and can be
+viewed online with
 [nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/main/examples/)
 and tried out interactively with
 [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/main?filepath=examples).

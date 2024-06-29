@@ -13,10 +13,21 @@ operators, with arbitrary names and indices, as well as sums over any of the
 indices. It defines an opinionated canonical form (normal ordering plus some
 additional rules) to automatically simplify expressions. It is recommended to
 use an interface that can display LaTeX formulas (e.g., Jupyter notebooks) for
-convenient output formatting. While there is some documentation, it is not
-always kept fully up to date, and it is recommended to look at the latest commit
-messages to get an idea about new features etc. You can also check out the
-notebooks in the `examples` folder, which can be viewed online with
+convenient output formatting. 
+
+Starting from v1.4, QuantumAlgebra also interoperates with computer algebra
+systems (CAS) such as
+[Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl) or
+[SymPy.jl](https://github.com/JuliaPy/SymPy.jl) /
+[SymPyPythonCall.jl](https://github.com/jverzani/SymPyPythonCall.jl), as the
+"scalar" prefactors of each quantum term can be arbitrary expressions provided
+by these systems. While such expressions do not support symbolic indices in the
+same way as QuantumAlgebra, they provide much more flexibility in terms of the
+mathematical operations and powerful manipulation functions possible on the
+parameters.
+
+Example jupyter notebooks are available in the `examples` folder and can be
+viewed online with
 [nbviewer](https://nbviewer.jupyter.org/github/jfeist/QuantumAlgebra.jl/blob/main/examples/)
 and tried out interactively with
 [Binder](https://mybinder.org/v2/gh/jfeist/QuantumAlgebra.jl/main?filepath=examples).
@@ -59,9 +70,9 @@ The basic functions to create QuantumAlgebra expressions (which are of type
 
 - You can define your own bosonic/fermionic/two-level system operators with a
   set of macros:
-  - `@boson_ops name` defines new functions `$name()` and `$(name)dag()` for
+  - `@boson_ops name` defines new function `$name()` (and deprecated `$(name)dag()`) for
     bosonic species `name`.
-  - `@fermion_ops name` defines new functions `$name()` and `$(name)dag()` for
+  - `@fermion_ops name` defines new function `$name()` (and deprecated `$(name)dag()`) for
     fermionic species `name`.
   - `@tlsxyz_ops name` defines new functions `$(name)x()`, `$(name)y()` and
     `$(name)z()` for the Pauli matrices for two-level system species `name`.
@@ -69,7 +80,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
     the two-level system excitation and deexcitation operators for species
     `name`.
 
-  Note that for `@boson_ops` and `@fermion_ops`, deprecated `$(name)dag()`
+  Note that for `@boson_ops` and `@fermion_ops`, the deprecated `$(name)dag()`
   functions are defined for backward compatibility. These will be removed in a
   future version, as `$(name)'()` is now the preferred syntax for creating an
   adjoint.
@@ -122,8 +133,9 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   julia> (a(:i)*f(:k))'
   f†(k) a†(i)
   ```
-  If you need a bare number as a QuantumAlgebra expression, you can use
-  `x*one(QuExpr)` (or `one(A)`, where `A` is any `QuExpr`).
+  If you explicitly need a bare number as a QuantumAlgebra expression, you can
+  use, e.g. `QuExpr(1)` (which is equal to `one(QuExpr)`). However, most
+  functions that take a `QuExpr` will also accept a bare number.
 
 - `∑(ind,A::QuExpr)` to represent an analytic sum over index `ind`. Since summed
   indices have no semantic meaning, the index within the expression gets

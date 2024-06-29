@@ -10,4 +10,12 @@ QuantumAlgebra.numlatex(x::Num) = _issum(x) ? Expr(:latexifymerge,"\\left(",x, "
 
 QuantumAlgebra.num_expr(s::Union{Num,Complex{Num}}) = Symbolics.toexpr(s)
 
+Symbolics.simplify(ex::QuExpr; kwargs...) = map_scalar_function(x -> Symbolics.simplify(x; kwargs...), ex)
+# the definitions for Pair and Vector avoid method call ambiguities due to substitute(expr, s::{Pair,Vector})
+for T in (Any,Pair,Vector)
+    @eval Symbolics.substitute(ex::QuExpr, s::$T; kwargs...) = map_scalar_function(ex) do x
+        Symbolics.substitute(x, s; kwargs...)
+    end
+end
+
 end

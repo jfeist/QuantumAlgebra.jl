@@ -503,6 +503,10 @@ end
                          raw"\left(\cos^{2}\left( x \right) + \sin^{2}\left( x \right)\right) {a}")
                 @test latex(ex) ∈ lstrs
                 @test map_scalar_function(Symbolics.simplify, ex) == a()
+                @test Symbolics.simplify(ex) == a()
+                ex = w * a()
+                @test Symbolics.substitute(ex, w => 1) == a()
+                @test Symbolics.substitute(ex, w => x) == x*a()
 
                 @test julia_expression(expval(sin(x)*a())) == Expr(:call, :*, Expr(:call, sin, :x), :(a[]))
             end
