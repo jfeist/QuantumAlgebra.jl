@@ -1,5 +1,56 @@
 # Release notes
 
+## v1.4.0 (2024-06-29)
+This is a minor release with some bug fixes and new features:
+ - Allow `Number` type inputs for most exported functions so that they do not
+   require `QuExpr` wrapping, such that `expval(3)` or `Avac(1)` no longer raise
+   errors (closes [#14](https://github.com/jfeist/QuantumAlgebra.jl/issues/14)).
+ - Support interoperability with symbolic computer algebra systems (CAS) such as
+   [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl) or
+   [SymPy.jl](https://github.com/JuliaPy/SymPy.jl) /
+   [SymPyPythonCall.jl](https://github.com/jverzani/SymPyPythonCall.jl).
+   Expressions provided by these systems can be used as the "scalar" factors of
+   each term in a `QuExpr`, and thus provide an alternative to the
+   QuantumAlgebra `Param` objects. In contrast to `Param`s, they do not support
+   symbolic indices, but provide much more flexibility in terms of the
+   mathematical operations and powerful manipulation functions. For example, one
+   can use
+   ```julia
+   julia> using QuantumAlgebra, Symbolics
+   julia> @boson_ops a;
+   julia> @variables x y;
+   julia> H = cos(x)^2 * a() * a'() + sin(x)^2 * a'() * a();
+   julia> Symbolics.simplify(normal_form(H))
+   cos(x)^2 + a†() a()
+
+   julia> Symbolics.substitute(H, x => y)
+   sin(y)^2 a†() a() + cos(y)^2 a() a†()
+ 
+   julia> Symbolics.substitute(H, x => 2)
+   0.826821810431806 a†() a() + 0.17317818956819406 a() a†()
+ 
+   julia> Symbolics.substitute(H, x => 2; fold=false)
+   sin(2)^2 a†() a() + cos(2)^2 a() a†()
+   ```
+
+   While overloads for some functions (like `simplify` and `substitute` from
+   `Symbolics`) are available, all other functions/manipulations from the CAS
+   packages can be applied with the new function `map_scalar_function` which
+   applies a function to each scalar factor in a `QuExpr`. This can be used as,
+   e.g.,
+   ```julia
+   julia> map_scalar_function(Symbolics.simplify, normal_form(H))
+   cos(x)^2 + a†() a()
+   ```
+
+   In order not to add dependencies on several CAS packages to QuantumAlgebra,
+   the interoperability helpers are defined in extension modules, using
+   [https://github.com/cjdoris/PackageExtensionCompat.jl](PackageExtensionCompat.jl)
+   to maintain compatibility with Julia versions before v1.9.
+
+## v1.3.1 (2023-12-22)
+This is a patch release with some bug fixes and performance improvements.
+
 ## v1.3.0 (2023-09-19)
 This is a minor release with some bug fixes in LaTeX output, added unit tests for many functions, and some new features and deprecations:
 - The functions that generate operators now can be conjugated directly, e.g., `a'()` is equivalent to `adag()` (and to `a()'`, which was already the case beforehand). The old `_dag` functions for bosons and fermions are deprecated and will be removed in a future version.
