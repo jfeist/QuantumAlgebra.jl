@@ -52,11 +52,11 @@ function _corrheis_cached(ops::BaseOpProduct,H::QuExpr,Ls)::QuExpr
     end
 end
 
-droplen(n) = A -> droplen(n,A)
+droplen(n) = Base.Fix1(droplen,n)
 droplen(n,A::QuTerm) = (any(@. length(A.corrs) > n) || any(@. length(A.expvals) > n)) ? 0 : 1
 droplen(n,A::QuExpr) = QuExpr((t,droplen(n,t)*s) for (t,s) in A.terms)
 
-dropcorr(n) = A -> dropcorr(n,A)
+dropcorr(n) = Base.Fix1(dropcorr,n)
 function dropcorr(n,A::QuExpr)
     Anew = QuExpr()
     terms_to_do = collect(A.terms)

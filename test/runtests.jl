@@ -1,6 +1,6 @@
 using QuantumAlgebra
 using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
-using QuantumAlgebra: expheis, corrheis, _lindbladterm, ExpVal, Corr
+using QuantumAlgebra: expheis, corrheis, _lindbladterm, ExpVal, Corr, to_opprod
 using Test, Documenter
 import Symbolics
 import SymPyPythonCall
@@ -534,8 +534,6 @@ end
     end
 
     @testset "EqSys" begin
-        QuantumAlgebra.auto_normal_form(true)
-
         H = ∑(:i,Pr"ω_i"*a'(:i)*a(:i))
         for (func,op) in ((expheis,expval), (corrheis,corr))
             @test func(a(:j),H) == -1im * Pr"ω_j" * op(a(:j))
@@ -565,6 +563,11 @@ end
         @test corrheis(lhs,H,Ls) == corr(rhs1)
 
         QuantumAlgebra.use_σxyz()
+        # the equations below come out needlessly complicated with
+        # auto_normal_form(true) as some expressions occur that QuantumAlgebra
+        # does not simplify fully, in particular it does not simplify:
+        # σˣᵢ σˣⱼ σᶻᵢ = σˣⱼ σˣᵢ σᶻᵢ = -i σˣⱼ σʸᵢ
+        QuantumAlgebra.auto_normal_form(false)
 
         H = ∑(:i,Pr"ω_i"*a'(:i)*a(:i)) + ∑(:α,1//2*Pr"ωe_α"*σz(:α)) + ∑(:α,∑(:i,Pr"g_i,α"*(a'(:i)+a(:i))*σx(:α)))
         Ls = ((:α,Pr"γe_α",σm(:α)),)
@@ -572,10 +575,14 @@ end
         maxord = 2
         EQ = EqSys{ExpVal}(H,maxord,Ls,σz(:α))
         @test length(EQ.eqs) == 6
+        lhs = ExpVal(to_opprod(σy(:i)a(:j)))
+        rhs = expval(-2Pr"g_j,i"*σz(:i) - 1im*∑(:k,Pr"g_j,k"*σx(:k)σy(:i)) + Pr"ωe_i"*σx(:i)a(:j) - (1im*Pr"ω_j"+1//2*Pr"γe_i")*σy(:i)a(:j))
+        @test EQ.eqs[lhs] == normal_form(rhs)
 
         EQ = EqSys{Corr}(H,maxord,Ls)
         @test length(EQ.eqs) == 15
-
-        QuantumAlgebra.auto_normal_form(false)
+        lhs = Corr(to_opprod(a(:i)a(:j)))
+        rhs = -1im*corr(∑(:k, Pr"g_j,k"*σx(:k)*a(:i) + Pr"g_i,k"*σx(:k)*a(:j)) + (Pr"ω_i"+Pr"ω_j")*a(:i)a(:j))
+        @test EQ.eqs[lhs] == normal_form(rhs)
     end
 end
