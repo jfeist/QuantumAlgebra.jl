@@ -436,24 +436,25 @@ end
             @test normal_form(heisenberg_eom(a(:i,:j),H,Ls)) == -1im*∑((:k,:l),Pr"ω_i,j,k,l"*a(:k,:l)) - 1//2*Pr"κ_i,j"*a(:i,:j)
 
             tmp = ∑(:i,expval_as_corrs(a'(:n)*a(:i)))
-            tmplatex = raw"\sum_{\#_{1}} \langle {a}_{n}^\dagger\rangle_{c} \langle {a}_{\#_{1}}\rangle_{c}  + \sum_{\#_{1}} \langle {a}_{n}^\dagger {a}_{\#_{1}}\rangle_{c} "
+            tmplatex = raw"\sum_{\#_{1}} \langle {a}_{n}^{\dagger}\rangle_{c} \langle {a}_{\#_{1}}\rangle_{c}  + \sum_{\#_{1}} \langle {a}_{n}^{\dagger} {a}_{\#_{1}}\rangle_{c} "
             @test latex(tmp) == tmplatex
             @test expval_as_corrs(tmp) == tmp
             @test sprint(show,"text/latex",tmp) == "\$$(tmplatex)\$"
 
             @test latex(a(:i_1,:i_2)) == raw"{a}_{i_{1}i_{2}}"
 
-            @test latex(normal_form(e(:i)*d'(:j))) == " - {d}_{j}^\\dagger {e}_{i}"
-            @test latex(normal_form(f(:i)*d'(:j))) == "{d}_{j}^\\dagger {f}_{i}"
+            @test latex(normal_form(e(:i)*d'(:j))) == " - {d}_{j}^{\\dagger} {e}_{i}"
+            @test latex(normal_form(f(:i)*d'(:j))) == "{d}_{j}^{\\dagger} {f}_{i}"
 
             lσp = latex(σp())
             lσz = latex(σz())
             if QuantumAlgebra.using_σpm()
-                @test lσp == "{{\\sigma}}^+"
-                @test lσz == " - 1 + 2 {{\\sigma}}^+ {{\\sigma}}^-"
+                @test lσp == "{{\\sigma}}^{+}"
+                @test lσz == " - 1 + 2 {{\\sigma}}^{+} {{\\sigma}}^{-}"
+                @test latex(σp(:i)σp(:j) - 2σp(:i)σm(:j) + a()^2) == "{{\\sigma}}_{i}^{+} {{\\sigma}}_{j}^{+} - 2 {{\\sigma}}_{i}^{+} {{\\sigma}}_{j}^{-} + {{a}}^{2}"
             else
-                @test lσp == "\\frac{1}{2} {{\\sigma}}^x + \\frac{1}{2}\\mathit{i} {{\\sigma}}^y"
-                @test lσz == "{{\\sigma}}^z"
+                @test lσp == "\\frac{1}{2} {{\\sigma}}^{x} + \\frac{1}{2}\\mathit{i} {{\\sigma}}^{y}"
+                @test lσz == "{{\\sigma}}^{z}"
             end
 
             A = a'(:i)*a'(:j)*a(:k)*a(:l)
@@ -494,7 +495,7 @@ end
                 Symbolics.@variables w x
                 ex = x * a'() * a() * w
                 @test string(ex) == "w*x a†() a()"
-                @test latex(ex) == "w x {a}^\\dagger {a}"
+                @test latex(ex) == "w x {a}^{\\dagger} {a}"
                 @test julia_expression(expval(normal_form(ex))) == Expr(:call,:*,Expr(:call,*,:w,:x),Expr(:ref,:aᴴa))
 
                 ex = cos(x)^2 * a() + sin(x)^2 * a()
@@ -515,7 +516,7 @@ end
                 SymPyPythonCall.@syms w x
                 ex = x * a'() * a() * w
                 @test string(ex) == "w*x a†() a()"
-                @test latex(ex) == "w x {a}^\\dagger {a}"
+                @test latex(ex) == "w x {a}^{\\dagger} {a}"
                 @test julia_expression(expval(normal_form(ex))) == :((w*x)*aᴴa[])
 
                 ex = cos(x)^2 * a() + sin(x)^2 * a()

@@ -116,7 +116,7 @@ const NoName = QuOpName(Symbol())
 const BaseOpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
 const BaseOpType_sym  = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
 const BaseOpType_expr = ("ᴴ", "ᴴ", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
-const BaseOpType_latex = ("^\\dagger", "^\\dagger", "^+", "^x", "^y", "^z", "^-", "", "")
+const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "", "")
 
 @concrete struct BaseOperator
     t::BaseOpType
