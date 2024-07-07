@@ -106,7 +106,7 @@ function Base.print(io::IO,A::QuExpr)
     end
 end
 
-function Base.print(io::IO, eqsys::EqSys)
+function Base.print(io::IO, eqsys::QuEqSys)
     for (A,dAdt) in eqsys.eqs
         println(io,"dₜ", A," = ", dAdt)
     end
@@ -209,7 +209,7 @@ end
     end
     return ex isa Expr ? ex : Expr(:latexifymerge,ex)
 end
-@latexrecipe function f(eqsys::EqSys)
+@latexrecipe function f(eqsys::QuEqSys)
     env --> :align
 
     # for align, we can return two vectors for the lhs and rhs of each equation

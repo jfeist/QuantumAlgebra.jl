@@ -533,7 +533,7 @@ end
         end
     end
 
-    @testset "EqSys" begin
+    @testset "QuEqSys" begin
         H = ∑(:i,Pr"ω_i"*a'(:i)*a(:i))
         for (func,op) in ((expheis,expval), (corrheis,corr))
             @test func(a(:j),H) == -1im * Pr"ω_j" * op(a(:j))
@@ -573,13 +573,13 @@ end
         Ls = ((:α,Pr"γe_α",σm(:α)),)
 
         maxord = 2
-        EQ = EqSys{ExpVal}(H,maxord,Ls,σz(:α))
+        EQ = heisenberg_eom_system(ExpVal,H,maxord,Ls,σz(:α))
         @test length(EQ.eqs) == 6
         lhs = ExpVal(to_opprod(σy(:i)a(:j)))
         rhs = expval(-2Pr"g_j,i"*σz(:i) - 1im*∑(:k,Pr"g_j,k"*σx(:k)σy(:i)) + Pr"ωe_i"*σx(:i)a(:j) - (1im*Pr"ω_j"+1//2*Pr"γe_i")*σy(:i)a(:j))
         @test EQ.eqs[lhs] == normal_form(rhs)
 
-        EQ = EqSys{Corr}(H,maxord,Ls)
+        EQ = heisenberg_eom_system(Corr,H,maxord,Ls)
         @test length(EQ.eqs) == 15
         lhs = Corr(to_opprod(a(:i)a(:j)))
         rhs = -1im*corr(∑(:k, Pr"g_j,k"*σx(:k)*a(:i) + Pr"g_i,k"*σx(:k)*a(:j)) + (Pr"ω_i"+Pr"ω_j")*a(:i)a(:j))

@@ -2,7 +2,6 @@ using Preferences
 using OrderedCollections
 
 export QuExpr
-export EqSys
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops, @anticommuting_fermion_group
 export tlspm_ops, tlsxyz_ops
@@ -423,11 +422,11 @@ end
 
 const EqDict{T<:Union{ExpVal,Corr}} = OrderedDict{T,QuExpr}
 
-struct EqSys{T<:Union{ExpVal,Corr}}
+struct QuEqSys{T<:Union{ExpVal,Corr}}
     eqs::EqDict{T}
 end
 
-const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr,EqSys}
+const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr,QuEqSys}
 
 @static if _DEFINE_DEFAULT_OPS
     # do not use the macros here so that we can define the constructors as const

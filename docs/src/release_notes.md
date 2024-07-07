@@ -1,52 +1,76 @@
 # Release notes
 
+## v1.5.0 (2024-xx-xx)
+This is a minor release with some bug fixes and new features:
+- Add `heisenberg_eom_system` function to generate a system of Heisenberg
+  equations of motion for either the expectation values or the cumulants /
+  correlators of operator products, starting from a Hamiltonian and Lindblad
+  operators describing decoherence. Typically, these equation systems are not
+  closed without approximations as equations for products of n operators involve
+  products of m>n operators, so the system has to be truncated. This is achieved
+  with a filter function that removes higher-order terms or rewrites them
+  (approximately) in terms of lower-order expressions. Simple example:
+  ```julia
+  julia> using QuantumAlgebra
+  julia> @boson_ops a;
+  julia> H = Pr"ω"*a'()*a() + Pr"χ"*a'()*(a'()+a())*a();
+  julia> Ls = ((Pr"γ",a()),);
+  julia> EQ = heisenberg_eom_system(H,2,Ls,a())
+  dₜ⟨a()⟩ = -1//2 γ ⟨a()⟩  - 1i ω ⟨a()⟩  - 2i χ ⟨a†() a()⟩  - 1i χ ⟨a()²⟩ 
+  dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩ 
+  dₜ⟨a()²⟩ = -2i χ ⟨a()⟩  - γ ⟨a()²⟩  - 2i ω ⟨a()²⟩  
+  ```
+- Fix a LaTeX output error where Latexify misinterpreted a superscript "^+" as a
+  sum and replaced "x^+ - y" with "x^- y".
+
+
 ## v1.4.0 (2024-06-29)
 This is a minor release with some bug fixes and new features:
- - Allow `Number` type inputs for most exported functions so that they do not
-   require `QuExpr` wrapping, such that `expval(3)` or `Avac(1)` no longer raise
-   errors (closes [#14](https://github.com/jfeist/QuantumAlgebra.jl/issues/14)).
- - Support interoperability with symbolic computer algebra systems (CAS) such as
-   [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl) or
-   [SymPy.jl](https://github.com/JuliaPy/SymPy.jl) /
-   [SymPyPythonCall.jl](https://github.com/jverzani/SymPyPythonCall.jl).
-   Expressions provided by these systems can be used as the "scalar" factors of
-   each term in a `QuExpr`, and thus provide an alternative to the
-   QuantumAlgebra `Param` objects. In contrast to `Param`s, they do not support
-   symbolic indices, but provide much more flexibility in terms of the
-   mathematical operations and powerful manipulation functions. For example, one
-   can use
-   ```julia
-   julia> using QuantumAlgebra, Symbolics
-   julia> @boson_ops a;
-   julia> @variables x y;
-   julia> H = cos(x)^2 * a() * a'() + sin(x)^2 * a'() * a();
-   julia> Symbolics.simplify(normal_form(H))
-   cos(x)^2 + a†() a()
+- Allow `Number` type inputs for most exported functions so that they do not
+  require `QuExpr` wrapping, such that `expval(3)` or `Avac(1)` no longer raise
+  errors (closes [#14](https://github.com/jfeist/QuantumAlgebra.jl/issues/14)).
+- Support interoperability with symbolic computer algebra systems (CAS) such as
+  [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl) or
+  [SymPy.jl](https://github.com/JuliaPy/SymPy.jl) /
+  [SymPyPythonCall.jl](https://github.com/jverzani/SymPyPythonCall.jl).
+  Expressions provided by these systems can be used as the "scalar" factors of
+  each term in a `QuExpr`, and thus provide an alternative to the
+  QuantumAlgebra `Param` objects. In contrast to `Param`s, they do not support
+  symbolic indices, but provide much more flexibility in terms of the
+  mathematical operations and powerful manipulation functions. For example, one
+  can use
+  ```julia
+  julia> using QuantumAlgebra, Symbolics
+  julia> @boson_ops a;
+  julia> @variables x y;
+  julia> H = cos(x)^2 * a() * a'() + sin(x)^2 * a'() * a();
+  julia> Symbolics.simplify(normal_form(H))
+  cos(x)^2 + a†() a()
 
-   julia> Symbolics.substitute(H, x => y)
-   sin(y)^2 a†() a() + cos(y)^2 a() a†()
+  julia> Symbolics.substitute(H, x => y)
+  sin(y)^2 a†() a() + cos(y)^2 a() a†()
 
-   julia> Symbolics.substitute(H, x => 2)
-   0.826821810431806 a†() a() + 0.17317818956819406 a() a†()
+  julia> Symbolics.substitute(H, x => 2)
+  0.826821810431806 a†() a() + 0.17317818956819406 a() a†()
 
-   julia> Symbolics.substitute(H, x => 2; fold=false)
-   sin(2)^2 a†() a() + cos(2)^2 a() a†()
-   ```
+  julia> Symbolics.substitute(H, x => 2; fold=false)
+  sin(2)^2 a†() a() + cos(2)^2 a() a†()
+  ```
 
-   While overloads for some functions (like `simplify` and `substitute` from
-   `Symbolics`) are available, all other functions/manipulations from the CAS
-   packages can be applied with the new function `map_scalar_function` which
-   applies a function to each scalar factor in a `QuExpr`. This can be used as,
-   e.g.,
-   ```julia
-   julia> map_scalar_function(Symbolics.simplify, normal_form(H))
-   cos(x)^2 + a†() a()
-   ```
+  While overloads for some functions (like `simplify` and `substitute` from
+  `Symbolics`) are available, all other functions/manipulations from the CAS
+  packages can be applied with the new function `map_scalar_function` which
+  applies a function to each scalar factor in a `QuExpr`. This can be used as,
+  e.g.,
+  ```julia
+  julia> map_scalar_function(Symbolics.simplify, normal_form(H))
+  cos(x)^2 + a†() a()
+  ```
 
-   In order not to add dependencies on several CAS packages to QuantumAlgebra,
-   the interoperability helpers are defined in extension modules, using
-   [PackageExtensionCompat.jl](https://github.com/cjdoris/PackageExtensionCompat.jl)
-   to maintain compatibility with Julia versions before v1.9.
+  In order not to add dependencies on several CAS packages to QuantumAlgebra,
+  the interoperability helpers are defined in extension modules, using
+  [PackageExtensionCompat.jl](https://github.com/cjdoris/PackageExtensionCompat.jl)
+  to maintain compatibility with Julia versions before v1.9.
 
 ## v1.3.1 (2023-12-22)
 This is a patch release with some bug fixes and performance improvements.

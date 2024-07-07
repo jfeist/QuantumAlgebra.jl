@@ -1,6 +1,6 @@
-export droplen, dropcorr
+export heisenberg_eom_system, droplen, dropcorr, ExpVal, Corr
 
-# equation systems (EqSys)
+# equation systems (QuEqSys)
 
 to_bareterm(A::QuExpr) = ((t,s) = only(A.terms); @assert isone(s); t)
 to_opprod(A::QuExpr)::BaseOpProduct = to_opprod(to_bareterm(A))
@@ -97,8 +97,11 @@ end
 get_opstodo(ops::QuExpr,H) = get_opstodo((ops,),H)
 get_opstodo(ops,H) = [canon_inds()(to_opprod(normal_form(A))) for A in ops]
 
-EqSys{LHSfunc}(H,maxord::Integer,Ls=(),ops=nothing) where LHSfunc = EqSys{LHSfunc}(H,droplen(maxord),Ls,ops)
-function EqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
+heisenberg_eom_system(H::QuExpr,rhsfilt,Ls=(),ops=nothing) = heisenberg_eom_system(ExpVal,H,rhsfilt,Ls,ops)
+heisenberg_eom_system(::Type{LHSfunc},H::QuExpr,maxord::Integer,Ls=(),ops=nothing) where LHSfunc = heisenberg_eom_system(LHSfunc,H,droplen(maxord),Ls,ops)
+heisenberg_eom_system(::Type{LHSfunc},H::QuExpr,rhsfilter,Ls=(),ops=nothing) where LHSfunc = QuEqSys{LHSfunc}(H,rhsfilter,Ls,ops)
+
+function QuEqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
     Lops = QuantumAlgebra._lindbladterm.(Ls)
     RHSfunc = LHSfunc === ExpVal ? expheis : (LHSfunc === Corr ? corrheis : throw(ArgumentError("LHSfunc must be Corr or ExpVal")))
     opstodo = LHSfunc.(get_opstodo(ops,H))
@@ -124,7 +127,16 @@ function EqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
             end
         end
     end
-    EqSys{LHSfunc}(sort!(eqs))
+    QuEqSys{LHSfunc}(sort!(eqs))
 end
 
 nicety(A::Union{ExpVal,Corr}) = count(A->A.t ∈ (BosonDestroy_,FermionDestroy_,TLSDestroy_), A.ops.v)
+
+Base.getindex(EQ::QuEqSys{LHSfunc},A::QuExpr) where LHSfunc = getindex(EQ,to_bareterm(A))
+Base.getindex(EQ::QuEqSys{LHSfunc},A::QuTerm) where LHSfunc = begin
+    EC = isempty(A.bares) ? only(_getECs(A,LHSfunc)) : LHSfunc(to_opprod(A))
+    getindex(EQ,EC)
+end
+Base.getindex(EQ::QuEqSys{LHSfunc},A::LHSfunc) where LHSfunc = EQ.eqs[A]
+Base.getindex(EQ::QuEqSys{LHSfunc},i::Int) where LHSfunc = EQ.eqs[collect(keys(EQ.eqs))[i]]
+Base.length(EQ::QuEqSys) = length(EQ.eqs)
