@@ -8,6 +8,7 @@ function _get_mode_name(ex::QuExpr)
 end
 
 _parse_modes_in_vacuum(modes::Nothing) = nothing
+_parse_modes_in_vacuum(modes::Set{QuOpName}) = modes
 _parse_modes_in_vacuum(modes::QuExpr) = _parse_modes_in_vacuum((modes,))
 _parse_modes_in_vacuum(modes) = Set{QuOpName}(_get_mode_name.(modes))
 
@@ -101,7 +102,7 @@ right, respectively. To be precise, `Avac(A)` returns ``A'`` such that ``A'|0⟩
 A|0⟩``, while `vacA(A)` does the same for ``⟨0|A``."""
 Avac, vacA
 
-function _TLS_to_pm_normal(A::QuExpr)
+function _TLS_to_pm_normal(A::QuExpr,shortcut_vacA_zero)
     An = QuExpr()
     terms_to_clean = collect(A.terms)
     while !isempty(terms_to_clean)
@@ -109,7 +110,7 @@ function _TLS_to_pm_normal(A::QuExpr)
         v = t.bares.v
         iTLS = findfirst(A->A.t ∈ (TLSx_,TLSy_,TLSz_), v)
         if iTLS === nothing
-            _add_with_normal_order!(An,t,s,true) # last argument is shortcut_vacA_zero
+            _add_with_normal_order!(An,t,s,shortcut_vacA_zero) # last argument is shortcut_vacA_zero
         else
             O = v[iTLS]
             if O.t == TLSx_
@@ -145,25 +146,25 @@ end
 Calculate the vacuum expectation value ``⟨0|S^\\dagger A S|0⟩``, i.e., the
 expectation value ``⟨ψ|A|ψ⟩`` for the state defined by ``|ψ⟩= S|0⟩```.
 """
-function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()),modes_in_vacuum::Nothing=nothing)
+function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()),modes_in_vacuum=nothing)
     # simplify down as much as possible by applying vacuum from left and right
     # convert TLSx/y/z operators to TLSCreate/TLSDestroy to ensure that no bare operators survive
 
-    # currently, only nothing is supported, pending implementation of modes_in_vacuum for normal_form(A, shortcut_vacA_zero=true)
     mv = _parse_modes_in_vacuum(modes_in_vacuum)
 
     # since we will have <vac|stateop' * A * stateop|vac>, we can simplify
     # stateop by applying vacuum from right
     stateop = Avac(stateop,mv)
-    x = normal_form(stateop' * A, true) # second argument is shortcut_vacA_zero
+    # second argument is shortcut_vacA_zero, if mv is nothing, we can set it to true
+    x = normal_form(stateop' * A, isnothing(mv))
     # same here, simplify since we will have <vac|stateop' * A
-    x = vacA(x)
-    x = _TLS_to_pm_normal(x*stateop)
+    x = vacA(x,mv)
+    x = _TLS_to_pm_normal(x*stateop, isnothing(mv)) # second argument is shortcut_vacA_zero
 
     vAv = QuExpr()
     for (t,s) in x.terms
         tn,sn = Avac(vacA(t,s,mv)...,mv)
-        @assert sn==0 || isempty(tn.bares)
+        isnothing(mv) && @assert sn==0 || isempty(tn.bares)
         _add_sum_term!(vAv,tn,simplify_number(sn))
     end
     vAv
