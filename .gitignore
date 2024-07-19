@@ -8,3 +8,4 @@
 /docs/site/
 
 .ipynb_checkpoints/
+.CondaPkg/

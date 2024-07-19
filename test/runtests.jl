@@ -578,6 +578,7 @@ end
         lhs = ExpVal(to_opprod(σy(:i)a(:j)))
         rhs = expval(-2Pr"g_j,i"*σz(:i) - 1im*∑(:k,Pr"g_j,k"*σx(:k)σy(:i)) + Pr"ωe_i"*σx(:i)a(:j) - (1im*Pr"ω_j"+1//2*Pr"γe_i")*σy(:i)a(:j))
         @test EQ.eqs[lhs] == normal_form(rhs)
+        @test EQ.eqs == heisenberg_eom_system(H,maxord,Ls,σz(:α)).eqs
 
         EQ = heisenberg_eom_system(Corr,H,maxord,Ls)
         @test length(EQ.eqs) == 15

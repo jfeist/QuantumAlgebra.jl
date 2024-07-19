@@ -216,6 +216,31 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   julia> Avac(σz())
   -1
   ```
+  Both functions can also be called with an optional second argument,
+  `Avac(A,modes_in_vacuum)` or `vacA(A,modes_in_vacuum)`, which is an iterable
+  over operators (or a single operator) that will be assumed to be in the vacuum
+  state, while all others are not. Note that the operators in `modes_in_vacuum`
+  do not distinguish by index, i.e., if the modes have indices, all modes with
+  the same name are assumed to be in the vacuum state. To avoid confusion, the
+  `modes_in_vacuum` argument thus does not accept operators with indices.
+    ```jldoctest
+  julia> Avac(a(),a())
+  0
+
+  julia> Avac(a(),f())
+  a()
+
+  julia> Avac(a(:i)*a'(:j),f())
+  δ(ij)  + a†(j) a(i)
+
+  julia> Avac(a'()*a()*f()*f'(),f())
+  a†() a()
+
+  julia> @boson_ops b;
+
+  julia> Avac(a'()*a()*b()*b'()^2*f()*f'(),(f(),b()))
+  2 a†() b†() a()
+  ```
 
 - `vacExpVal(A,S=1)` calculates the vacuum expectation value ``⟨0|S^{†}AS|0⟩``,
   i.e., the expectation value ``⟨ψ|A|ψ⟩`` for the state defined by ``|ψ⟩=S|0⟩``.
@@ -232,6 +257,98 @@ The basic functions to create QuantumAlgebra expressions (which are of type
 
   julia> vacExpVal(σx())
   0
+  ```
+  Like `vacA` and `Avac`, `vacExpVal` also takes an optional `modes_in_vacuum`
+  argument, `vacExpVal(A,S,modes_in_vacuum)` (since all arguments are
+  positional, `S` has to be given explicitly in this case even if it is just the
+  identity operator, i.e., `vacExpVal(A,1,a())`):
+  ```jldoctest
+  julia> @boson_ops b;
+
+  julia> vacExpVal(a'()*a()*b()^2*b'()^2*f()*f'(), 1, (f(),b()))
+  2 a†() a()
+  ```
+
+- `heisenberg_eom(A,H,Ls=())` calculates the [Heisenberg equation of
+  motion](https://en.wikipedia.org/wiki/Lindbladian#Heisenberg_picture) for
+  operator `A` under the action of Hamiltonian `H` and potential Lindblad decay
+  terms `Ls`, given by ``\frac{dA}{dt} = i[H,A] + ∑_i γ_i (L_i^† A L_i - \frac{1}{2} \{L_i^†
+  L_i,A\})``. The Lindblad decay operators are passed as a tuple (not an array)
+  of tuples, where each inner tuple describes one decay operator. The possible
+  forms are `(L,)` for decay operator `L`, `(γ,L)` for decay operator `L` with
+  rate `γ`, and `(inds,γ,L)` for decay operators summed over the given indices
+  (note that this is different from the operator itself being a sum, seen in the
+  example below). Finally, `L` can (in all three cases above) be just a single
+  operator or a tuple of two operators `L=(X,Y)` to represent off-diagonal
+  Lindblad terms ``L_{X,Y}[ρ] = X ρ Y^† - \frac{1}{2} \{Y^† X,ρ\}``.
+  ```jldoctest
+  julia> H = Pr"ω"*a'()a();
+
+  julia> Ls = ((Pr"γ",a()),);
+
+  julia> normal_form(heisenberg_eom(a(),H,Ls))
+  -1//2 γ a() - 1i ω a()
+
+  julia> H = QuExpr();
+
+  julia> Ls = ((:i,a(:i)),);
+
+  julia> normal_form(heisenberg_eom(a(:i),H,Ls))
+  -1//2 a(i)
+
+  julia> Ls = ((∑(:i,a(:i)),),);
+
+  julia> normal_form(heisenberg_eom(a(:i),H,Ls))
+  -1//2 ∑₁ a(#₁)
+
+  julia> Ls = (((:i,:j),(a(:i),a(:j))),);
+
+  julia> normal_form(heisenberg_eom(a(:i),H,Ls))
+  -1//2 ∑₁ a(#₁)
+  ```
+
+- `heisenberg_eom_system(H,rhsfilt,Ls=(),ops=nothing)` calculates the system of
+  equations of motion for the expectation values of operators appearing in `H`
+  and `Ls` (same conventions as for `heisenberg_eom` above). Typically, these
+  equation systems are not closed without approximations as equations for
+  products of ``n`` operators involve products of ``m>n`` operators, so the
+  system has to be truncated. This is achieved with a filter function that
+  removes higher-order terms or rewrites them (approximately) in terms of
+  lower-order expressions. The function `rhsfilt` is applied to the right-hand
+  side of the equations to filter them as desired. If
+  `rhsfilt(A::QuExpr)::QuExpr` is a function, it will be applied to the
+  calculated right-hand side of the equations. `QuantumAlgebra` comes with two
+  predefined constructors for filter functions, `droplen(maxorder::Int)`, which
+  leads to all terms of order higher than `maxorder` being neglected, and
+  `dropcorr(maxorder::Int)`, where all terms of order higher than `maxorder` are
+  rewritten in terms of lower-order expressions up to order `maxorder` and
+  higher-order correlators, with those correlations being neglected (i.e.,
+  `dropcorr(1)` will replace ``⟨a^† a⟩ = ⟨a^† a⟩_c + ⟨a^†⟩ ⟨a⟩ ≈ ⟨a^†⟩ ⟨a⟩``).
+  If `rhsfilt` is a number, it will be interpreted as `droplen(rhsfilt)`.
+  Finally, the `ops` argument can be used to specify the operators that should
+  be used to "seed" the system of equations, otherwise all operators appearing
+  in `H` are used.
+  ```jldoctest
+  julia> H = Pr"ω"*a'()*a() + Pr"χ"*a'()*(a'()+a())*a();
+
+  julia> Ls = ((Pr"γ",a()),);
+
+  julia> heisenberg_eom_system(H,2,Ls,a())
+  dₜ⟨a()⟩ = -1//2 γ ⟨a()⟩  - 1i ω ⟨a()⟩  - 2i χ ⟨a†() a()⟩  - 1i χ ⟨a()²⟩ 
+  dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩ 
+  dₜ⟨a()²⟩ = -2i χ ⟨a()⟩  - γ ⟨a()²⟩  - 2i ω ⟨a()²⟩  
+  ```
+  The `heisenberg_eom_system` function can also be passed either `ExpVal` or
+  `Corr` as a first argument, which will give the equations of motion of the
+  expectation values (the default) or correlators (corresponding to a cumulant
+  expansion) of the operators.
+    ```jldoctest
+  julia> H = Pr"ω"*a'()*a() + Pr"χ"*a'()*(a'()+a())*a();
+
+  julia> Ls = ((Pr"γ",a()),);
+
+  julia> heisenberg_eom_system(Corr,H,1,Ls,a())
+  dₜ⟨a()⟩c = -1//2 γ ⟨a()⟩c  - 1i ω ⟨a()⟩c  - 2i χ ⟨a†()⟩c ⟨a()⟩c  - 1i χ ⟨a()⟩c² 
   ```
 
 - `julia_expression(A)` to obtain a julia expression that can be used to

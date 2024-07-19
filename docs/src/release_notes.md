@@ -1,6 +1,6 @@
 # Release notes
 
-## v1.5.0 (2024-xx-xx)
+## v1.5.0 (2024-07-19)
 This is a minor release with some bug fixes and new features:
 - Add `heisenberg_eom_system` function to generate a system of Heisenberg
   equations of motion for either the expectation values or the cumulants /
