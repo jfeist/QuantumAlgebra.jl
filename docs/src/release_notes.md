@@ -20,9 +20,11 @@ This is a minor release with some bug fixes and new features:
   dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩ 
   dₜ⟨a()²⟩ = -2i χ ⟨a()⟩  - γ ⟨a()²⟩  - 2i ω ⟨a()²⟩  
   ```
+- Add additional argument `modes_in_vacuum` to `vacA`, `Avac`, and `vacExpVal`,
+  to restrict the modes that are considered to be in the vacuum state, with all
+  other operators unaffected.
 - Fix a LaTeX output error where Latexify misinterpreted a superscript "^+" as a
   sum and replaced "x^+ - y" with "x^- y".
-
 
 ## v1.4.0 (2024-06-29)
 This is a minor release with some bug fixes and new features:
