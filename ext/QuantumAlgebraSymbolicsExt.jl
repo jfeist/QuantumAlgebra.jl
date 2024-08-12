@@ -3,7 +3,13 @@ module QuantumAlgebraSymbolicsExt
 using QuantumAlgebra
 using Symbolics
 
-_issum(x::Num) = (v = Symbolics.value(x); Symbolics.SymbolicUtils.iscall(v) && Symbolics.operation(v) === (+))
+@static if hasproperty(Symbolics.SymbolicUtils,:iscall)
+    iscall = Symbolics.SymbolicUtils.iscall
+else
+    iscall = Symbolics.SymbolicUtils.istree
+end
+
+_issum(x::Num) = (v = Symbolics.value(x); iscall(v) && Symbolics.operation(v) === (+))
 
 QuantumAlgebra.numstring(x::Num) = _issum(x) ? "($(string(x)))" : string(x)
 QuantumAlgebra.numlatex(x::Num) = _issum(x) ? Expr(:latexifymerge,"\\left(",x, "\\right)") : x
