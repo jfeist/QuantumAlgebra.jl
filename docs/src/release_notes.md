@@ -1,5 +1,9 @@
 # Release notes
 
+## v1.5.1 (2024-11-20)
+This is a patch release with some fixes to improve compatibility with
+[Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl).
+
 ## v1.5.0 (2024-07-19)
 This is a minor release with some bug fixes and new features:
 - Add `heisenberg_eom_system` function to generate a system of Heisenberg
