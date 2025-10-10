@@ -160,7 +160,7 @@ end
     return LaTeXString("\\delta$(latexindstr((A.iA,A.iB)))")
 end
 @latexrecipe function f(A::BaseOpProduct)
-    cdot --> false
+    mult_symbol --> ""
 
     isempty(A.v) && return
     ex = Expr(:call,:*)
@@ -168,17 +168,17 @@ end
     return ex
 end
 @latexrecipe function f(A::ExpVal)
-    cdot --> false
+    mult_symbol --> ""
 
     return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle")
 end
 @latexrecipe function f(A::Corr)
-    cdot --> false
+    mult_symbol --> ""
 
     return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle_{c}")
 end
 @latexrecipe function f(A::QuTerm)
-    cdot --> false
+    mult_symbol --> ""
 
     isempty(A) && return
     ex = Expr(:call,:*)
@@ -188,7 +188,7 @@ end
 end
 @latexrecipe function f(A::QuExpr)
     fmt --> FancyNumberFormatter()
-    cdot --> false
+    mult_symbol --> ""
 
     ex = 0
     # convert to tuples so sorting ignores the numbers if terms are different (which they are)
