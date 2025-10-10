@@ -9,7 +9,7 @@ makedocs(;
     repo="https://github.com/jfeist/QuantumAlgebra.jl/blob/{commit}{path}#{line}",
     sitename="QuantumAlgebra.jl",
     format=Documenter.HTML(;
-        prettyurls=get(ENV, "CI", "false") == "true",
+        prettyurls=true,
         canonical="https://jfeist.github.io/QuantumAlgebra.jl",
         assets=String[],
     ),
