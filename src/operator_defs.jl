@@ -8,7 +8,7 @@ export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
-export @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @param
+export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @param
 export map_scalar_function
 
 # compile-time options
@@ -406,6 +406,23 @@ function parse_name_array(expr)
     else
         throw(ArgumentError("Expected symbol or array statement, got $(expr)."))
     end
+end
+
+# use as `@qindex i j[:] k[:]` to define indices i,j,k, where j and k have a numeric subindex
+macro qindex(exprs...)
+    code = Expr(:block)
+    names = []
+    for expr in exprs
+        name, ndims = parse_name_array(expr)
+        ndims < 2 || error("indices can have at most one subscript")
+        refind = QuIndex(name)
+        sym = refind.sym
+        rhs = iszero(ndims) ? refind : :( QuExprCstrctArrAlias(Base.Fix1(QuIndex,$sym),$ndims) )
+        push!(names, esc(name))
+        push!(code.args, :( $(esc(name)) = $rhs ))
+    end
+    push!(code.args, :( ($(names...),) ))
+    code
 end
 
 function quexpr_variable_code(expr, opfunc, postfixes=(Symbol(),))
