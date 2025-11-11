@@ -41,7 +41,7 @@ end
 
     @testset "variables are consts" begin
         for name in names(QuantumAlgebra,all=true)
-            startswith(string(name),"##meta#") && continue
+            startswith(string(name),"#") && continue
             @test isconst(QuantumAlgebra, name)
         end
     end
