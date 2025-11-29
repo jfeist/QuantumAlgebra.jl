@@ -24,10 +24,10 @@ function Base.:^(A::Union{QuTerm,QuExpr},n::Int)
 end
 Base.literal_pow(::typeof(^),A::Union{QuTerm,QuExpr},::Val{n}) where n = A^n
 
-noaliascopy(A::Param) = Param(A.name,A.state,copy(A.inds))
+noaliascopy(A::Param) = Param(A.name,A.state,indcopy(A.inds))
 # δ is isbitstype
 noaliascopy(A::δ) = A
-noaliascopy(A::BaseOperator) = BaseOperator(A.t,A.name,copy(A.inds))
+noaliascopy(A::BaseOperator) = BaseOperator(A.t,A.name,indcopy(A.inds))
 noaliascopy(A::T) where T<:Union{ExpVal,Corr} = T(noaliascopy(A.ops))
 noaliascopy(A::BaseOpProduct) = BaseOpProduct(noaliascopy(A.v))
 noaliascopy(v::Vector{T}) where T<:Union{δ,Param,BaseOperator,ExpVal,Corr} = noaliascopy.(v)

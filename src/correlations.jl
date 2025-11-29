@@ -159,7 +159,7 @@ function term2expvals(A::QuTerm,C::Tuple)
     QuTerm(A.nsuminds,A.δs,A.params,expvals,A.corrs,BaseOpProduct())
 end
 
-_canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(A.inds))
+_canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(assignedinds(A.inds)))
 _expval2tuple(A::ExpVal) = Tuple(_canon_op_to_num.(A.ops.v))
 const _CORR2EXPVALS_CACHE = Dict{Int,Vector{Any}}()
 function corr2expvals_inds(N)

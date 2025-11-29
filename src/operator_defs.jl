@@ -19,6 +19,17 @@ function set_define_default_ops(t::Bool)
     end
 end
 
+# compile-time options
+const _QUINDICES_TYPE = @load_preference("quindices_type", "Vector")
+function set_quindices_type(t::String)
+    parse_quindices_type(t)
+    @set_preferences!("quindices_type" => t)
+    if t != _QUINDICES_TYPE
+        @info("quindices_type setting changed to $t; restart your Julia session for this change to take effect!")
+    end
+end
+
+
 # dynamically changeable options
 const _using_σpm = Ref(false)
 function use_σpm(t::Bool=true; set_preference=false)
@@ -80,17 +91,44 @@ isnoindex(ii::QuIndex) = ii == NoIndex
 
 @inline Base.isless(i1::QuIndex,i2::QuIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
 
-const QuIndices = Vector{QuIndex}
-Base.tail(inds::QuIndices) = inds[2:end]
-assignedinds(inds::QuIndices) = inds
-# const QuIndices = NTuple{5,QuIndex}
-# # no need to define Base.tail for NTuple
-# assignedinds(inds::QuIndices) = filter(!isnoindex,inds)
+function parse_quindices_type(t::String)
+    if t == "Vector"
+        return Vector{QuIndex}
+    elseif startswith(t,"NTuple")
+        m = match(r"NTuple\{(\d+)\}", t)
+        m !== nothing || throw(ArgumentError("Invalid quindices_type specification: $t"))
+        N = parse(Int, m.captures[1])
+        return NTuple{N,QuIndex}
+    else
+        throw(ArgumentError("quindices_type has to be one of \"Vector\" or \"NTuple{N}\", got \"$t\"."))
+    end
+end
+
+const QuIndices = parse_quindices_type(_QUINDICES_TYPE)
+@static if QuIndices == Vector{QuIndex}
+    const _QUINDICES_LENGTH = typemax(Int)
+    assignedinds(inds::QuIndices) = inds
+    indcopy(inds::QuIndices) = copy(inds)
+    Base.tail(inds::QuIndices) = inds[2:end]
+    make_indices(inds...)::QuIndices = [QuIndex(i) for i in inds]
+elseif QuIndices <: NTuple
+    # no need to define Base.tail for NTuple
+    assignedinds(inds::QuIndices) = filter(!isnoindex,inds)
+    indcopy(inds::QuIndices) = inds
+    let
+        tuple_len(::Type{NTuple{N,T}}) where {N,T} = N
+        global const _QUINDICES_LENGTH = tuple_len(QuIndices)
+        syms = Symbol.(:i, 1:_QUINDICES_LENGTH)
+        args = Expr.(:kw, syms, :NoIndex)
+        body = Expr(:tuple, Expr.(:call, :QuIndex, syms)...)
+        @eval make_indices($(args...))::QuIndices = $body
+    end
+else
+    error("Unexpected QuIndices type")
+end
 
 make_indices(inds::QuIndices) = inds
 make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
-make_indices(inds...)::QuIndices = [QuIndex(i) for i in inds]
-#make_indices(i1=NoIndex,i2=NoIndex,i3=NoIndex,i4=NoIndex,i5=NoIndex)::QuIndices = (QuIndex(i1),QuIndex(i2),QuIndex(i3),QuIndex(i4),QuIndex(i5))
 
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]

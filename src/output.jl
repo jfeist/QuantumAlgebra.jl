@@ -45,7 +45,7 @@ end
 
 Base.print(io::IO,A::BaseOperator) = (B = unalias(A); print(io,B.name,BaseOpType_sym[Int(B.t)],"(",B.inds...,")"))
 Base.print(io::IO,A::δ) = print(io,"δ(",A.iA,A.iB,")")
-Base.print(io::IO,A::Param) = print(io, A.name, A.state=='c' ? "*" : "", length(A.inds)==0 ? "" : "($(A.inds...))")
+Base.print(io::IO,A::Param) = print(io, A.name, A.state=='c' ? "*" : "", isempty(assignedinds(A.inds)) ? "" : "($(A.inds...))")
 Base.print(io::IO,A::ExpVal) = print(io,"⟨", A.ops, "⟩")
 Base.print(io::IO,A::Corr) = print(io,"⟨", A.ops, "⟩c")
 
@@ -142,13 +142,13 @@ function _push_exponents!(ex,itr)
 end
 
 @latexrecipe function f(ii::QuIndex)
-    isnoindex(ii) && return
+    isnoindex(ii) && return LaTeXString("")
     isintindex(ii) && return LaTeXString("$(ii.num)")
     issumindex(ii) && return LaTeXString("\\#_{$(ii.num)}")
     s = unicode_to_latex(string(ii.sym))
     return LaTeXString(ii.num == typemin(ii.num) ? s : "$(s)_{$(ii.num)}")
 end
-latexindstr(inds) = isempty(inds) ? "" : "_{$(latexify.(inds)...)}"
+latexindstr(inds) = isempty(assignedinds(inds)) ? "" : "_{$(latexify.(inds)...)}"
 @latexrecipe function f(A::BaseOperator)
     B = unalias(A)
     return LaTeXString("{$(unicode_to_latex(B.name))}$(latexindstr(B.inds))$(BaseOpType_latex[Int(B.t)])")

@@ -3,7 +3,7 @@ export Avac, vacA, vacExpVal
 function _get_mode_name(ex::QuExpr)
     opprod = to_opprod(ex)
     op = unalias(only(opprod.v))
-    isempty(op.inds) || throw(ArgumentError("Modes in vacuum should be given without indices"))
+    isempty(assignedinds(op.inds)) || throw(ArgumentError("Modes in vacuum should be given without indices"))
     op.name
 end
 
