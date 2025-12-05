@@ -285,7 +285,7 @@ _map_quexpr_ops(f,A::QuExpr) = QuExpr((f(t),s) for (t,s) in A.terms)
 
 map_scalar_function(f,A::QuExpr) = QuExpr((t,f(s)) for (t,s) in A.terms)
 
-struct QuExprConstructor{F,Fdag} <: Function
+struct QuExprConstructor{F,Fdag}
     name::String
     f::F
     namedag::String

@@ -648,7 +648,7 @@ function *(A::QuTerm,B::QuTerm)
         f = reorder_suminds()
         apflat = (args...) -> f.(Iterators.flatten(args))
     else
-        apflat = (args...) -> vcat(args...)
+        apflat = vcat
     end
     δs = apflat(A.δs, B.δs)
     params = apflat(A.params, B.params)
