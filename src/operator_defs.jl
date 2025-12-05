@@ -12,6 +12,15 @@ export map_scalar_function
 
 # compile-time options
 const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", true)
+
+"""
+    set_define_default_ops(t::Bool)
+
+Set the preference for whether to define default operators (`a`, `adag`, `f`, `fdag`, `σx`, `σy`, `σz`, `σp`, `σm`) upon import.
+Default is `true`.
+
+Note that changing this preference requires restarting the Julia session to take effect.
+"""
 function set_define_default_ops(t::Bool)
     @set_preferences!("define_default_ops" => t)
     if t != _DEFINE_DEFAULT_OPS
@@ -21,6 +30,17 @@ end
 
 # compile-time options
 const _QUINDICES_TYPE = @load_preference("quindices_type", "Vector")
+
+"""
+    set_quindices_type(t::String)
+
+Set the preference for the underlying type used to store indices. `t` must be
+either `"Vector"` (default) or `"NTuple{N}"` (where `N` is an integer).
+- `"Vector"`: Uses `Vector{QuIndex}`. Allows arbitrary number of indices but is slower due to heap allocation.
+- `"NTuple{N}"`: Uses `NTuple{N,QuIndex}`. Faster (stack allocation) but limits the number of indices per operator to a maximum of `N`.
+
+Note that changing this preference requires restarting the Julia session to take effect.
+"""
 function set_quindices_type(t::String)
     parse_quindices_type(t)
     @set_preferences!("quindices_type" => t)

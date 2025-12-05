@@ -1,5 +1,12 @@
 # Release notes
 
+## v1.6.0 (2025-12-05)
+This is a minor release with internal improvements and new features:
+- The internal storage of indices (`QuIndices`) can now be configured to use
+  `NTuple{N,QuIndex}` for arbitrary `N` (previously limited to `N=5` when using
+  tuples). This can be set via the `quindices_type` preference.
+- Documentation for the `quindices_type` preference has been added.
+
 ## v1.5.1 (2024-11-20)
 This is a patch release with some fixes to improve compatibility with
 [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl).

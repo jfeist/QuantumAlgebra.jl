@@ -410,6 +410,15 @@ permanently (this uses [Preferences.jl](https://github.com/JuliaPackaging/Prefer
     `QuantumAlgebra.use_σpm(true/false)`, and can be made permanent with
     `QuantumAlgebra.use_σpm(true/false; set_preference=true)` or with
     `Preferences.set_preferences!(QuantumAlgebra,"use_σpm"=>true/false)`.
+  - `"quindices_type"`: Choose the underlying type for storing indices. The
+    default is `"Vector"`, which allows an arbitrary number of indices but is
+    slower (allocates memory). The alternative is `"NTuple{N}"` (e.g.,
+    `"NTuple{5}"`), which uses a fixed-size tuple to store up to `N` indices.
+    This is faster (stack-allocated) but limits the number of indices per
+    operator to a maximum of `N`.
+    This setting can be changed with `QuantumAlgebra.set_quindices_type("Vector"
+    / "NTuple{N}")`. Note that changing this value requires restarting the Julia
+    session to take effect.
 
 ## Citing
 

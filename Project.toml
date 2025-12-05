@@ -1,6 +1,6 @@
 name = "QuantumAlgebra"
 uuid = "1b9008d5-2a9d-4901-8cfb-44bb87795b64"
-version = "1.5.1"
+version = "1.6.0"
 authors = ["Johannes Feist <johannes.feist@gmail.com> and contributors"]
 
 [deps]
