@@ -157,7 +157,7 @@ end
     return LaTeXString(string("$(unicode_to_latex(A.name))$(latexindstr(A.inds))", A.state=='c' ? "^{*}" : ""))
 end
 @latexrecipe function f(A::δ)
-    return LaTeXString("\\delta$(latexindstr((A.iA,A.iB)))")
+    return LaTeXString("\\delta$(latexindstr(make_indices(A.iA,A.iB)))")
 end
 @latexrecipe function f(A::BaseOpProduct)
     mult_symbol --> ""
