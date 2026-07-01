@@ -55,13 +55,6 @@ function ≈(A::QuExpr,B::QuExpr)
     return true
 end
 
-function Base.hash(v::Vector{T},h::UInt) where T <: QuantumObject
-    h = hash(length(v),h)
-    for x in v
-        h = hash(x,h)
-    end
-    h
-end
 function Base.hash(ind::QuIndex,h::UInt)
     ### CAREFUL: This relies on the fact that QuIndex has two 32-bit components
     ### and is the same size as a UInt64
