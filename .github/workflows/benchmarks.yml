@@ -1,0 +1,71 @@
+name: Benchmarks
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: Benchmarks (Julia 1, ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+
+      - uses: julia-actions/cache@v2
+
+      - name: Instantiate benchmark environment
+        shell: julia --color=yes --project=bench {0}
+        run: |
+          using Pkg
+          Pkg.develop(PackageSpec(path=pwd()))
+          Pkg.instantiate()
+
+      - name: Run benchmarks (current branch)
+        run: julia --color=yes --project=bench bench/runbench.jl --output bench/results/current.toml --seconds 1.0
+
+      - name: Upload benchmark result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: bench/results/current.toml
+
+      - name: Prepare baseline checkout
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.sha }}
+          git worktree add ../_benchmark_base ${{ github.event.pull_request.base.sha }}
+
+      - name: Instantiate baseline benchmark environment
+        if: github.event_name == 'pull_request'
+        working-directory: ../_benchmark_base
+        shell: julia --color=yes --project=bench {0}
+        run: |
+          using Pkg
+          Pkg.develop(PackageSpec(path=pwd()))
+          Pkg.instantiate()
+
+      - name: Run baseline benchmarks
+        if: github.event_name == 'pull_request'
+        working-directory: ../_benchmark_base
+        run: julia --color=yes --project=bench bench/runbench.jl --output bench/results/baseline.toml --seconds 1.0
+
+      - name: Compare with baseline and fail on regressions
+        if: github.event_name == 'pull_request'
+        run: julia --color=yes --project=bench bench/runbench.jl --current bench/results/current.toml --baseline ../_benchmark_base/bench/results/baseline.toml --threshold 0.10 --fail-on-regression
+
+      - name: Upload baseline benchmark artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline-${{ github.event.pull_request.base.sha }}
+          path: ../_benchmark_base/bench/results/baseline.toml

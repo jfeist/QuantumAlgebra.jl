@@ -427,4 +427,25 @@ permanently (this uses [Preferences.jl](https://github.com/JuliaPackaging/Prefer
 
 If you use QuantumAlgebra in academic work, we would appreciate a citation. See
 [`CITATION.bib`](CITATION.bib) for the relevant references.
- 
+
+## Benchmarks
+The benchmark suite lives in the [bench](bench/) directory and uses Chairmarks.jl.
+
+Run all benchmarks:
+```julia
+julia --project=bench bench/runbench.jl
+```
+
+Write results to a custom file:
+```julia
+julia --project=bench bench/runbench.jl --output bench/results/local.toml
+```
+
+Compare a run against a baseline:
+```julia
+julia --project=bench bench/runbench.jl --output bench/results/current.toml
+julia --project=bench bench/runbench.jl --current bench/results/current.toml --baseline bench/results/baseline.toml --threshold 0.10
+```
+
+On GitHub Actions, [Benchmarks workflow](.github/workflows/benchmarks.yml) runs on pushes and pull requests,
+stores benchmark artifacts, and fails pull requests with regressions above the configured threshold.

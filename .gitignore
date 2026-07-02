@@ -9,3 +9,4 @@
 
 .ipynb_checkpoints/
 .CondaPkg/
+bench/results/
