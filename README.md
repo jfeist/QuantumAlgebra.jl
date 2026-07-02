@@ -441,11 +441,12 @@ Write results to a custom file:
 julia --project=bench bench/runbench.jl --output bench/results/local.toml
 ```
 
-Compare a run against a baseline:
+Benchmark a commit range and append results to a CSV history database:
 ```julia
-julia --project=bench bench/runbench.jl --output bench/results/current.toml
-julia --project=bench bench/runbench.jl --current bench/results/current.toml --baseline bench/results/baseline.toml --threshold 0.10
+julia --project=bench bench/bench_over_commits.jl main~30..main
 ```
 
-On GitHub Actions, [Benchmarks workflow](.github/workflows/benchmarks.yml) runs on pushes and pull requests,
-stores benchmark artifacts, and fails pull requests with regressions above the configured threshold.
+The history runner uses `git rev-list --reverse` internally, so any revision specification accepted there can be used.
+It writes a machine-and-Julia-version specific CSV database under `bench/results/` by default,
+including commit hash, commit timestamp, benchmark name, and metrics (`time_ns`, `allocs`, `bytes`).
+It always uses the benchmark scripts from your current checkout; only the `QuantumAlgebra` package source is switched across the requested commit range.

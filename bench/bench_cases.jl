@@ -23,9 +23,9 @@ function make_cases()
     @boson_ops a
     @tlsxyz_ops σ
 
-    H = ∑(:n, ∑(:m, ∑(:k, Pr"ω_n,m" * a'(:n, :k) * a(:m, :k)))) +
+    H = ∑(:n, ∑(:m, ∑(:k, Pr"ω_n,m" * a(:n, :k)' * a(:m, :k)))) +
         ∑(:i, 1 // 2 * Pr"ν_i" * σz(:i)) +
-        ∑(:n, ∑(:k, ∑(:i, Pr"g_i,n,k" * σx(:i) * (a'(:n, :k) + a(:n, :k)))))
+        ∑(:n, ∑(:k, ∑(:i, Pr"g_i,n,k" * σx(:i) * (a(:n, :k)' + a(:n, :k)))))
 
     Acomm = σz(:j)
 
@@ -36,7 +36,7 @@ function make_cases()
         
     Random.seed!(4)
     # Shuffle so no operator appears twice (as σz() * σz() == 1).
-    randops = shuffle!([a.(1:50)..., σz.(1:50)..., a'.(1:50)...])
+    randops = shuffle!([a.(1:50)..., σz.(1:50)..., adjoint.(a.(1:50))...])
     
     prodcorr_cases = [
         begin
