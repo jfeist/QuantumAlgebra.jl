@@ -4,7 +4,6 @@ using TOML
 
 const BENCH_SCRIPT = abspath(joinpath(@__DIR__, "runbench.jl"))
 const BENCH_PROJECT = abspath(joinpath(@__DIR__, "Project.toml"))
-const DEFAULT_SCRATCH_DIR = joinpath(@__DIR__, ".bench_over_commits")
 
 function parse_cli_args(args)
     s = ArgParseSettings(autofix_names = true)
@@ -25,10 +24,6 @@ function parse_cli_args(args)
         "--rerun-existing"
             help = "Re-run commits already present in database"
             action = :store_true
-        "--scratch-dir"
-            help = "Temporary project-local directory containing the git worktree and benchmark environment"
-            arg_type = String
-            default = DEFAULT_SCRATCH_DIR
     end
 
     return ArgParse.parse_args(args, s; as_symbols = true)
@@ -103,61 +98,20 @@ function append_benchmark_rows(db_path::AbstractString, meta, payload)
     suites = payload["suites"]
     open(db_path, "a") do io
         for suite in suites
-            suite_name = String(suite["name"])
             for case in suite["cases"]
-                case_name = String(case["name"])
                 metrics = case["metrics"]
-                println(
-                    io,
-                    string(
-                        meta.hash, ",",
-                        meta.unix, ",",
-                        meta.iso, ",",
-                        VERSION, ",",
-                        gethostname(), ",",
-                        suite_name, ",",
-                        case_name, ",",
-                        Float64(metrics["time_ns"]), ",",
-                        Int(round(metrics["allocs"])), ",",
-                        Int(round(metrics["bytes"])),
-                    ),
-                )
+                join(io, [meta.hash, meta.unix, meta.iso, VERSION, gethostname(), suite["name"], 
+                          case["name"], metrics["time_ns"], metrics["allocs"], metrics["bytes"]], ",")
+                println(io)
             end
         end
     end
 end
 
-function ensure_worktree(repo::AbstractString, worktree::AbstractString, commit::AbstractString)
-    run(`git -C $(repo) worktree prune`)
-    if isdir(worktree)
-        rm(worktree; recursive = true, force = true)
-    end
-    run(`git -C $(repo) worktree add --force --detach $(worktree) $(commit)`)
-end
-
-function checkout_in_worktree(worktree::AbstractString, commit::AbstractString)
-    run(`git -C $(worktree) checkout --detach --force $(commit)`)
-end
-
-function setup_benchmark_env(env_dir::AbstractString, worktree::AbstractString)
-    if isdir(env_dir)
-        rm(env_dir; recursive = true, force = true)
-    end
-    mkpath(env_dir)
-    cp(BENCH_PROJECT, joinpath(env_dir, "Project.toml"); force = true)
-    if isfile(joinpath(env_dir, "Manifest.toml"))
-        rm(joinpath(env_dir, "Manifest.toml"); force = true)
-    end
-    setup_expr = "using Pkg; Pkg.develop(PackageSpec(path=\"$(worktree)\")); Pkg.instantiate()"
-    setup_cmd = `$(Base.julia_cmd()) --project=$(env_dir) -e $(setup_expr)`
-    run(setup_cmd)
-end
-
 function run_benchmark_in_worktree(seconds::Real, env_dir::AbstractString)
     output_file, io = mktemp()
     close(io)
-    cmd = `$(Base.julia_cmd()) --project=$(env_dir) $(BENCH_SCRIPT) --output $(output_file) --seconds $(seconds)`
-    run(cmd)
+    run(`$(Base.julia_cmd()) --project=$(env_dir) $(BENCH_SCRIPT) --output $(output_file) --seconds $(seconds)`)
     payload = TOML.parsefile(output_file)
     rm(output_file; force = true)
     return payload
@@ -169,13 +123,9 @@ function main(args)
     repo = abspath(joinpath(@__DIR__, ".."))
     db_opt = get(opts, :database, nothing)
     db_path = isnothing(db_opt) ? default_database_path() : abspath(String(db_opt))
-    rerun_existing = Bool(opts[:rerun_existing])
+    rerun_existing = opts[:rerun_existing]
     seconds = opts[:seconds]
-    scratch_dir = abspath(String(opts[:scratch_dir]))
-    worktree = joinpath(scratch_dir, "worktree")
-    bench_env = joinpath(scratch_dir, "env")
-
-    revspec = Vector{String}(opts[:revspec])
+    revspec = opts[:revspec]
     commits = collect_commits(repo, revspec)
     isempty(commits) && error("No commits matched revision spec: $(join(revspec, " "))")
 
@@ -185,27 +135,33 @@ function main(args)
     println("Database: ", db_path)
     println("Commits matched: ", length(commits))
 
-    mkpath(scratch_dir)
-    ensure_worktree(repo, worktree, commits[1])
-    try
+    mktempdir() do scratch_dir
+        worktree = joinpath(scratch_dir, "worktree")
+        bench_env = joinpath(scratch_dir, "env")
+
+        run(`git -C $(repo) worktree prune`)
+        run(`git -C $(repo) worktree add --force --detach $(worktree) $(commits[1])`)
+
+        mkpath(bench_env)
+        cp(BENCH_PROJECT, joinpath(bench_env, "Project.toml"))
+        setup_expr = "using Pkg; Pkg.develop(PackageSpec(path=\"$(worktree)\"));"
+        run(`$(Base.julia_cmd()) --project=$(bench_env) -e $(setup_expr)`)
+
         for commit in commits
             if !rerun_existing && (commit in existing)
                 println("Skipping existing commit: ", commit)
                 continue
             end
 
-            checkout_in_worktree(worktree, commit)
+            run(`git -C $(worktree) checkout --force --detach $(commit)`)
             meta = commit_metadata(repo, commit)
             println("Running benchmarks for ", meta.hash, " (", meta.iso, ")")
 
-            setup_benchmark_env(bench_env, worktree)
+            run(`$(Base.julia_cmd()) --project=$(bench_env) -e "using Pkg; Pkg.resolve()"`)
             payload = run_benchmark_in_worktree(seconds, bench_env)
             append_benchmark_rows(db_path, meta, payload)
             push!(existing, commit)
         end
-    finally
-        run(`git -C $(repo) worktree remove --force $(worktree)`)
-        rm(scratch_dir; recursive = true, force = true)
     end
 
     println("Done.")
