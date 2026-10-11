@@ -1,5 +1,8 @@
 # Release notes
 
+## v1.7.0 (unreleased)
+- The minimum supported Julia version is now 1.10 (the current LTS).
+
 ## v1.6.1 (2026-10-11)
 This is a patch release with bug fixes:
 - Fix `expval_as_corrs` and `corr_as_expvals` (and thus `heisenberg_eom_system` for

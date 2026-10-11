@@ -35,7 +35,7 @@ Preferences = "1"
 SymPy = "1, 2"
 SymPyPythonCall = "0.3, 0.4, 0.5"
 Symbolics = "5.14, 6, 7"
-julia = "1.6"
+julia = "1.10"
 
 [extras]
 SymPy = "24249f21-da20-56a4-8eb1-6a02cf4ae2e6"
