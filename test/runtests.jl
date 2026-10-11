@@ -234,6 +234,10 @@ end
             @test_is_normal_form tmp
 
             @test_throws ArgumentError normal_form(QuExpr(TLSx(:σ)) * QuExpr(TLSCreate(:σ)))
+            @test_throws ArgumentError normal_form(QuExpr(TLSx(:σ,:i)) * QuExpr(TLSCreate(:σ,:j)))
+            # Pauli matrices and jump operators can be mixed if they cannot act on the same two-level system
+            @test normal_form(QuExpr(TLSx(:σ)) * QuExpr(TLSCreate(:τ))) == QuExpr(TLSCreate(:τ)) * QuExpr(TLSx(:σ))
+            @test normal_form(QuExpr(TLSx(:σ,1)) * QuExpr(TLSCreate(:σ,2))) == QuExpr(TLSCreate(:σ,2)) * QuExpr(TLSx(:σ,1))
 
             tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*a'(5)*a(5))
             if QuantumAlgebra.using_σpm()

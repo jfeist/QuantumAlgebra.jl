@@ -74,14 +74,15 @@ end
     τx, τy, τz = ((inds...) -> QuExpr(T(:τ, inds...)) for T in (QA.TLSx, QA.TLSy, QA.TLSz))
     ρx, ρy, ρz = ((inds...) -> QuExpr(T(:ρ, inds...)) for T in (QA.TLSx, QA.TLSy, QA.TLSz))
 
-    # operators acting on sites given by `sites` (two-level systems either with
-    # jump operators σ± or with Pauli matrices τˣʸᶻ, ρˣʸᶻ, since these cannot be mixed)
+    # operators acting on sites given by `sites` (two-level systems with jump operators σ±,
+    # and if pauli == true, also other two-level systems with Pauli matrices τˣʸᶻ, ρˣʸᶻ)
     function oppool(sites, pauli)
         ops = QuExpr[]
         for s in sites
             append!(ops, [q(i,j,s) for i=1:3, j=1:3])
             append!(ops, [p(i,j,s) for i=1:2, j=1:2])
-            append!(ops, pauli ? [τx(s), τy(s), τz(s), ρx(s), ρz(s)] : [σp(s), σm(s)])
+            append!(ops, [σp(s), σm(s)])
+            pauli && append!(ops, [τx(s), τy(s), τz(s), ρx(s), ρz(s)])
             append!(ops, [f(s), f'(s)])
         end
         ops

@@ -156,7 +156,8 @@ commutes(::Val{FermionFamily}, A, B) = opname(A) != opname(B)
 ## two-level systems                                           ##
 #################################################################
 # either described by σ⁺ and σ⁻ (TLSCreate_ and TLSDestroy_), or by the
-# Pauli matrices σˣ, σʸ, σᶻ (TLSx_, TLSy_, TLSz_). These cannot be mixed.
+# Pauli matrices σˣ, σʸ, σᶻ (TLSx_, TLSy_, TLSz_). These cannot be mixed for
+# operators that can act on the same two-level system.
 
 ispauli(t::BaseOpType) = t in (TLSx_,TLSy_,TLSz_)
 
@@ -176,8 +177,8 @@ end
 function exchange!(::Val{TLSFamily}, emit, B, A)
     ta, tb = optype(A), optype(B)
     ta == tb && return 1
-    ispauli(ta) == ispauli(tb) || throw(ArgumentError("QuantumAlgebra currently does not support mixing 'normal' (x,y,z) Pauli matrices with jump operators (+,-)."))
     maybe_same_site(A,B) || return 1
+    ispauli(ta) == ispauli(tb) || throw(ArgumentError("QuantumAlgebra currently does not support mixing 'normal' (x,y,z) Pauli matrices with jump operators (+,-) acting on the same two-level system."))
     dd = site_deltas(A,B)
     if ta == TLSCreate_ && tb == TLSDestroy_
         if isempty(dd)
