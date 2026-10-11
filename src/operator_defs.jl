@@ -575,7 +575,8 @@ acting on the qudit with indices `inds`. Level 1 is the ground state, i.e., the 
 Internally, all operators are expressed through the "creation" operators ``|i⟩⟨1|`` and
 "annihilation" operators ``|1⟩⟨i|`` (with ``i ≥ 2``), using ``|i⟩⟨j| = |i⟩⟨1|1⟩⟨j|`` and
 ``|1⟩⟨1| = 1 - \\sum_{k≥2} |k⟩⟨1|1⟩⟨k|``, which gives a unique normal form. For `d=2`, `q(2,1)`
-and `q(1,2)` are equivalent to ``σ^{+}`` and ``σ^{-}``.
+and `q(1,2)` are equivalent to ``σ^{+}`` and ``σ^{-}``. When printing, products ``|i⟩⟨1|1⟩⟨j|``
+acting on the same qudit are shown as ``|i⟩⟨j|`` (written `qⁱʲ`).
 
 # Examples
 ```julia

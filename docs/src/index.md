@@ -125,13 +125,13 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   q (constructor for 3-level qudit)
 
   julia> q(2,3,:i)
-  q²¹(i) q¹³(i)
+  q²³(i)
 
   julia> normal_form(q(1,2,:i)*q(2,3,:i))
   q¹³(i)
 
   julia> q(1,1)
-  1 - q²¹() q¹²() - q³¹() q¹³()
+  1 - q²²() - q³³()
   ```
 
 - `param(name::Symbol,state='n',inds...)` to create a named parameter. `state` must be

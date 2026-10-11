@@ -309,8 +309,8 @@ lookahead_contraction(::Val{QuditFamily}, ::BaseOpType) = true
 
 op_adjoint(::Val{QuditFamily}, A::BaseOperator) = ((d,i,j) = qudit_levels(A); qudit_op(opname(A), d, j, i, inds(A)))
 
-function opsymbol(::Val{QuditFamily}, A::BaseOperator, style::Symbol)
-    _, i, j = qudit_levels(A)
+opsymbol(::Val{QuditFamily}, A::BaseOperator, style::Symbol) = ((_, i, j) = qudit_levels(A); _qudit_symbol(i, j, style))
+function _qudit_symbol(i, j, style::Symbol)
     if style === :latex
         "^{$i$(max(i,j) ≥ 10 ? "," : "")$j}"
     elseif style === :expr

@@ -2,7 +2,15 @@
     q = qudit_ops(:q, 3)
     @test string(q) == "q (constructor for 3-level qudit)"
     @test string(q(2,1,:i)) == "q²¹(i)"
-    @test string(q(2,3,:i)) == "q²¹(i) q¹³(i)"
+    # products |i⟩⟨1|1⟩⟨j| on the same qudit are displayed as |i⟩⟨j|
+    @test string(q(2,3,:i)) == "q²³(i)"
+    @test string(q(1,1)) == "1 - q²²() - q³³()"
+    @test latex(q(2,3,:i)) == "{q}_{i}^{23}"
+    @test julia_expression(expval(q(2,3,:i))) == :(q_2_3[i])
+    @test julia_expression(expval(q(3,2,:i)),[:q_2_3]) == :(conj(q_2_3[i]))
+    # ...but only if this does not require moving operators past ones that they might not commute with
+    @test string(q(2,1,:i)*q(3,1,:k)*q(1,2,:k)*q(1,3,:i)) == "q²¹(i) q³²(k) q¹³(i)"
+    @test string(q(2,1,1)*q(3,1,2)*q(1,2,2)*q(1,3,1)) == "q²³(1) q³²(2)"
     @test latex(q(1,3,:i)) == "{q}_{i}^{13}"
     @test julia_expression(expval(q(1,3,:i))) == :(q_1_3[i])
     @test_throws ArgumentError q(4,1)

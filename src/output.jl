@@ -32,7 +32,39 @@ function printspaced(io::IO,v,trailing_space=false)
     trailing_space && print(io," ")
 end
 
-Base.print(io::IO,A::OpProduct) = printspaced(io,A)
+Base.print(io::IO,A::OpProduct) = printspaced(io,_display_items(A))
+
+# For display, products |i⟩⟨1| |1⟩⟨j| of operators on the same qudit (see `qudit_ops`) are shown as |i⟩⟨j|
+struct _QuditTransition
+    create::BaseOperator
+    destroy::BaseOperator
+end
+Base.:(==)(A::_QuditTransition,B::_QuditTransition) = A.create == B.create && A.destroy == B.destroy
+_levels(T::_QuditTransition) = (qudit_levels(T.create)[2], qudit_levels(T.destroy)[3])
+Base.print(io::IO,T::_QuditTransition) = print(io,opname(T.create),_qudit_symbol(_levels(T)...,:text),"(",inds(T.create)...,")")
+
+# the items to display for a product of operators: operators, and pairs of operators on the same qudit that
+# are merged into a transition operator (if the second one commutes with all operators between them)
+function _display_items(ops)
+    any(O -> optype(O) == QuditCreate_, ops) || return ops
+    v = collect(ops)
+    items = Union{BaseOperator,_QuditTransition}[]
+    merged = falses(length(v))
+    for k in eachindex(v)
+        merged[k] && continue
+        O = v[k]
+        kp = optype(O) == QuditCreate_ ? findnext(P -> optype(P) == QuditDestroy_ && opname(P) == opname(O) && inds(P) == inds(O), v, k+1) : nothing
+        if kp !== nothing && !merged[kp] && all(m -> commutes(v[m],v[kp]), k+1:kp-1)
+            merged[kp] = true
+            push!(items, _QuditTransition(O,v[kp]))
+        else
+            push!(items, O)
+        end
+    end
+    items
+end
+# the indices of the displayed items
+_display_indices(ops) = QuIndex[ind for x in _display_items(ops) for ind in (x isa _QuditTransition ? inds(x.create) : inds(x))]
 function Base.print(io::IO,ii::QuIndex)
     if isnoindex(ii)
         return
@@ -160,12 +192,15 @@ end
 @latexrecipe function f(A::δ)
     return LaTeXString("\\delta$(latexindstr(make_indices(A.iA,A.iB)))")
 end
+@latexrecipe function f(T::_QuditTransition)
+    return LaTeXString("{$(unicode_to_latex(opname(T.create)))}$(latexindstr(inds(T.create)))$(_qudit_symbol(_levels(T)...,:latex))")
+end
 @latexrecipe function f(A::OpProduct)
     mult_symbol --> ""
 
     isempty(A) && return
     ex = Expr(:call,:*)
-    _push_exponents!(ex,A)
+    _push_exponents!(ex,_display_items(A))
     return ex
 end
 @latexrecipe function f(A::ExpVal)

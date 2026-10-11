@@ -2,7 +2,8 @@ export julia_expression
 
 # to make a variable name from operators
 varname(A::BaseOperator) = string(opname(A),opsymbol(A,:expr))
-varname(A::OpProduct) = Symbol((varname(O) for O in A)...)
+varname(T::_QuditTransition) = string(opname(T.create),_qudit_symbol(_levels(T)...,:expr))
+varname(A::OpProduct) = Symbol((varname(O) for O in _display_items(A))...)
 varname(A::Union{ExpVal,Corr}) = varname(ops(A))
 
 # for sum indices use a valid and short symbol that cannot be expressed as a single char, i.e., no risk of collisions with "real" index names
@@ -34,14 +35,14 @@ function julia_expression(A::Union{ExpVal,Corr},varnames=nothing)
     A = unalias(A)
     x = varname(A)
     if varnames === nothing || x ∈ varnames
-        :( $x[$(indexpr(A)...)] )
+        :( $x[$(indexpr.(_display_indices(ops(A)))...)] )
     else
         # <A> = <A^†>^*
         Ap = A'
         x = varname(Ap)
         x ∈ varnames || throw(ArgumentError("Neither $(repr(varname(A))) nor $(repr(x)) are in the list of allowed variable names, varnames = $(varnames)."))
         # since conjugation changes the order, we have to use the indices of A after conjugation
-        :( conj($x[$(indexpr(Ap)...)]) )
+        :( conj($x[$(indexpr.(_display_indices(ops(Ap)))...)]) )
     end
 end
 num_expr(s::Number) = :( $(isreal(s) ? Float64(s) : ComplexF64(s)) )
