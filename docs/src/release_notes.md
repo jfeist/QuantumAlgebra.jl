@@ -1,5 +1,27 @@
 # Release notes
 
+## v1.6.1 (2026-10-11)
+This is a patch release with bug fixes:
+- Fix `expval_as_corrs` and `corr_as_expvals` (and thus `heisenberg_eom_system` for
+  correlators) for sums whose operators simplify when the summation index is
+  equal to another index, e.g., for products of Pauli matrices. Previously, the
+  prefactors of such simplifications were dropped, products that vanish were not
+  taken into account, and in some cases an assertion error was thrown. This
+  changes (corrects) results, e.g., of the equations of motion for correlators in
+  systems with Pauli matrices and sums.
+- Fix `normal_form` for products of Pauli matrices where operators that are not
+  next to each other were contracted although an operator in between does not
+  commute with them (e.g., `σx(:j)*σy(:i)*sz(1)*σz(:j)` lost a term proportional
+  to `δ(ij)`).
+- Make the result of `heisenberg_eom_system` deterministic. Which of two
+  equivalent (mutually conjugate) expectation values or correlators was chosen
+  as a variable could depend on the order in which operators were defined and on
+  the package version.
+- Remove a method of `Base.hash` for vectors of QuantumAlgebra objects (see
+  [#32](https://github.com/jfeist/QuantumAlgebra.jl/issues/32)).
+- Allow OrderedCollections v2.
+- The minimum supported Julia version is now 1.10 (the current LTS).
+
 ## v1.6.0 (2025-12-05)
 This is a minor release with internal improvements and new features:
 - The new preference`"quindices_type"` can be used to choose the underlying
