@@ -3,6 +3,12 @@ using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, Qu
 using QuantumAlgebra: expheis, corrheis, _lindbladterm, ExpVal, Corr, to_opprod
 using Test, Documenter
 import Symbolics
+# conda-forge's python 3.15 package does not include libpython, so PythonCall cannot load it
+# (https://github.com/JuliaPy/PythonCall.jl/issues/838) -- remove this once that is fixed.
+# (Pkg.test still reports a failure when it precompiles SymPyPythonCall before the tests run,
+# but it is precompiled successfully on import below.)
+import CondaPkg
+CondaPkg.add("python"; version="<3.15")
 import SymPyPythonCall
 
 @static if !QuantumAlgebra._DEFINE_DEFAULT_OPS
