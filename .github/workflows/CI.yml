@@ -7,6 +7,8 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    # nightly often breaks because of upstream changes, so it should not fail the workflow
+    continue-on-error: ${{ matrix.version == 'nightly' }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +31,10 @@ jobs:
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+        env:
+          # test/runtests.jl pins the python version before loading SymPyPythonCall, which fails to
+          # precompile without the pin (and on Julia 1.12, Pkg.test aborts if precompiling it fails)
+          JULIA_PKG_PRECOMPILE_AUTO: 0
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:

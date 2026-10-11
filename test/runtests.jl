@@ -5,8 +5,8 @@ using Test, Documenter
 import Symbolics
 # conda-forge's python 3.15 package does not include libpython, so PythonCall cannot load it
 # (https://github.com/JuliaPy/PythonCall.jl/issues/838) -- remove this once that is fixed.
-# (Pkg.test still reports a failure when it precompiles SymPyPythonCall before the tests run,
-# but it is precompiled successfully on import below.)
+# Pkg.test precompiles all test dependencies before running this file, which fails for SymPyPythonCall
+# (fatal on Julia 1.12) -- set JULIA_PKG_PRECOMPILE_AUTO=0 to avoid that (as in CI).
 import CondaPkg
 CondaPkg.add("python"; version="<3.15")
 import SymPyPythonCall
