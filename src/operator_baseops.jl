@@ -3,8 +3,7 @@ import Base: ==, ≈, *, +, -
 
 export normal_form, comm
 
-Base.length(A::Union{ExpVal,Corr}) = length(ops(A))
-Base.length(A::QuTerm) = length(bares(A)) + mapreduce(length,+,expvals(A);init=0) + mapreduce(length,+,corrs(A);init=0)
+Base.length(A::Union{ExpVal,Corr}) = _groupnops(_head(A))
 
 Base.zero(::Type{QuExpr}) = QuExpr()
 Base.zero(::QuExpr) = zero(QuExpr)
@@ -23,12 +22,6 @@ function Base.:^(A::Union{QuTerm,QuExpr},n::Int)
 end
 Base.literal_pow(::typeof(^),A::Union{QuTerm,QuExpr},::Val{n}) where n = A^n
 
-==(A::BaseOperator,B::BaseOperator) = optype(A) == optype(B) && opname(A) == opname(B) && inds(A) == inds(B)
-==(A::BaseOpProduct,B::BaseOpProduct) = A.v == B.v
-==(A::Param,B::Param) = opname(A) == opname(B) && parstate(A) == parstate(B) && inds(A) == inds(B)
-==(A::T,B::T) where T<:Union{ExpVal,Corr} = ops(A) == ops(B)
-==(A::QuTerm,B::QuTerm) = (nsuminds(A) == nsuminds(B) && deltas(A) == deltas(B) && params(A) == params(B) &&
-                           expvals(A) == expvals(B) && corrs(A) == corrs(B) && bares(A) == bares(B))
 ==(A::QuExpr,B::QuExpr) = isequal(A.terms, B.terms)
 
 function ≈(A::QuExpr,B::QuExpr)
@@ -42,46 +35,8 @@ function ≈(A::QuExpr,B::QuExpr)
     return true
 end
 
-function Base.hash(ind::QuIndex,h::UInt)
-    ### CAREFUL: This relies on the fact that QuIndex has two 32-bit components
-    ### and is the same size as a UInt64
-    GC.@preserve ind begin
-        hash(Base.unsafe_load(Ptr{UInt64}(Base.unsafe_convert(Ptr{Cvoid},Ref(ind)))), h)
-    end
-end
-function Base.hash(name::QuOpName,h::UInt)
-    h = hash(name.i,h)
-    h
-end
-function Base.hash(A::BaseOperator,h::UInt)
-    h = hash(UInt(optype(A)),h)
-    h = hash(opname(A),h)
-    h = hash(inds(A),h)
-    h
-end
-function Base.hash(A::Param,h::UInt)
-    h = hash(opname(A),h)
-    h = hash(parstate(A),h)
-    h = hash(inds(A),h)
-    h
-end
-function Base.hash(A::BaseOpProduct,h::UInt)
-    h = hash(A.v,h)
-    h
-end
-function Base.hash(A::T,h::UInt) where T<:Union{ExpVal,Corr}
-    h = hash(T,h)
-    h = hash(ops(A),h)
-    h
-end
-function Base.hash(A::QuTerm,h::UInt)
-    h = hash(nsuminds(A),h)
-    h = hash(deltas(A),h)
-    h = hash(expvals(A),h)
-    h = hash(corrs(A),h)
-    h = hash(bares(A),h)
-    h
-end
+Base.hash(ind::QuIndex,h::UInt) = hash(idxword(ind),h)
+Base.hash(name::QuOpName,h::UInt) = hash(name.i,h)
 function Base.hash(A::QuExpr,h::UInt)
     h = hash(A.terms,h)
     h
@@ -100,7 +55,16 @@ end
 @inline recursive_cmp(A::BaseOperator,B::BaseOperator) = cmp(A,B)
 @inline recursive_cmp(A::Param,B::Param) = cmp(A,B)
 @inline recursive_cmp(A::δ,B::δ) = cmp(A,B)
-@inline recursive_cmp(A::BaseOpProduct,B::BaseOpProduct) = (cc = cmp(length(A),length(B)); cc == 0 ? recursive_cmp(A.v,B.v) : cc)
+# operator products are ordered first by their length
+@inline function recursive_cmp(A::OpProduct,B::OpProduct)
+    cc = cmp(length(A),length(B))
+    cc == 0 || return cc
+    for (a, b) in zip(A, B)
+        cc = cmp(a,b)
+        cc == 0 || return cc
+    end
+    return 0
+end
 @inline recursive_cmp(A::T,B::T) where T<:Union{ExpVal,Corr}  = recursive_cmp(ops(A),ops(B))
 
 # compare f(A) and f(B), and return from the calling function if they are not equal
@@ -112,20 +76,36 @@ macro _cmpAB(f,rec=true)
     end)
 end
 
-@inline function Base.cmp(A::BaseOperator,B::BaseOperator)
-    @_cmpAB optype false
-    @_cmpAB opname false
-    @_cmpAB inds false
-    # they are equal
-    return 0
+# compare the indices stored in words wA[offA+1:offA+nA] and wB[offB+1:offB+nB] lexicographically
+# (the encoding of the indices is chosen such that comparing the words gives the order of the indices)
+@inline function _cmp_index_words(wA::Words, offA::Int, nA::Int, wB::Words, offB::Int, nB::Int)
+    @inbounds for k = 1:min(nA,nB)
+        a, b = wA[offA+k], wB[offB+k]
+        a == b || return a < b ? -1 : 1
+    end
+    cmp(nA,nB)
 end
 
+# order by type, name, extra information, indices
+@inline function Base.cmp(A::BaseOperator,B::BaseOperator)
+    hA, hB = _head(A), _head(B)
+    cc = cmp(hA >> 56, hB >> 56)
+    cc == 0 || return cc
+    cc = cmp(_headname(hA), _headname(hB))
+    cc == 0 || return cc
+    cc = cmp(_headextra(hA), _headextra(hB))
+    cc == 0 || return cc
+    _cmp_index_words(A.w, A.off, _headnind(hA), B.w, B.off, _headnind(hB))
+end
+
+# order by name, state, indices
 @inline function Base.cmp(A::Param,B::Param)
-    @_cmpAB opname false
-    @_cmpAB parstate false
-    @_cmpAB inds false
-    # they are equal
-    return 0
+    hA, hB = _head(A), _head(B)
+    cc = cmp(_headname(hA), _headname(hB))
+    cc == 0 || return cc
+    cc = cmp(parstate(A), parstate(B))
+    cc == 0 || return cc
+    _cmp_index_words(A.w, A.off, _headnind(hA), B.w, B.off, _headnind(hB))
 end
 
 @inline function Base.cmp(A::δ,B::δ)
@@ -153,7 +133,7 @@ end
 @inline Base.isless(A::BaseOperator,B::BaseOperator) = cmp(A,B) < 0
 @inline Base.isless(A::Param,B::Param) = cmp(A,B) < 0
 @inline Base.isless(A::δ,B::δ) = cmp(A,B) < 0
-@inline Base.isless(A::BaseOpProduct,B::BaseOpProduct) = recursive_cmp(A,B) < 0
+@inline Base.isless(A::OpProduct,B::OpProduct) = recursive_cmp(A,B) < 0
 @inline Base.isless(A::T,B::T) where T<:Union{ExpVal,Corr} = recursive_cmp(A,B) < 0
 @inline Base.isless(A::QuTerm,B::QuTerm) = cmp(A,B) < 0
 
@@ -164,8 +144,8 @@ Compute the commutator ``[A,B] = A*B - B*A``.
 """
 comm(A,B) = A*B - B*A
 
-Base.adjoint(A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(optype(A))],opname(A),inds(A))
-Base.adjoint(A::BaseOpProduct) = BaseOpProduct(adjoint.(view(A.v, lastindex(A.v):-1:1)))
+Base.adjoint(A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(optype(A))],opname(A),inds(A),opextra(A))
+Base.adjoint(A::OpProduct) = BaseOpProduct(reverse!(BaseOperator[adjoint(O) for O in A]))
 Base.adjoint(A::T) where {T<:Union{ExpVal,Corr}} = T(adjoint(ops(A)))
 Base.adjoint(A::Param) = parstate(A)=='r' ? A : Param(opname(A),parstate(A)=='n' ? 'c' : 'n',inds(A))
 function Base.adjoint(A::QuTerm)
@@ -176,6 +156,21 @@ Base.adjoint(A::QuExpr) = QuExpr((adjoint(t),adjoint(s)) for (t,s) in A.terms)
 
 is_normal_form(A::Union{ExpVal,Corr}) = is_normal_form(ops(A))
 is_normal_form(ops::BaseOpProduct) = is_normal_form(ops.v)
+function is_normal_form(s::OpSeq)
+    # check that the operators are sorted and that no neighbors contract, without allocating
+    needs_lookahead = false
+    prev = nothing
+    for O in s
+        if prev !== nothing
+            isless(O,prev) && return false
+            contract!(_NoEmit(),prev,O) === nothing || return false
+        end
+        needs_lookahead |= lookahead_contraction(O)
+        prev = O
+    end
+    # checking for contractions of operators that are not neighbors needs random access
+    needs_lookahead ? is_normal_form(collect(s)) : true
+end
 function is_normal_form(v::Vector{BaseOperator})
     issorted(v) || return false
     # now check that no contractions occur
@@ -196,19 +191,14 @@ function is_normal_form(t::QuTerm)
         is_normal_form(CO) || return false
     end
 
-    # ensure that sum indices are ordered
-    changeable_indices = indices(t,false)
-    last_sumind = sumindex(0).num
-    for ind in Base.Iterators.filter(issumindex,changeable_indices)
-        # sumindex have to be increasing without jumps
-        ind.num ≤ last_sumind + oneunit(last_sumind) || return false
-        last_sumind = max(ind.num,last_sumind)
-    end
+    # ensure that sum indices are ordered, i.e., numbered in order of appearance (outside of the δs)
+    _, ordered = _foldl_indices((sumind_ordered, ind) -> _check_sumind_order(sumind_ordered, ind), (sumindex(0).num, true), t, false)
+    ordered || return false
 
     isempty(deltas(t)) && return true
 
     # all indices that are not in δs
-    changeable_indices_set = Set{QuIndex}(changeable_indices)
+    changeable_indices_set = Set{QuIndex}(indices(t,false))
     # accumulate indices that δs want to change (to compare with later δs)
     replace_inds = Set{QuIndex}()
     for (iδ,dd) in enumerate(deltas(t))
@@ -228,6 +218,13 @@ function is_normal_form(t::QuTerm)
     return true
 end
 is_normal_form(A::QuExpr) = all(is_normal_form, keys(A.terms))
+
+# helper for is_normal_form: sum indices have to be increasing without jumps
+@inline function _check_sumind_order((last_sumind, ordered), ind)
+    (ordered && issumindex(ind)) || return (last_sumind, ordered)
+    ind.num ≤ last_sumind + oneunit(last_sumind) || return (last_sumind, false)
+    (max(ind.num,last_sumind), true)
+end
 
 # returns a WorkTerm (that can be modified freely) or nothing if the term is zero
 function _normalize_without_commutation(A::QuTerm)::Union{WorkTerm,Nothing}
@@ -291,9 +288,9 @@ function _normalize_without_commutation(A::QuTerm)::Union{WorkTerm,Nothing}
             merge!(sumrepls,replacements)
             replacements = sumrepls
         end
+        # apply the replacements to all indices apart from those of the δs (which have been updated above)
         f = replace_inds(replacements)
-        W = WorkTerm(nsuminds(A)-length(delsuminds), δs, f.(params(A)), [f(ops(E)) for E in expvals(A)],
-                     [f(ops(C)) for C in corrs(A)], f(bares(A)))
+        W = WorkTerm(_encode_term(nsuminds(A)-length(delsuminds), (δs,), (params(A),), (expvals(A),), (corrs(A),), (bares(A),), nothing, f))
     end
     # also sort all the commuting terms
     sort!(W.params)
@@ -419,8 +416,7 @@ function normal_order!(v::Vector{BaseOpProduct},::Type{T},commterms,pref=1) wher
         pp = normal_order!(EC,newterms)
         for (t,s) in newterms.terms
             #@assert iszero(nsuminds(t)) && isempty(params(t)) && isempty(expvals(t)) && isempty(corrs(t))
-            # copy the other products since they can still be modified afterwards
-            nv = T[T(copy(v[jj])) for jj in eachindex(v) if jj != ii]
+            nv = T[T(v[jj]) for jj in eachindex(v) if jj != ii]
             isempty(bares(t)) || pushfirst!(nv, T(bares(t)))
             nt = QuTerm(deltas(t), nv)
             # include current prefactor here
@@ -489,7 +485,7 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
 
                 pref = sev*sco*sba
                 iszero(pref) && continue
-                nt = QuTerm(nsuminds(t),[deltas(t);deltas(tev);deltas(tco);deltas(tba)],params(t),expvals(tev),corrs(tco),bares(tba))
+                nt = _encode_term(nsuminds(t), (deltas(t),deltas(tev),deltas(tco),deltas(tba)), (params(t),), (expvals(tev),), (corrs(tco),), (bares(tba),), nothing, nothing)
                 _add_with_normal_order!(A,nt,s*pref,shortcut_vacA_zero)
             end
         end
@@ -513,8 +509,6 @@ function normal_form(A::QuExpr,shortcut_vacA_zero=false)
 end
 normal_form(A::Number) = QuExpr(A)
 
-*(A::BaseOpProduct,B::BaseOpProduct) = BaseOpProduct(vcat(A.v,B.v))
-
 function *(A::QuTerm,B::QuTerm)
     nA, nB = nsuminds(A), nsuminds(B)
     if nA > 0 && nB > 0
@@ -524,20 +518,13 @@ function *(A::QuTerm,B::QuTerm)
             B = shift_sumind(nA)(B)
         end
     end
+    parts = ((deltas(A),deltas(B)), (params(A),params(B)), (expvals(A),expvals(B)), (corrs(A),corrs(B)), (bares(A),bares(B)))
     if nA + nB > 0
-        # NB: reorder_suminds numbers the sum indices in the order they are encountered,
-        # so the order of the calls below matters (has to be the order of the fields of QuTerm)
+        # renumber the sum indices in the order in which they appear
         f = reorder_suminds()
-        apflat = (args...) -> f.(Iterators.flatten(args))
-        δs = apflat(deltas(A), deltas(B))
-        ps = apflat(params(A), params(B))
-        evs = apflat(expvals(A), expvals(B))
-        cos = apflat(corrs(A), corrs(B))
-        barevec = BaseOpProduct(apflat(bares(A), bares(B)))
-        QuTerm(nA+nB, δs, ps, evs, cos, barevec)
+        _encode_term(nA+nB, parts..., f, f)
     else
-        QuTerm(0, vcat(deltas(A), deltas(B)), vcat(params(A), params(B)),
-               vcat(expvals(A), expvals(B)), vcat(corrs(A), corrs(B)), bares(A) * bares(B))
+        _encode_term(0, parts..., nothing, nothing)
     end
 end
 

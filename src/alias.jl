@@ -7,7 +7,7 @@ function unalias(A::BaseOperator)::BaseOperator
         names = _GROUPALIASES[opname(A)]
         ind = first(inds(A))
         @assert isintindex(ind)
-        BaseOperator(optype(A),names[ind.num],Base.tail(inds(A)))
+        BaseOperator(optype(A),names[ind.num],Base.tail(inds(A)),opextra(A))
     else
         A
     end

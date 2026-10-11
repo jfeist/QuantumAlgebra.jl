@@ -45,8 +45,9 @@ function _vacA(BO::BaseOpProduct,fac)
 end
 
 function _apply_on_vacuum_modes(func,A::QuTerm,fac,modes_in_vacuum::Nothing)
-    BO, fac = func(bares(A),fac)
-    Anew = BO === bares(A) ? A : QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),corrs(A),BO)
+    BA = BaseOpProduct(bares(A))
+    BO, fac = func(BA,fac)
+    Anew = BO === BA ? A : QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),corrs(A),BO)
     return (Anew, fac)
 end
 

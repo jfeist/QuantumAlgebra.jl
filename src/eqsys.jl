@@ -3,8 +3,8 @@ export heisenberg_eom_system, droplen, dropcorr, ExpVal, Corr
 # equation systems (QuEqSys)
 
 to_bareterm(A::QuExpr) = ((t,s) = only(A.terms); @assert isone(s); t)
-to_opprod(A::QuExpr)::BaseOpProduct = to_opprod(to_bareterm(A))
-to_opprod(A::QuTerm)::BaseOpProduct = (@assert nsuminds(A) == 0 && isempty(deltas(A)) && isempty(params(A)) && isempty(expvals(A)) && isempty(corrs(A)); bares(A))
+to_opprod(A::QuExpr) = to_opprod(to_bareterm(A))
+to_opprod(A::QuTerm) = (@assert nsuminds(A) == 0 && isempty(deltas(A)) && isempty(params(A)) && isempty(expvals(A)) && isempty(corrs(A)); bares(A))
 
 _getECs(A::QuTerm,::Type{Corr})   = (@assert isempty(expvals(A)); corrs(A))
 _getECs(A::QuTerm,::Type{ExpVal}) = (@assert isempty(corrs(A)); expvals(A))
@@ -14,7 +14,7 @@ expheis(A::QuExpr,H::QuExpr,Ls=()) = expval(normal_form(heisenberg_eom(A,H,Ls)))
 
 corrheis(A::Corr,args...) = corrheis(ops(A),args...)
 corrheis(A::QuExpr,args...) = corrheis(to_opprod(A),args...)
-function corrheis(ops::BaseOpProduct,H::QuExpr,Ls=())::QuExpr
+function corrheis(ops::OpProduct,H::QuExpr,Ls=())::QuExpr
     f = canon_inds_remember()
     rhs = _corrheis_cached(f(ops),H,Ls)
     replace_inds(f.replacements)(rhs)

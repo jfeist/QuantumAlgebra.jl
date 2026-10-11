@@ -8,14 +8,9 @@ using PrecompileTools
         @tlsxyz_ops σ
     end
 
-    @static if _QUINDICES_LENGTH > 0
-        @static if _QUINDICES_LENGTH >= 3
-            param(:g,'n',:k,3)'
-            Pr"ω_i,j,3"
-        else
-            param(:g,'n',:k)'
-            Pr"ω_i"
-        end
+    let
+        param(:g,'n',:k,3)'
+        Pr"ω_i,j,3"
 
         σx(:i)*σy(:i)
         σz(3)*σy(2)
@@ -89,13 +84,8 @@ using PrecompileTools
         expval_as_corrs(-1*param(:g,'r',1)*σz(1))
         expval_as_corrs(a'(:n)*σy(:k)*a(:m)*a'(:m))
 
-        @static if _QUINDICES_LENGTH >= 2
-            H = ∑(:i,param(:ω,'r',:i)*a'(:i)*a(:i)) + ∑(:j,(1//2)*param(:ωe,'r',:j)*σz(:j)) +
-                ∑(:i,∑(:j,param(:g,'r',(:i,:j))*(a'(:i)+a(:i))*σx(:j)))
-        else
-            H = ∑(:i,param(:ω,'r',:i)*a'(:i)*a(:i)) + (1//2)*param(:ωe,'r',1)*σz(1) +
-                ∑(:i,param(:g,'r',:i)*(a'(:i)+a(:i))*σx(1))
-        end
+        H = ∑(:i,param(:ω,'r',:i)*a'(:i)*a(:i)) + ∑(:j,(1//2)*param(:ωe,'r',:j)*σz(:j)) +
+            ∑(:i,∑(:j,param(:g,'r',(:i,:j))*(a'(:i)+a(:i))*σx(:j)))
         comm(a'(:n)*a(:m),H)
         comm(a'(:n)*a(:n),H)
         for op in [a(:n),a'(:n),σx(:k),σy(:k),σz(:k)]
@@ -125,17 +115,15 @@ using PrecompileTools
             end
         end
 
-        @static if _QUINDICES_LENGTH >= 3
-            let
-                dotest = (H,A,n=3) -> begin
-                    for _ = 1:n
-                        A = normal_form(comm(H,A))
-                    end
-                    A
+        let
+            dotest = (H,A,n=3) -> begin
+                for _ = 1:n
+                    A = normal_form(comm(H,A))
                 end
-                H = ∑(:n,∑(:m,∑(:k,Pr"ω_n,m"*a'(:n,:k)*a(:m,:k)))) + ∑(:i,1//2*Pr"ν_i"*σz(:i)) + ∑(:n,∑(:k,∑(:i,Pr"g_i,n,k"*σx(:i)*(a'(:n,:k)+a(:n,:k)))))
-                dotest(H,σz(:j))
+                A
             end
+            H = ∑(:n,∑(:m,∑(:k,Pr"ω_n,m"*a'(:n,:k)*a(:m,:k)))) + ∑(:i,1//2*Pr"ν_i"*σz(:i)) + ∑(:n,∑(:k,∑(:i,Pr"g_i,n,k"*σx(:i)*(a'(:n,:k)+a(:n,:k)))))
+            dotest(H,σz(:j))
         end
 
         let allops = (a(1),f(:α),σz(:i),a(2),f(:β),σz(:j),a(3),f(:γ),σz(:k))

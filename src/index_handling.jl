@@ -1,11 +1,11 @@
 abstract type IndexFunction end
 
-(f::IndexFunction)(A::BaseOperator) = BaseOperator(optype(A),opname(A),f.(inds(A)))
+(f::IndexFunction)(A::BaseOperator) = BaseOperator(optype(A),opname(A),QuIndex[f(i) for i in inds(A)],opextra(A))
 (f::IndexFunction)(d::δ) = δ(f(d.iA),f(d.iB))
-(f::IndexFunction)(par::Param) = Param(opname(par),parstate(par),f.(inds(par)))
-(f::IndexFunction)(ops::BaseOpProduct) = BaseOpProduct(BaseOperator[f(O) for O in ops])
+(f::IndexFunction)(par::Param) = Param(opname(par),parstate(par),QuIndex[f(i) for i in inds(par)])
+(f::IndexFunction)(ops::OpProduct) = BaseOpProduct(BaseOperator[f(O) for O in ops])
 (f::IndexFunction)(ev::T) where T<:Union{ExpVal,Corr} = T(f(ops(ev)))
-(f::IndexFunction)(A::QuTerm,nsuminds=nsuminds(A)) = QuTerm(nsuminds,f.(deltas(A)),f.(params(A)),f.(expvals(A)),f.(corrs(A)),f(bares(A)))
+(f::IndexFunction)(A::QuTerm,nsuminds=nsuminds(A)) = _map_term_indices(f,A,nsuminds)
 # some index functions have to be reset for each new term in a sum
 (f::IndexFunction)(A::QuExpr) = _map_quexpr_ops(x->(adapt_for_new_term!(f); f(x)),A)
 # by default, nothing to do
@@ -77,19 +77,17 @@ adapt_for_new_term!(f::popped_out_suminds) = error("popped_out_suminds should no
 hasind(ind::QuIndex,d::δ) = ind in (d.iA,d.iB)
 hasind(ind::QuIndex,A::Union{BaseOperator,Param}) = ind in inds(A)
 hasind(ind::QuIndex,ev::Union{ExpVal,Corr}) = hasind(ind,ops(ev))
-hasind(ind::QuIndex,A::BaseOpProduct) = any(O -> hasind(ind,O), A)
+hasind(ind::QuIndex,A::OpProduct) = any(O -> hasind(ind,O), A)
 
 split_by_ind(ind::QuIndex,v) = (iwiths = hasind.((ind,),v); (v[.!iwiths], v[iwiths]))
 
 indices(d::δ)::Vector{QuIndex} = [d.iA,d.iB]
 indices(A::Union{BaseOperator,Param})::Vector{QuIndex} = collect(assignedinds(inds(A))) # collect to guarantee copy
 indices(v::AbstractVector)::Vector{QuIndex} = mapreduce(indices, vcat, v; init=QuIndex[])
-indices(A::BaseOpProduct)::Vector{QuIndex} = mapreduce(indices, vcat, A; init=QuIndex[])
+indices(A::OpProduct)::Vector{QuIndex} = mapreduce(indices, vcat, A; init=QuIndex[])
 indices(A::Union{ExpVal,Corr})::Vector{QuIndex} = indices(ops(A))
-indices(A::QuTerm, withδs::Bool=true)::Vector{QuIndex} = begin
-    args = withδs ? (deltas(A),params(A),expvals(A),corrs(A),bares(A)) : (params(A),expvals(A),corrs(A),bares(A))
-    mapreduce(indices, vcat, args; init=QuIndex[])
-end
+indices(v::ItemSeq{<:Union{Param,ExpVal,Corr}})::Vector{QuIndex} = mapreduce(indices, vcat, v; init=QuIndex[])
+indices(A::QuTerm, withδs::Bool=true)::Vector{QuIndex} = _foldl_indices(push!, QuIndex[], A, withδs)
 indices(A::QuExpr)::Vector{QuIndex} = mapreduce(indices, vcat, sort!(collect(keys(A.terms))); init=QuIndex[])
 
 "`extindices(A)` return externally visible indices of an expression"

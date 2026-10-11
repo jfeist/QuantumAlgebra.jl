@@ -28,25 +28,15 @@ function set_define_default_ops(t::Bool)
     end
 end
 
-# compile-time options
-const _QUINDICES_TYPE = @load_preference("quindices_type", "Vector")
-
 """
     set_quindices_type(t::String)
 
-Set the preference for the underlying type used to store indices. `t` must be
-either `"Vector"` (default) or `"NTuple{N}"` (where `N` is an integer).
-- `"Vector"`: Uses `Vector{QuIndex}`. Allows arbitrary number of indices but is slower due to heap allocation.
-- `"NTuple{N}"`: Uses `NTuple{N,QuIndex}`. Faster (stack allocation) but limits the number of indices per operator to a maximum of `N`.
-
-Note that changing this preference requires restarting the Julia session to take effect.
+Deprecated: indices are now always stored in a compact form that supports an arbitrary
+number of indices, so the `"quindices_type"` preference no longer has any effect.
 """
 function set_quindices_type(t::String)
-    parse_quindices_type(t)
-    @set_preferences!("quindices_type" => t)
-    if t != _QUINDICES_TYPE
-        @info("quindices_type setting changed to $t; restart your Julia session for this change to take effect!")
-    end
+    Base.depwarn("`set_quindices_type` is deprecated and has no effect, indices are always stored in a compact form with an arbitrary number of indices.", :set_quindices_type; force=true)
+    nothing
 end
 
 
@@ -183,60 +173,41 @@ isnoindex(ii::QuIndex) = ii == NoIndex
 
 @inline Base.isless(i1::QuIndex,i2::QuIndex) = isless((i1.sym,i1.num),(i2.sym,i2.num))
 
-function parse_quindices_type(t::String)
-    if t == "Vector"
-        return Vector{QuIndex}
-    elseif startswith(t,"NTuple")
-        m = match(r"NTuple\{(\d+)\}", t)
-        m !== nothing || throw(ArgumentError("Invalid quindices_type specification: $t"))
-        N = parse(Int, m.captures[1])
-        return NTuple{N,QuIndex}
-    else
-        throw(ArgumentError("quindices_type has to be one of \"Vector\" or \"NTuple{N}\", got \"$t\"."))
-    end
-end
-
-const QuIndices = parse_quindices_type(_QUINDICES_TYPE)
-@static if QuIndices == Vector{QuIndex}
-    const _QUINDICES_LENGTH = typemax(Int)
-    assignedinds(inds::QuIndices) = inds
-    Base.tail(inds::QuIndices) = inds[2:end]
-    make_indices(inds...)::QuIndices = [QuIndex(i) for i in inds]
-elseif QuIndices <: NTuple
-    # no need to define Base.tail for NTuple
-    assignedinds(inds::QuIndices) = filter(!isnoindex,inds)
-    let
-        tuple_len(::Type{NTuple{N,T}}) where {N,T} = N
-        global const _QUINDICES_LENGTH = tuple_len(QuIndices)
-        syms = Symbol.(:i, 1:_QUINDICES_LENGTH)
-        args = Expr.(:kw, syms, :NoIndex)
-        body = Expr(:tuple, Expr.(:call, :QuIndex, syms)...)
-        @eval make_indices($(args...))::QuIndices = $body
-    end
-else
-    error("Unexpected QuIndices type")
-end
-
-make_indices(inds::QuIndices) = inds
-make_indices(inds::Union{Vector,Tuple}) = make_indices(inds...)
+"`make_indices(inds...)`: convert the arguments (or a single tuple or vector of them) to a vector of `QuIndex`"
+make_indices(inds...) = QuIndex[QuIndex(i) for i in inds]
+make_indices(inds::Union{AbstractVector,Tuple}) = make_indices(inds...)
+make_indices(inds::AbstractVector{QuIndex}) = inds
+# all indices are "assigned" (i.e., not NoIndex) since they are stored with variable length
+assignedinds(inds) = inds
 
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]
+# names are ordered alphabetically, _NameRank[][i] is the position of the name with id i in that order
+const _NameRank = Ref(IndexInt[])
 
 @concrete struct QuOpName
     i::IndexInt
     function QuOpName(name::Symbol)
         i = get!(_NameTable,name) do
             push!(_NameTableInv,name)
+            length(_NameTableInv) < 2^24 || error("too many operator names")
+            # replace (instead of modifying) the rank vector so that it is always valid
+            ranks = similar(_NameRank[], length(_NameTableInv))
+            ranks[sortperm(_NameTableInv)] .= 1:length(_NameTableInv)
+            _NameRank[] = ranks
             length(_NameTableInv)
         end
         new(i)
     end
     QuOpName(name::QuOpName) = name
+    # create from the id of an existing name
+    QuOpName(i::IndexInt, ::Val{:id}) = new(i)
 end
 sym(ind::QuOpName) = _NameTableInv[ind.i]
 Base.print(io::IO, ind::QuOpName) = print(io, sym(ind))
-Base.isless(i1::QuOpName,i2::QuOpName) = isless(sym(i1),sym(i2))
+_namerank(ind::QuOpName) = @inbounds _NameRank[][ind.i]
+Base.isless(i1::QuOpName,i2::QuOpName) = _namerank(i1) < _namerank(i2)
+Base.cmp(i1::QuOpName,i2::QuOpName) = cmp(_namerank(i1),_namerank(i2))
 const NoName = QuOpName(Symbol())
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
@@ -247,12 +218,45 @@ const BaseOpType_sym  = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
 const BaseOpType_expr = ("ᴴ", "ᴴ", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
 const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "", "")
 
-@concrete struct BaseOperator
-    t::BaseOpType
-    name::QuOpName
-    inds::QuIndices
-    BaseOperator(t,name,inds...) = new(t,QuOpName(name),make_indices(inds...))
+# a struct representing a delta function with unequal indices
+@concrete struct δ
+    iA::QuIndex
+    iB::QuIndex
+    δ(iA,iB) = (@assert !isnoindex(iA) && !isnoindex(iB); new(iA,iB))
 end
+
+"""
+    δ(iA, iB)
+
+Represents a Kronecker delta function δ_{iA,iB} in a quantum expression.
+
+The delta function is zero if indices are different, and one if they are the same.
+
+# Examples
+```julia
+δ(QuIndex(1), QuIndex(2))    # δ₁₂
+δ(QuIndex(:i), QuIndex(:j))  # δᵢⱼ
+```
+"""
+δ
+function δ(Ainds::AbstractVector{QuIndex},Binds::AbstractVector{QuIndex})
+    length(Ainds) == length(Binds) || return nothing
+
+    res = Vector{δ}(undef,length(Ainds))
+    jj = 0
+    for (iA,iB) in zip(Ainds,Binds)
+        if iA != iB
+            (isnoindex(iA) || isnoindex(iB)) && return nothing
+            # if they are integer indices and different, the result is zero
+            isintindex(iA) && isintindex(iB) && return nothing
+            res[jj+=1] = iB<iA ? δ(iB,iA) : δ(iA,iB)
+        end
+    end
+    resize!(res,jj)
+    res
+end
+
+include("term_storage.jl")
 
 """
     BaseOperator
@@ -291,54 +295,6 @@ for (op,desc) in (
     end
 end
 
-@concrete struct BaseOpProduct
-    v::Vector{BaseOperator}
-end
-Base.isempty(A::BaseOpProduct) = isempty(A.v)
-BaseOpProduct() = BaseOpProduct(BaseOperator[])
-
-# a struct representing a delta function with unequal indices
-@concrete struct δ
-    iA::QuIndex
-    iB::QuIndex
-    δ(iA,iB) = (@assert !isnoindex(iA) && !isnoindex(iB); new(iA,iB))
-end
-
-"""
-    δ(iA, iB)
-
-Represents a Kronecker delta function δ_{iA,iB} in a quantum expression.
-
-The delta function is zero if indices are different, and one if they are the same.
-
-# Examples
-```julia
-δ(QuIndex(1), QuIndex(2))    # δ₁₂
-δ(QuIndex(:i), QuIndex(:j))  # δᵢⱼ
-```
-"""
-δ
-function δ(Ainds::QuIndices,Binds::QuIndices)
-    length(Ainds) == length(Binds) || return nothing
-
-    res = Vector{δ}(undef,length(Ainds))
-    jj = 0
-    for (iA,iB) in zip(Ainds,Binds)
-        if iA != iB
-            (isnoindex(iA) || isnoindex(iB)) && return nothing
-            # if they are integer indices and different, the result is zero
-            isintindex(iA) && isintindex(iB) && return nothing
-            res[jj+=1] = iB<iA ? δ(iB,iA) : δ(iA,iB)
-        end
-    end
-    resize!(res,jj)
-    res
-end
-
-@concrete struct ExpVal
-    ops::BaseOpProduct
-end
-
 """
     ExpVal(ops::BaseOpProduct)
 
@@ -356,10 +312,6 @@ ev = ExpVal(BaseOpProduct([a, a_dag]))  # ⟨a† a⟩
 """
 ExpVal
 
-@concrete struct Corr
-    ops::BaseOpProduct
-end
-
 """
     Corr(ops::BaseOpProduct)
 
@@ -376,12 +328,6 @@ corr = Corr(BaseOpProduct([a, a_dag]))  # ⟨a† a⟩c
 [`ExpVal`](@ref), [`corr`](@ref)
 """
 Corr
-
-@concrete struct Param
-    name::QuOpName
-    state::Char
-    inds::QuIndices
-end
 
 """
     Param(name, state, inds)
@@ -404,105 +350,6 @@ p = Param(:ω, 'r', 1)     # Real parameter ω₁
 """
 Param
 
-@concrete struct QuTerm
-    nsuminds::IndexInt # have a sum over n indices, represented by QuIndex with issumindex(ind)==true
-    δs::Vector{δ}
-    params::Vector{Param}
-    expvals::Vector{ExpVal}
-    corrs::Vector{Corr}
-    bares::BaseOpProduct
-end
-
-"""
-    QuTerm
-
-Represents a single term in a quantum algebra expression.
-
-A term consists of:
-- Sum indices (summed-over indices)
-- Delta functions
-- Parameters
-- Expectation values
-- Correlators/cumulants
-- Bare operators
-
-# See also
-[`QuExpr`](@ref), [`BaseOperator`](@ref)
-"""
-QuTerm
-QuTerm() = QuTerm(BaseOpProduct())
-QuTerm(op::BaseOperator) = QuTerm(BaseOpProduct([op]))
-QuTerm(ops::BaseOpProduct) = QuTerm(0,δ[],Param[],ExpVal[],Corr[],ops)
-QuTerm(δs::Vector{δ},ops::BaseOpProduct) = QuTerm(0,δs,Param[],ExpVal[],Corr[],ops)
-QuTerm(p::Param)  = QuTerm(0,δ[],Param[p],ExpVal[],Corr[],BaseOpProduct())
-QuTerm(E::ExpVal) = QuTerm(0,δ[],Param[],ExpVal[E],Corr[],BaseOpProduct())
-QuTerm(C::Corr)   = QuTerm(0,δ[],Param[],ExpVal[],Corr[C],BaseOpProduct())
-QuTerm(Es::Vector{ExpVal}) = QuTerm(0,δ[],Param[],Es,Corr[],BaseOpProduct())
-QuTerm(Cs::Vector{Corr}) = QuTerm(0,δ[],Param[],ExpVal[],Cs,BaseOpProduct())
-QuTerm(δs::Vector{δ},Es::Vector{ExpVal}) = QuTerm(0,δs,Param[],Es,Corr[],BaseOpProduct())
-QuTerm(δs::Vector{δ},Cs::Vector{Corr})   = QuTerm(0,δs,Param[],ExpVal[],Cs,BaseOpProduct())
-
-#################################################################
-## accessors                                                   ##
-#################################################################
-# All code outside of this file should use these functions instead of accessing the fields
-# of the structs directly, so that the underlying storage can be changed. The returned
-# objects should be treated as read-only.
-
-"`nsuminds(t::QuTerm)`: number of summation indices in the term"
-nsuminds(t::QuTerm) = Int(t.nsuminds)
-"`deltas(t::QuTerm)`: the Kronecker deltas `δ` in the term"
-deltas(t::QuTerm) = t.δs
-"`params(t::QuTerm)`: the parameters `Param` in the term"
-params(t::QuTerm) = t.params
-"`expvals(t::QuTerm)`: the expectation values `ExpVal` in the term"
-expvals(t::QuTerm) = t.expvals
-"`corrs(t::QuTerm)`: the correlators `Corr` in the term"
-corrs(t::QuTerm) = t.corrs
-"`bares(t::QuTerm)`: the product of \"bare\" operators (outside expectation values) in the term"
-bares(t::QuTerm) = t.bares
-
-"`optype(A::BaseOperator)`: the `BaseOpType` of an operator"
-optype(A::BaseOperator) = A.t
-"`opname(A)`: the name (as a `QuOpName`) of an operator or parameter"
-opname(A::Union{BaseOperator,Param}) = A.name
-"`inds(A)`: the indices of an operator or parameter (note: can be padded with `NoIndex` for `NTuple` storage, use `assignedinds` to remove those)"
-inds(A::Union{BaseOperator,Param}) = A.inds
-"`parstate(A::Param)`: one of 'r' (real), 'n' (normal/complex) or 'c' (complex conjugate)"
-parstate(A::Param) = A.state
-"`ops(A::Union{ExpVal,Corr})`: the product of operators inside the expectation value or correlator"
-ops(A::Union{ExpVal,Corr}) = A.ops
-
-# BaseOpProduct behaves as a (read-only outside of normal ordering) sequence of BaseOperators
-Base.length(A::BaseOpProduct) = length(A.v)
-Base.iterate(A::BaseOpProduct, args...) = iterate(A.v, args...)
-Base.eltype(::Type{BaseOpProduct}) = BaseOperator
-Base.getindex(A::BaseOpProduct, i) = A.v[i]
-Base.firstindex(A::BaseOpProduct) = firstindex(A.v)
-Base.lastindex(A::BaseOpProduct) = lastindex(A.v)
-Base.eachindex(A::BaseOpProduct) = eachindex(A.v)
-Base.collect(A::BaseOpProduct) = collect(A.v)
-Base.copy(A::BaseOpProduct) = BaseOpProduct(copy(A.v))
-
-"""
-    WorkTerm
-
-Mutable working form of a `QuTerm` used while normal ordering. All vectors are owned by
-the `WorkTerm` and can be modified freely. Convert back with `QuTerm(w::WorkTerm)`.
-"""
-struct WorkTerm
-    nsuminds::IndexInt
-    δs::Vector{δ}
-    params::Vector{Param}
-    expvals::Vector{BaseOpProduct}
-    corrs::Vector{BaseOpProduct}
-    bares::BaseOpProduct
-end
-WorkTerm(t::QuTerm) = WorkTerm(nsuminds(t), copy(deltas(t)), collect(params(t)), [copy(ops(E)) for E in expvals(t)],
-                               [copy(ops(C)) for C in corrs(t)], copy(bares(t)))
-QuTerm(w::WorkTerm) = QuTerm(w.nsuminds, w.δs, w.params, ExpVal.(w.expvals), Corr.(w.corrs), w.bares)
-
-Base.isempty(A::QuTerm) = nsuminds(A) == 0 && isempty(deltas(A)) && isempty(params(A)) && isempty(expvals(A)) && isempty(corrs(A)) && isempty(bares(A))
 
 """
     QuExpr
@@ -843,7 +690,7 @@ struct QuEqSys{T<:Union{ExpVal,Corr}}
     eqs::EqDict{T}
 end
 
-const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,ExpVal,Corr,QuTerm,QuExpr,QuEqSys}
+const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,OpSeq,ExpVal,Corr,QuTerm,QuExpr,QuEqSys}
 
 @static if _DEFINE_DEFAULT_OPS
     # do not use the macros here so that we can define the constructors as const

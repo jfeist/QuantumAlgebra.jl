@@ -32,7 +32,7 @@ function printspaced(io::IO,v,trailing_space=false)
     trailing_space && print(io," ")
 end
 
-Base.print(io::IO,A::BaseOpProduct) = printspaced(io,A)
+Base.print(io::IO,A::OpProduct) = printspaced(io,A)
 function Base.print(io::IO,ii::QuIndex)
     if isnoindex(ii)
         return
@@ -160,7 +160,7 @@ end
 @latexrecipe function f(A::δ)
     return LaTeXString("\\delta$(latexindstr(make_indices(A.iA,A.iB)))")
 end
-@latexrecipe function f(A::BaseOpProduct)
+@latexrecipe function f(A::OpProduct)
     mult_symbol --> ""
 
     isempty(A) && return

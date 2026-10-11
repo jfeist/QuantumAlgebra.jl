@@ -57,11 +57,8 @@ end
 
     @test isbitstype(QuantumAlgebra.QuIndex)
     @test isbitstype(QuantumAlgebra.QuOpName)
-    if isbitstype(QuantumAlgebra.QuIndices)
-        @test isbitstype(QuantumAlgebra.BaseOperator)
-        @test isbitstype(QuantumAlgebra.Param)
-    end
     @test isbitstype(QuantumAlgebra.δ)
+    @test isempty(Test.detect_ambiguities(QuantumAlgebra; recursive=true))
 
     @testset "auto_normal_form($auto_norm)" for auto_norm in (false,true)
         QuantumAlgebra.auto_normal_form(auto_norm)
