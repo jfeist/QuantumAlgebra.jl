@@ -134,6 +134,25 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   1 - q²²() - q³³()
   ```
 
+- `spin_ops(name, j=nothing)` returns constructors for the operators ``J_+``,
+  ``J_-``, ``J_z`` of a spin (the Lie algebra su(2) ≅ so(3)), with commutation
+  relations ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. Without `j`, only these
+  are used, so that results hold in any representation (e.g., for collective
+  spins). With fixed spin `j` (which can also be symbolic), products
+  ``J_+ J_-`` on the same site are replaced using the Casimir operator,
+  ``J_+ J_- = j(j+1) - J_z^2 + J_z``, and the vacuum is the lowest-weight state.
+  ```jldoctest
+  julia> Jp, Jm, Jz = spin_ops(:J);
+
+  julia> normal_form(comm(Jp(), Jm()))
+  2 Jᶻ()
+
+  julia> Sp, Sm, Sz = spin_ops(:S, 1//2);
+
+  julia> normal_form(Sp()*Sm())
+  3//4 + Sᶻ() - Sᶻ()²
+  ```
+
 - `param(name::Symbol,state='n',inds...)` to create a named parameter. `state` must be
   one of `'r'`, `'n'`, or `'c'` for purely real, non-conjugated complex, and
   conjugated complex parameters. More conveniently, parameters can be entered

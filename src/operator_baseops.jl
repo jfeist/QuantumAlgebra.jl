@@ -301,8 +301,10 @@ _opat(s::OpSeq,p) = BaseOperator(s.w,p)
 
 # For operators where some contractions are not between neighbors in the normal order (e.g., σˣ₁ σˣ₂ σʸ₁),
 # find the first operator A[kp] (after A[k+1]) that contracts with A[k] and can be moved next to it,
-# i.e., that commutes with all operators in between. Returns the position of A[kp] (given that of A[k]),
-# or nothing if there is no such operator.
+# i.e., that commutes with all operators in between. If lookahead_meet(A[k]), A[k] can also be moved to
+# the right past operators it commutes with, so that the two meet in between. Returns the positions of
+# A[kp] and of the last operator before the meeting point (i.e., the position of A[k] if A[kp] is moved
+# next to it), given the position of A[k], or nothing if there is no such operator.
 function _contraction_partner(A,pk)
     Ak = _opat(A,pk)
     lookahead_contraction(Ak) || return nothing
@@ -310,14 +312,30 @@ function _contraction_partner(A,pk)
     pend = _endpos(A)
     pk1 = _nextpos(A,pk)
     pk1 < pend || return nothing
+    meet = lookahead_meet(Ak)
+    # if they can meet, A[k] can be moved to the right past all following operators it commutes with (up to pr)
+    pr = pk
+    if meet
+        while (pn = _nextpos(A,pr)) < pend && commutes(Ak,_opat(A,pn))
+            pr = pn
+        end
+    end
     pprev, pkp = pk1, _nextpos(A,pk1)
     while pkp < pend
         Akp = _opat(A,pkp)
-        (opfamily(Akp) == fam && lookahead_contraction(Akp)) || break
-        commutes(_opat(A,pprev),Akp) || break
-        # A[kp] has to commute with all operators it is moved past, not just its neighbor
-        if _commutes_with_all(A,pk1,pprev,Akp) && contract!(_NoEmit(),Ak,Akp) !== nothing
-            return pkp
+        if meet
+            # meeting point: as far right as A[k] can be moved (but before A[kp])
+            pm = pr < pkp ? pr : pprev
+            if opfamily(Akp) == fam && _commutes_with_all(A,_nextpos(A,pm),pkp,Akp) && contract!(_NoEmit(),Ak,Akp) !== nothing
+                return (pkp, pm)
+            end
+        else
+            (opfamily(Akp) == fam && lookahead_contraction(Akp)) || break
+            commutes(_opat(A,pprev),Akp) || break
+            # A[kp] has to commute with all operators it is moved past, not just its neighbor
+            if _commutes_with_all(A,pk1,pprev,Akp) && contract!(_NoEmit(),Ak,Akp) !== nothing
+                return (pkp, pk)
+            end
         end
         pprev, pkp = pkp, _nextpos(A,pkp)
     end
@@ -338,23 +356,26 @@ struct _NoEmit end
 (::_NoEmit)(args...) = nothing
 
 # emitter used in normal_order!: e(c, δs, ops...) adds the term obtained from replacing A[i1] and A[i2]
-# (with i1 < i2) in the operator product A by ops (at position i1), with prefactor c*e.prefactor
-# and the additional Kronecker deltas δs, to e.collector
+# (with i1 < i2) in the operator product A by ops, placed after A[ins] (with i1 ≤ ins < i2, where
+# ins == i1 means at the position of A[i1]), with prefactor c*e.prefactor and the additional
+# Kronecker deltas δs, to e.collector
 struct _ReplaceEmitter{T}
     A::Vector{BaseOperator}
     i1::Int
     i2::Int
+    ins::Int
     collector::QuExpr
     prefactor::T
 end
 function (e::_ReplaceEmitter)(c, δs::Vector{δ}, newops::BaseOperator...)
     iszero(c) && return nothing
-    A, i1, i2 = e.A, e.i1, e.i2
+    A, i1, i2, ins = e.A, e.i1, e.i2, e.ins
     v = BaseOperator[]
     sizehint!(v, length(A) - 2 + length(newops))
     append!(v, view(A, 1:i1-1))
+    append!(v, view(A, i1+1:ins))
     append!(v, newops)
-    append!(v, view(A, i1+1:i2-1))
+    append!(v, view(A, ins+1:i2-1))
     append!(v, view(A, i2+1:length(A)))
     _add_sum_term!(e.collector, QuTerm(δs, BaseOpProduct(v)), c*e.prefactor)
     nothing
@@ -376,7 +397,7 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
         while j>1 && A[j]<A[j-1]
             # rewrite A[j-1] A[j] = x A[j] A[j-1] + R, where R is added to term_collector
             # (with the prefactor before the exchange)
-            x = exchange!(_ReplaceEmitter(A,j-1,j,term_collector,prefactor),A[j-1],A[j])
+            x = exchange!(_ReplaceEmitter(A,j-1,j,j-1,term_collector,prefactor),A[j-1],A[j])
             prefactor *= x
             iszero(prefactor) && return prefactor
             A[j-1], A[j] = A[j], A[j-1]
@@ -389,12 +410,13 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
     did_contractions = false
     k = 1
     while k < length(A)
-        kp = k+1
-        res = contract!(_ReplaceEmitter(A,k,kp,term_collector,prefactor),A[k],A[kp])
+        kp, ins = k+1, k
+        res = contract!(_ReplaceEmitter(A,k,kp,ins,term_collector,prefactor),A[k],A[kp])
         if res === nothing
-            kp = something(_contraction_partner(A,k), 0)
-            if kp > 0
-                res = contract!(_ReplaceEmitter(A,k,kp,term_collector,prefactor),A[k],A[kp])
+            partner = _contraction_partner(A,k)
+            if partner !== nothing
+                kp, ins = partner
+                res = contract!(_ReplaceEmitter(A,k,kp,ins,term_collector,prefactor),A[k],A[kp])
             end
         end
         if res === nothing
@@ -405,12 +427,15 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
         fac, op = res
         prefactor *= fac
         iszero(prefactor) && return prefactor
-        # replace A[k] A[kp] by op (where op === nothing is the identity)
+        # replace A[k] A[kp] by op (where op === nothing is the identity), placed after the original A[ins]
         if op === nothing
             deleteat!(A,(k,kp))
-        else
+        elseif ins == k
             A[k] = op
             deleteat!(A,kp)
+        else
+            deleteat!(A,(k,kp))
+            insert!(A,ins,op)
         end
         # we replaced [...,A[k-1],A[k],A[k+1],...,A[kp],...]
         # with        [...,A[k-1],A[k+1],...] or [...,A[k-1],Anew,A[k+1]...]

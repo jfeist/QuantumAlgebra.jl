@@ -4,7 +4,7 @@ using OrderedCollections
 export QuExpr
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops, @anticommuting_fermion_group
-export tlspm_ops, tlsxyz_ops, qudit_ops, gellmann_ops
+export tlspm_ops, tlsxyz_ops, qudit_ops, gellmann_ops, spin_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
@@ -217,11 +217,11 @@ const NoName = QuOpName(Symbol())
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
 # start the counting at 1 so we can index into the tuples defined below with Int(BaseOpType)
 # (for qudits, the symbols are determined from the levels of the transition operators |i⟩⟨1| and |1⟩⟨i|)
-@enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ TLSx_  TLSy_  TLSz_  QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, TLSx_, TLSy_, TLSz_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
-const BaseOpType_sym   = ("†", "†", "⁺", "", "ˣ", "ʸ", "ᶻ", "", "⁻", "", "")
-const BaseOpType_expr  = ("ᴴ", "ᴴ", "⁺", "", "ˣ", "ʸ", "ᶻ", "", "⁻", "", "")
-const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "", "^{x}", "^{y}", "^{z}", "", "^{-}", "", "")
+@enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_ TLSx_  TLSy_  TLSz_  SpinMinus_ SpinZ_ QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_, TLSx_, TLSy_, TLSz_, SpinPlus_, SpinZ_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
+const BaseOpType_sym   = ("†", "†", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "⁻", "", "")
+const BaseOpType_expr  = ("ᴴ", "ᴴ", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "⁻", "", "")
+const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "^{z}", "", "^{-}", "", "")
 
 # a struct representing a delta function with unequal indices
 @concrete struct δ
@@ -681,6 +681,25 @@ end
 "`@tlsxyz_ops name`: define functions `\$(name)x`, `\$(name)y`, and `\$(name)z` creating Pauli operators for a two-level system with name `name`."
 macro tlsxyz_ops(name)
     :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
+end
+
+"""
+    spin_ops(name::Symbol, j=nothing)
+
+Return constructors `(Jp, Jm, Jz)` for the operators ``J_+``, ``J_-`` and ``J_z`` of a spin, i.e.,
+of the Lie algebra su(2) ≅ so(3), with ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. If `j` is not
+given, only these commutation relations are used, which hold in any representation (e.g., for
+collective spins). If the spin `j` is given (any number, e.g., `1//2`, `3`, or a symbolic variable),
+products ``J_+ J_-`` acting on the same spin are replaced by ``j(j+1) - J_z^2 + J_z``, and the vacuum
+is the lowest-weight state with ``J_-|0⟩ = 0`` and ``J_z|0⟩ = -j|0⟩``. Note that other relations that
+hold for a specific `j` (e.g., ``J_+^2 = 0`` for `j = 1//2`) are not used.
+"""
+function spin_ops(name::Symbol, j=nothing)
+    op_name = QuOpName(name)
+    extra = _spin_extra(j)
+    cstr(t) = (args...) -> QuExpr(BaseOperator(t, op_name, make_indices(args...), extra))
+    Jp = QuExprConstructor(string(name,"⁺"), cstr(SpinPlus_), string(name,"⁻"), cstr(SpinMinus_))
+    (Jp, Jp', QuExprConstructor(string(name,"ᶻ"), cstr(SpinZ_)))
 end
 
 ## functions for constructing `param`s with string macros,

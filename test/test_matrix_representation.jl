@@ -11,9 +11,13 @@ _E(d,i,j) = (M = zeros(ComplexF64,d,d); M[i,j] = 1; M)
 
 # a mode is identified by the operator name and its (integer) indices
 _modekey(O::QA.BaseOperator) = (QA.sym(QA.opname(O)), Tuple(QA.inds(O)))
+# spins without fixed j are represented with spin _ABSTRACT_SPIN_J[] (their algebra holds in any representation)
+const _ABSTRACT_SPIN_J = Ref{Rational{Int}}(1)
+_spinj(O::QA.BaseOperator) = something(QA.spin_j(O), _ABSTRACT_SPIN_J[])
 function _modedim(O::QA.BaseOperator)
     fam = QA.opfamily(O)
-    fam == QA.QuditFamily ? QA.qudit_levels(O)[1] : fam in (QA.TLSFamily, QA.FermionFamily) ? 2 : error("no matrix representation for $O")
+    fam == QA.QuditFamily ? QA.qudit_levels(O)[1] : fam in (QA.TLSFamily, QA.FermionFamily) ? 2 :
+    fam == QA.SpinFamily ? Int(2*_spinj(O)+1) : error("no matrix representation for $O")
 end
 # local matrix of the operator (level 1 is the ground state / vacuum)
 function _localmat(O::QA.BaseOperator)
@@ -22,6 +26,13 @@ function _localmat(O::QA.BaseOperator)
     if fam == QA.QuditFamily
         d, i, j = QA.qudit_levels(O)
         _E(d,i,j)
+    elseif fam == QA.SpinFamily
+        # basis states m = -j,...,j (level 1 is the lowest-weight state)
+        j = _spinj(O)
+        ms = -j:j
+        t == QA.SpinZ_ ? diagm(ComplexF64.(ms)) :
+        t == QA.SpinPlus_ ? sum(sqrt(j*(j+1)-m*(m+1))*_E(length(ms),k+1,k) for (k,m) in enumerate(ms[1:end-1])) :
+                            sum(sqrt(j*(j+1)-m*(m+1))*_E(length(ms),k,k+1) for (k,m) in enumerate(ms[1:end-1]))
     elseif fam == QA.FermionFamily
         t == QA.FermionCreate_ ? _E(2,2,1) : _E(2,1,2)
     else
@@ -79,7 +90,8 @@ function expand_sums(A::QuExpr, vals)
 end
 function samematrix(A::QuExpr, B::QuExpr)
     modes = sort!(collect(merge(_modes(A), _modes(B))), by=first)
-    matrep(A, modes) ≈ matrep(B, modes)
+    # (with an absolute tolerance since the matrices can vanish up to rounding errors)
+    isapprox(matrep(A, modes), matrep(B, modes); atol=1e-10)
 end
 
 @testset "matrix representation" begin
@@ -159,6 +171,29 @@ end
         # terms that only differ in the numbering of sum indices are combined
         @test iszero(normal_form(∑(:i,∑(:j,f(:i)*f(:j)))))
         @test iszero(normal_form(∑((:i,:j),Pr"g_i"*r(2,1,:i)*r(3,1,:j)) - ∑((:j,:i),Pr"g_i"*r(3,1,:j)*r(2,1,:i))))
+    end
+
+    @testset "spins (abstract: j=$jabs)" for jabs in (1, 3//2)
+        _ABSTRACT_SPIN_J[] = jabs
+        Jp, Jm, Jz = spin_ops(:J)
+        Kp, Km, Kz = spin_ops(:K, 1//2)
+        Lp, Lm, Lz = spin_ops(:L, 3//2)
+        spinpool(s) = QuExpr[Jp(s), Jm(s), Jz(s), Kp(s), Km(s), Kz(s), Lp(s), Lm(s), Lz(s), f(s)]
+        for _ = 1:200
+            X = prod(rand(spinpool(1), rand(1:5)))
+            @test samematrix(normal_form(X), X)
+        end
+        substs = [(:i=>1, :j=>2), (:i=>1, :j=>1)]
+        for _ = 1:200
+            X = prod(rand([spinpool(:i); spinpool(:j)], rand(2:4)))
+            Xn = normal_form(X)
+            for sub in substs
+                fsub = QA.replace_inds((QA.QuIndex(k) => QA.QuIndex(v) for (k,v) in sub)...)
+                @test samematrix(normal_form(fsub(Xn)), fsub(X))
+            end
+            A, B = (prod(rand([spinpool(:i); spinpool(:j)], rand(1:2))) for _=1:2)
+            @test normal_form(normal_form(A*B)*X) == normal_form(A*normal_form(B*X))
+        end
     end
     QA.use_σpm(false)
 end

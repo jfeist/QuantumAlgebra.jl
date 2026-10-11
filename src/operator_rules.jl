@@ -16,24 +16,28 @@
 #       whether A and B commute (i.e., exchange! would return 1 and not emit any terms)
 #
 # In addition, families can define (with the defaults given below)
-#   lookahead_contraction(::Val{F}, t::BaseOpType)
-#       whether operators of kind t can contract with operators that are not next to them in
-#       the normal order (e.g., σˣ₁ σˣ₂ σʸ₁), and operators in between need to be checked
+#   lookahead_contraction(::Val{F}, A)
+#       whether A can contract with operators that are not next to it in the normal order (e.g.,
+#       σˣ₁ σˣ₂ σʸ₁). By default, the operators in between have to commute with the later one.
+#   lookahead_meet(::Val{F}, A)
+#       if true, the operators in between can also commute with A instead (so that A and the
+#       other operator meet somewhere in between)
 #   ladder(::Val{F}, A)
 #       +1 for creation, -1 for annihilation and 0 for other operators
 #   vacuum_eigenvalue_right(::Val{F}, A) / vacuum_eigenvalue_left(::Val{F}, A)
-#       λ if A|0⟩ = λ|0⟩ (⟨0|A = λ⟨0|), including λ=0, and `nothing` otherwise
+#       λ if A|0⟩ = λ|0⟩ (⟨0|A = λ⟨0|), including λ=0, and `nothing` otherwise. λ is either an
+#       Int, or an object x (of a concrete type) for which _vacuum_value(x) gives the number
 #   op_adjoint(::Val{F}, A)
 #       the adjoint of the operator A
 #   opsymbol(::Val{F}, A, style)
 #       the symbol appended to the operator name when printing (style is :text, :expr or :latex)
 
-@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily
+@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily SpinFamily
 
 const ComplexInt = Complex{Int}
 
-#                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ TLSx_      TLSy_      TLSz_      QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, TLSFamily, TLSFamily, TLSFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
+#                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_   TLSx_      TLSy_      TLSz_      SpinMinus_  SpinZ_      QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, SpinFamily, TLSFamily, TLSFamily, TLSFamily, SpinFamily, SpinFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
 
 opfamily(t::BaseOpType) = @inbounds BaseOpType_family[Int(t)]
 opfamily(A::BaseOperator) = opfamily(optype(A))
@@ -48,6 +52,8 @@ opfamily(A::BaseOperator) = opfamily(optype(A))
         f(Val(TLSFamily), args...)
     elseif fam == QuditFamily
         f(Val(QuditFamily), args...)
+    elseif fam == SpinFamily
+        f(Val(SpinFamily), args...)
     else
         error("unknown operator family $fam")
     end
@@ -78,7 +84,8 @@ end
     _with_family(commutes, fam, A, B)
 end
 
-lookahead_contraction(A::BaseOperator) = _with_family(lookahead_contraction, opfamily(A), optype(A))
+lookahead_contraction(A::BaseOperator) = _with_family(lookahead_contraction, opfamily(A), A)
+lookahead_meet(A::BaseOperator) = _with_family(lookahead_meet, opfamily(A), A)
 ladder(A::BaseOperator) = _with_family(ladder, opfamily(A), A)
 vacuum_eigenvalue_right(A::BaseOperator) = _with_family(vacuum_eigenvalue_right, opfamily(A), A)
 vacuum_eigenvalue_left(A::BaseOperator) = _with_family(vacuum_eigenvalue_left, opfamily(A), A)
@@ -87,13 +94,15 @@ op_adjoint(A::BaseOperator) = _with_family(op_adjoint, opfamily(A), A)
 opsymbol(A::BaseOperator, style::Symbol) = _with_family(opsymbol, opfamily(A), A, style)
 
 "`annihilates_vacuum_left(A)`: whether ⟨0|A = 0"
-annihilates_vacuum_left(A::BaseOperator) = (λ = vacuum_eigenvalue_left(A); λ !== nothing && iszero(λ))
+# (eigenvalues are usually integers, but can be any number, e.g., for spins)
+annihilates_vacuum_left(A::BaseOperator) = (λ = vacuum_eigenvalue_left(A); λ isa Int && iszero(λ))
 
 # defaults
-lookahead_contraction(::Val, ::BaseOpType) = false
+lookahead_contraction(::Val, ::BaseOperator) = false
+lookahead_meet(::Val, ::BaseOperator) = false
 function ladder(::Val, A::BaseOperator)
     t = optype(A)
-    t in (BosonCreate_, FermionCreate_, TLSCreate_, QuditCreate_) ? 1 : t in (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_) ? -1 : 0
+    t in (BosonCreate_, FermionCreate_, TLSCreate_, QuditCreate_, SpinPlus_) ? 1 : t in (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_) ? -1 : 0
 end
 op_adjoint(::Val, A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(optype(A))],opname(A),inds(A),opextra(A))
 function opsymbol(::Val, A::BaseOperator, style::Symbol)
@@ -103,6 +112,8 @@ end
 # for ladder operators, the vacuum is annihilated by the annihilation operators (and their adjoints from the left)
 vacuum_eigenvalue_right(F::Val, A::BaseOperator) = ladder(F, A) < 0 ? 0 : nothing
 vacuum_eigenvalue_left(F::Val, A::BaseOperator) = ladder(F, A) > 0 ? 0 : nothing
+
+const _NO_DELTAS = δ[]
 
 # whether two operators can act on the same mode (i.e., all their indices can be equal)
 function maybe_same_site(A::BaseOperator, B::BaseOperator)
@@ -228,7 +239,7 @@ end
 
 commutes(::Val{TLSFamily}, A, B) = optype(A) == optype(B) || !maybe_same_site(A,B)
 
-lookahead_contraction(::Val{TLSFamily}, t::BaseOpType) = ispauli(t)
+lookahead_contraction(::Val{TLSFamily}, A::BaseOperator) = ispauli(optype(A))
 
 # σᶻ|0⟩ = -|0⟩, where |0⟩ is the ground state
 vacuum_eigenvalue_right(F::Val{TLSFamily}, A::BaseOperator) = optype(A) == TLSz_ ? -1 : ladder(F, A) < 0 ? 0 : nothing
@@ -306,7 +317,7 @@ end
 commutes(::Val{QuditFamily}, A, B) = optype(A) == optype(B) || !maybe_same_site(A,B)
 
 # operators on the same qudit are not necessarily next to each other in the normal order (e.g., b₂†(1) b₂†(2) b₃†(1))
-lookahead_contraction(::Val{QuditFamily}, ::BaseOpType) = true
+lookahead_contraction(::Val{QuditFamily}, ::BaseOperator) = true
 
 op_adjoint(::Val{QuditFamily}, A::BaseOperator) = ((d,i,j) = qudit_levels(A); qudit_op(opname(A), d, j, i, inds(A)))
 
@@ -320,3 +331,74 @@ function _qudit_symbol(i, j, style::Symbol)
         max(i,j) ≥ 10 ? "⁽$(superscript(i))'$(superscript(j))⁾" : "$(superscript(i))$(superscript(j))"
     end
 end
+
+#################################################################
+## spins (su(2) ≅ so(3), in the Cartan-Weyl basis)              ##
+#################################################################
+# Operators J₊, J₋ and J_z with [J_z,J±] = ±J± and [J₊,J₋] = 2J_z. Since these are the commutation
+# relations of the Lie algebra, they hold in any representation (e.g., for collective spins). If
+# the spin j of the representation is fixed, the Casimir J² = J₊J₋ + J_z² - J_z = j(j+1) is used to
+# eliminate products J₊J₋ (on the same site), so that the normal-ordered products on one site are
+# J₊ᵃ J_zⁿ and J₋ᵇ J_zⁿ. The vacuum is the lowest-weight state, with J₋|0⟩ = 0 and J_z|0⟩ = -j|0⟩.
+# The normal order is J₊ < J₋ < J_z, so that J₊ and J₋ on the same site can always be brought
+# next to each other (by moving them past operators of the same kind).
+# The extra information stored with each operator is the index of j in _SPIN_J (0 if j is not fixed).
+
+const _SPIN_J = Any[]
+_spin_extra(j::Nothing) = 0
+_spin_extra(j) = something(findfirst(isequal(j), _SPIN_J), (push!(_SPIN_J, j); length(_SPIN_J)))
+"`spin_j(A)`: the spin j of the spin operator A, or `nothing` if it is not fixed"
+spin_j(A::BaseOperator) = (x = opextra(A); x == 0 ? nothing : _SPIN_J[x])
+
+_spin_like(A::BaseOperator, t::BaseOpType) = BaseOperator(t, opname(A), inds(A), opextra(A))
+
+function exchange!(::Val{SpinFamily}, emit, B, A)
+    ta, tb = optype(A), optype(B)
+    ta == tb && return 1
+    maybe_same_site(A,B) || return 1
+    opextra(A) == opextra(B) || throw(ArgumentError("spin $(opname(A)) is used with different values of j"))
+    dd = site_deltas(A,B)
+    if ta == SpinPlus_ && tb == SpinMinus_
+        # J₋ J₊ = J₊ J₋ - 2J_z
+        emit(-2, dd, _spin_like(A,SpinZ_))
+    elseif ta == SpinPlus_
+        # J_z J₊ = J₊ J_z + J₊
+        emit(1, dd, A)
+    else
+        # J_z J₋ = J₋ J_z - J₋
+        emit(-1, dd, A)
+    end
+    return 1
+end
+
+# J₊ J₋ = j(j+1) - J_z² + J_z on the same site (if j is fixed)
+function contract!(::Val{SpinFamily}, emit, A, B)
+    (optype(A) == SpinPlus_ && optype(B) == SpinMinus_ && opname(A) == opname(B) && inds(A) == inds(B)) || return nothing
+    opextra(A) == opextra(B) || throw(ArgumentError("spin $(opname(A)) is used with different values of j"))
+    j = spin_j(A)
+    j === nothing && return nothing
+    Jz = _spin_like(A,SpinZ_)
+    emit(j*(j+1), _NO_DELTAS)
+    emit(-1, _NO_DELTAS, Jz, Jz)
+    emit(1, _NO_DELTAS, Jz)
+    (zero(ComplexInt), nothing)
+end
+
+commutes(::Val{SpinFamily}, A, B) = optype(A) == optype(B) || !maybe_same_site(A,B)
+
+lookahead_contraction(::Val{SpinFamily}, A::BaseOperator) = optype(A) in (SpinPlus_, SpinMinus_) && opextra(A) != 0
+lookahead_meet(::Val{SpinFamily}, ::BaseOperator) = true
+
+# the eigenvalue -j of J_z for the vacuum (since j can be any number, it is wrapped so that the
+# return type of vacuum_eigenvalue_* stays concrete for all families)
+struct _SpinVacuumEigenvalue
+    j::Any
+end
+_vacuum_value(λ::_SpinVacuumEigenvalue) = -λ.j
+function _spin_vacuum_eigenvalue(A::BaseOperator)
+    j = spin_j(A)
+    j === nothing && throw(ArgumentError("the vacuum (lowest-weight state) is only defined for spins with fixed j, got $A"))
+    _SpinVacuumEigenvalue(j)
+end
+vacuum_eigenvalue_right(::Val{SpinFamily}, A::BaseOperator) = (t = optype(A); t == SpinMinus_ ? 0 : t == SpinZ_ ? _spin_vacuum_eigenvalue(A) : nothing)
+vacuum_eigenvalue_left(::Val{SpinFamily}, A::BaseOperator) = (t = optype(A); t == SpinPlus_ ? 0 : t == SpinZ_ ? _spin_vacuum_eigenvalue(A) : nothing)

@@ -17,15 +17,21 @@ _parse_modes_in_vacuum(modes) = Set{QuOpName}(_get_mode_name.(modes))
 # to the right as long as the vacuum is an eigenstate of them
 function _Avac(BO::BaseOpProduct,fac)
     ii = length(BO)
+    # eigenvalues are usually integers (and multiplied into fac directly), but can be other numbers
+    otherfac = 1
     while ii >= 1
         λ = vacuum_eigenvalue_right(BO[ii])
         λ === nothing && break
-        iszero(λ) && return (BO,zero(fac))
-        fac *= λ
+        if λ isa Int
+            iszero(λ) && return (BO,zero(fac))
+            fac *= λ
+        else
+            otherfac *= _vacuum_value(λ)
+        end
         ii -= 1
     end
     ii == length(BO) && return (BO,fac)
-    return (BaseOpProduct(BO[1:ii]), fac)
+    return (BaseOpProduct(BO[1:ii]), isone(otherfac) ? fac : fac*otherfac)
 end
 
 # helper function that is only called on normal-ordered terms that only contain
@@ -33,15 +39,21 @@ end
 # to the left as long as the vacuum is an eigenstate of them
 function _vacA(BO::BaseOpProduct,fac)
     ii = 1
+    # eigenvalues are usually integers (and multiplied into fac directly), but can be other numbers
+    otherfac = 1
     while ii <= length(BO)
         λ = vacuum_eigenvalue_left(BO[ii])
         λ === nothing && break
-        iszero(λ) && return (BO,zero(fac))
-        fac *= λ
+        if λ isa Int
+            iszero(λ) && return (BO,zero(fac))
+            fac *= λ
+        else
+            otherfac *= _vacuum_value(λ)
+        end
         ii += 1
     end
     ii == 1 && return (BO,fac)
-    return (BaseOpProduct(BO[ii:end]), fac)
+    return (BaseOpProduct(BO[ii:end]), isone(otherfac) ? fac : fac*otherfac)
 end
 
 function _apply_on_vacuum_modes(func,A::QuTerm,fac,modes_in_vacuum::Nothing)

@@ -456,7 +456,7 @@ end
 
             H = ∑((:i,:j,:k,:l),Pr"ω_i,j,k,l"*a'(:i,:j)*a(:k,:l))
             Ls = (((:k,:l),Pr"κ_k,l",a(:k,:l)),)
-            @test normal_form(heisenberg_eom(a(:i,:j),H,Ls)) == -1im*∑((:k,:l),Pr"ω_i,j,k,l"*a(:k,:l)) - 1//2*Pr"κ_i,j"*a(:i,:j)
+            @test normal_form(heisenberg_eom(a(:i,:j),H,Ls)) == normal_form(-1im*∑((:k,:l),Pr"ω_i,j,k,l"*a(:k,:l)) - 1//2*Pr"κ_i,j"*a(:i,:j))
 
             tmp = ∑(:i,expval_as_corrs(a'(:n)*a(:i)))
             tmplatex = raw"\sum_{\#_{1}} \langle {a}_{n}^{\dagger}\rangle_{c} \langle {a}_{\#_{1}}\rangle_{c}  + \sum_{\#_{1}} \langle {a}_{n}^{\dagger} {a}_{\#_{1}}\rangle_{c} "
@@ -614,4 +614,5 @@ end
     # the matrix representation helpers are used in the qudit tests as well
     include("test_matrix_representation.jl")
     include("test_qudits.jl")
+    include("test_spins.jl")
 end

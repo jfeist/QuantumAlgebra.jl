@@ -16,7 +16,13 @@ const _SIG_SELF = 0x5bd1e9955bd1e995
 const _SIG_OTHER = 0x27d4eb2f165667c5
 
 # a hash of the header word of an item that does not depend on the order in which names were registered
-@inline _stable_head(h::UInt64) = (h & ~(UInt64(0xffffff) << 32)) ⊻ @inbounds(_NameStableHash[_headname(h).i])
+# (or on the numerical values of operator types)
+const _KindStableHash = Tuple(_fnv1a(string(t)) for t in instances(BaseOpType))
+@inline function _stable_head(h::UInt64)
+    k = Int(h >> 56)
+    kh = k == 0 ? zero(UInt64) : @inbounds(_KindStableHash[k])
+    (h & ~(UInt64(0xffffffff) << 32)) ⊻ kh ⊻ @inbounds(_NameStableHash[_headname(h).i])
+end
 
 # add the contributions of the occurrences of sum indices in the item with index words w[off+1:off+nind] and
 # label-independent description desc to the signatures in newsig (using the signatures sig of the previous round)
