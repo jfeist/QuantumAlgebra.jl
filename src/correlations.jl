@@ -2,16 +2,31 @@ using Combinatorics
 
 export expval_as_corrs, corr_as_expvals
 
-# replace the bare operators `barevec` of A by a product of correlators of groups of them, as given by C
-function term2corr(A::QuTerm,barevec::Vector{BaseOperator},C::Tuple)
-    newcorrs = collect(Corr,corrs(A))
-    sizehint!(newcorrs,length(newcorrs)+length(C))
+"`OpPartition`: a partition of operators 1:N into groups, each given by the (sorted) indices of the operators in it"
+const OpPartition = Vector{Vector{Int}}
+_partition(C) = OpPartition([collect(Int,grp) for grp in C])
+
+# the existing correlators (T=Corr) or expectation values (T=ExpVal) of A, together with new ones
+# made from groups of the operators in barevec (as given by C), as a sorted vector of operator products
+function _merge_groups(old, barevec::Vector{BaseOperator}, C::OpPartition)
+    groups = OpSeq[ops(x) for x in old]
+    sizehint!(groups, length(groups)+length(C))
+    # store the new groups in a common buffer
+    buf = _words(sum(grp -> sum(i -> _nwords(barevec[i]), grp; init=0), C; init=0))
+    pos = 1
     for grp in C
-        push!(newcorrs,Corr(BaseOpProduct(BaseOperator[barevec[i] for i in grp])))
+        start = pos
+        for i in grp
+            pos = _write!(buf, pos, barevec[i], nothing)
+        end
+        push!(groups, OpSeq(buf, start, length(grp), pos - start))
     end
-    sort!(newcorrs)
-    QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),newcorrs,BaseOpProduct())
+    sort!(groups)
 end
+
+# replace the bare operators `barevec` of A by a product of correlators of groups of them, as given by C
+term2corr(A::QuTerm,barevec::Vector{BaseOperator},C::OpPartition) =
+    QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),_merge_groups(corrs(A),barevec,C),BaseOpProduct())
 
 """
     expval_as_corrs(expr::QuExpr)
@@ -118,11 +133,12 @@ end
 """
     expval2corrs_inds(N::Int)
 
-for N operators, create an array of tuples of tuples that represents the terms
-in a sum of products of correlators. Each tuple corresponds to a sum term, see
-[`CorrTup_isless`](@ref) and [`CorrPerm_isless`](@ref) for details of the
-format. The returned array and terms are sorted such that if the N operators are
-sorted, the represented expression is also sorted with the conventions of the
+for N operators, create an array of partitions (see [`OpPartition`](@ref)) that
+represents the terms in a sum of products of correlators. Each partition
+corresponds to a sum term. Internally, they are computed as tuples of tuples,
+see [`CorrTup_isless`](@ref) and [`CorrPerm_isless`](@ref) for details. The
+returned array and terms are sorted such that if the N operators are sorted,
+the represented expression is also sorted with the conventions of the
 QuantumAlgebra package. This allows to directly return a normal-ordered form.
 """
 function expval2corrs_inds(N::Int)
@@ -132,11 +148,11 @@ function expval2corrs_inds(N::Int)
         for n = 2:N-1
             append!(terms,ncomb_inds(n,1:N))
         end
-        Any[(tuple(1:N...),),sort!(terms,lt=CorrPerm_isless)...]
+        _partition.(Any[(tuple(1:N...),),sort!(terms,lt=CorrPerm_isless)...])
     end
 end
 # preload the cache for N=0 and N=1 so we do not have to special-case those above
-const _EXPVAL2CORRS_CACHE = Dict{Int,Vector{Any}}(0 => [((),)], 1 => [((1,),)])
+const _EXPVAL2CORRS_CACHE = Dict{Int,Vector{OpPartition}}(0 => [_partition(((),))], 1 => [_partition(((1,),))])
 
 function ncomb_inds(n,inds,used_combs=Set())
     terms = []
@@ -158,19 +174,12 @@ function ncomb_inds(n,inds,used_combs=Set())
 end
 
 # replace the bare operators `barevec` of A by a product of expectation values of groups of them, as given by C
-function term2expvals(A::QuTerm,barevec::Vector{BaseOperator},C::Tuple)
-    newexpvals = collect(ExpVal,expvals(A))
-    sizehint!(newexpvals,length(newexpvals)+length(C))
-    for grp in C
-        push!(newexpvals,ExpVal(BaseOpProduct(BaseOperator[barevec[i] for i in grp])))
-    end
-    sort!(newexpvals)
-    QuTerm(nsuminds(A),deltas(A),params(A),newexpvals,corrs(A),BaseOpProduct())
-end
+term2expvals(A::QuTerm,barevec::Vector{BaseOperator},C::OpPartition) =
+    QuTerm(nsuminds(A),deltas(A),params(A),_merge_groups(expvals(A),barevec,C),corrs(A),BaseOpProduct())
 
 _canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(assignedinds(inds(A))))
 _expval2tuple(A::ExpVal) = Tuple(_canon_op_to_num(O) for O in ops(A))
-const _CORR2EXPVALS_CACHE = Dict{Int,Vector{Any}}()
+const _CORR2EXPVALS_CACHE = Dict{Int,Vector{Pair{OpPartition,Number}}}()
 function corr2expvals_inds(N)
     get!(_CORR2EXPVALS_CACHE,N) do
         A = QuExpr(QuTerm(BaseOpProduct(BosonDestroy.(:a,_canon_ind.(1:N)))))
@@ -190,7 +199,7 @@ function corr2expvals_inds(N)
                 _add_with_normal_order!(ncA,ntt,ns*s)
             end
         end
-        [Tuple(_expval2tuple.(expvals(t)))=>s for (t,s) in sort!(collect(ncA.terms),by=x->x[1])]
+        Pair{OpPartition,Number}[_partition(_expval2tuple.(expvals(t)))=>s for (t,s) in sort!(collect(ncA.terms),by=x->x[1])]
     end
 end
 

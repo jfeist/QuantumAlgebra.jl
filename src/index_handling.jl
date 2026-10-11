@@ -48,13 +48,36 @@ struct replace_inds <: IndexFunction
 end
 (f::replace_inds)(ind::QuIndex) = get(f.replacements,ind,ind)
 
+# renumber sum indices in the order in which they are encountered
 mutable struct reorder_suminds <: IndexFunction
     icurr::IndexInt
-    replacements::Dict{QuIndex,QuIndex}
-    reorder_suminds() = new(0,Dict{QuIndex,QuIndex}())
+    # replacements[n] is the new number of sum index n (or 0 if it has not been encountered yet)
+    replacements::Vector{IndexInt}
+    reorder_suminds() = new(0,IndexInt[])
 end
-(f::reorder_suminds)(ind::QuIndex) = issumindex(ind) ? get!(()->sumindex(f.icurr += one(f.icurr)), f.replacements, ind) : ind
+function (f::reorder_suminds)(ind::QuIndex)
+    issumindex(ind) || return ind
+    n = Int(ind.num)
+    @assert n ≥ 1
+    if n > length(f.replacements)
+        nold = length(f.replacements)
+        resize!(f.replacements, n)
+        fill!(view(f.replacements, nold+1:n), zero(IndexInt))
+    end
+    r = f.replacements[n]
+    if iszero(r)
+        r = f.icurr += one(f.icurr)
+        f.replacements[n] = r
+    end
+    sumindex(r)
+end
 adapt_for_new_term!(f::reorder_suminds) = (f.icurr=0; empty!(f.replacements); f)
+
+"`_reorder_suminds(t::QuTerm)`: renumber the sum indices of `t` in the order in which they appear (returns `t` if that is already the case)"
+function _reorder_suminds(t::QuTerm)
+    _, ordered = _foldl_indices(_check_sumind_order, (sumindex(0).num, true), t, true)
+    ordered ? t : reorder_suminds()(t)
+end
 
 mutable struct popped_out_suminds <: IndexFunction
     conserved_ind::QuIndex

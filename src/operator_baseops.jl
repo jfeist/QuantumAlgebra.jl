@@ -150,33 +150,23 @@ Base.adjoint(A::T) where {T<:Union{ExpVal,Corr}} = T(adjoint(ops(A)))
 Base.adjoint(A::Param) = parstate(A)=='r' ? A : Param(opname(A),parstate(A)=='n' ? 'c' : 'n',inds(A))
 function Base.adjoint(A::QuTerm)
     B = QuTerm(nsuminds(A),deltas(A),adjoint.(params(A)),adjoint.(expvals(A)),adjoint.(corrs(A)),adjoint(bares(A)))
-    nsuminds(B)>0 ? reorder_suminds()(B) : B
+    nsuminds(B)>0 ? _reorder_suminds(B) : B
 end
 Base.adjoint(A::QuExpr) = QuExpr((adjoint(t),adjoint(s)) for (t,s) in A.terms)
 
 is_normal_form(A::Union{ExpVal,Corr}) = is_normal_form(ops(A))
 is_normal_form(ops::BaseOpProduct) = is_normal_form(ops.v)
-function is_normal_form(s::OpSeq)
-    # check that the operators are sorted and that no neighbors contract, without allocating
-    needs_lookahead = false
-    prev = nothing
-    for O in s
-        if prev !== nothing
-            isless(O,prev) && return false
-            contract!(_NoEmit(),prev,O) === nothing || return false
-        end
-        needs_lookahead |= lookahead_contraction(O)
-        prev = O
-    end
-    # checking for contractions of operators that are not neighbors needs random access
-    needs_lookahead ? is_normal_form(collect(s)) : true
-end
-function is_normal_form(v::Vector{BaseOperator})
-    issorted(v) || return false
-    # now check that no contractions occur
-    for k in 1:length(v)-1
-        contract!(_NoEmit(),v[k],v[k+1]) === nothing || return false
-        _contraction_partner(v,k) == 0 || return false
+# check that the operators are sorted and that no contractions occur
+function is_normal_form(A::Union{Vector{BaseOperator},OpSeq})
+    pend = _endpos(A)
+    p = _firstpos(A)
+    p == pend && return true
+    while (pn = _nextpos(A,p)) < pend
+        O, On = _opat(A,p), _opat(A,pn)
+        isless(On,O) && return false
+        contract!(_NoEmit(),O,On) === nothing || return false
+        _contraction_partner(A,p) === nothing || return false
+        p = pn
     end
     return true
 end
@@ -299,20 +289,49 @@ function _normalize_without_commutation(A::QuTerm)::Union{WorkTerm,Nothing}
     W
 end
 
+# Positions of operators in a sequence of operators: indices for a vector of operators,
+# and word offsets for a stored product (so that both can be traversed without allocating)
+_firstpos(A::Vector{BaseOperator}) = 1
+_endpos(A::Vector{BaseOperator}) = length(A)+1
+_nextpos(A::Vector{BaseOperator},p) = p+1
+_opat(A::Vector{BaseOperator},p) = @inbounds A[p]
+_firstpos(s::OpSeq) = s.off
+_endpos(s::OpSeq) = s.off + s.nw
+_nextpos(s::OpSeq,p) = p + _nwords(BaseOperator,s.w,p)
+_opat(s::OpSeq,p) = BaseOperator(s.w,p)
+
 # For operators where some contractions are not between neighbors in the normal order (e.g., σˣ₁ σˣ₂ σʸ₁),
-# find the first operator A[kp] (with kp ≥ k+2) that contracts with A[k] and can be moved next to it,
-# i.e., that commutes with all operators in between. Returns kp, or 0 if there is no such operator.
-function _contraction_partner(A::Vector{BaseOperator},k)
-    lookahead_contraction(A[k]) || return 0
-    fam = opfamily(A[k])
-    for kp = k+2:length(A)
-        (opfamily(A[kp]) == fam && lookahead_contraction(A[kp])) || break
-        commutes(A[kp-1],A[kp]) || break
+# find the first operator A[kp] (after A[k+1]) that contracts with A[k] and can be moved next to it,
+# i.e., that commutes with all operators in between. Returns the position of A[kp] (given that of A[k]),
+# or nothing if there is no such operator.
+function _contraction_partner(A,pk)
+    Ak = _opat(A,pk)
+    lookahead_contraction(Ak) || return nothing
+    fam = opfamily(Ak)
+    pend = _endpos(A)
+    pk1 = _nextpos(A,pk)
+    pk1 < pend || return nothing
+    pprev, pkp = pk1, _nextpos(A,pk1)
+    while pkp < pend
+        Akp = _opat(A,pkp)
+        (opfamily(Akp) == fam && lookahead_contraction(Akp)) || break
+        commutes(_opat(A,pprev),Akp) || break
         # A[kp] has to commute with all operators it is moved past, not just its neighbor
-        all(m -> commutes(A[m],A[kp]), k+1:kp-2) || continue
-        contract!(_NoEmit(),A[k],A[kp]) === nothing || return kp
+        if _commutes_with_all(A,pk1,pprev,Akp) && contract!(_NoEmit(),Ak,Akp) !== nothing
+            return pkp
+        end
+        pprev, pkp = pkp, _nextpos(A,pkp)
     end
-    return 0
+    return nothing
+end
+# whether B commutes with all operators at positions p with pstart ≤ p < pstop
+function _commutes_with_all(A,pstart,pstop,B)
+    p = pstart
+    while p < pstop
+        commutes(_opat(A,p),B) || return false
+        p = _nextpos(A,p)
+    end
+    true
 end
 
 # emitter that ignores the passed terms
@@ -374,7 +393,7 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
         kp = k+1
         res = contract!(_ReplaceEmitter(A,k,kp,term_collector,prefactor),A[k],A[kp])
         if res === nothing
-            kp = _contraction_partner(A,k)
+            kp = something(_contraction_partner(A,k), 0)
             if kp > 0
                 res = contract!(_ReplaceEmitter(A,k,kp,term_collector,prefactor),A[k],A[kp])
             end
@@ -434,6 +453,9 @@ end
 termsumiter(t::QuTerm,s,sum::QuExpr) = Base.Iterators.flatten((((t,s),), sum.terms))
 termsumiter(t,s,sum::QuExpr) = termsumiter(QuTerm(t),s,sum)
 
+# empty collector that is used (and never modified) when no new terms can be generated
+const _NO_NEW_TERMS = QuExpr()
+
 function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
     # no need to do anything since everything is in normal order
     # in particular, no copy necessary!
@@ -444,9 +466,10 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
 
     W = _normalize_without_commutation(t)
     W === nothing && return
-    newbareterms = QuExpr()
-    newexpvterms = QuExpr()
-    newcorrterms = QuExpr()
+    # parts with less than two operators cannot produce new terms, so do not create collectors for them
+    newbareterms = length(W.bares) < 2 ? _NO_NEW_TERMS : QuExpr()
+    newexpvterms = all(E -> length(E) < 2, W.expvals) ? _NO_NEW_TERMS : QuExpr()
+    newcorrterms = all(C -> length(C) < 2, W.corrs) ? _NO_NEW_TERMS : QuExpr()
     prefbare = normal_order!(W.bares,   newbareterms, shortcut_vacA_zero)
     prefexpv = normal_order!(W.expvals, ExpVal, newexpvterms)
     prefcorr = normal_order!(W.corrs,   Corr,   newcorrterms)
@@ -461,7 +484,7 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
             _add_sum_term!(A,t,s*pref)
         else
             # might need to reorder sum indices, which can "break" our normal order
-            tn = reorder_suminds()(t)
+            tn = _reorder_suminds(t)
             # this will check again if it is in normal form to make sure
             _add_with_normal_order!(A,tn,s*pref,shortcut_vacA_zero)
         end
