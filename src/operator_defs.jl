@@ -200,13 +200,11 @@ const QuIndices = parse_quindices_type(_QUINDICES_TYPE)
 @static if QuIndices == Vector{QuIndex}
     const _QUINDICES_LENGTH = typemax(Int)
     assignedinds(inds::QuIndices) = inds
-    indcopy(inds::QuIndices) = copy(inds)
     Base.tail(inds::QuIndices) = inds[2:end]
     make_indices(inds...)::QuIndices = [QuIndex(i) for i in inds]
 elseif QuIndices <: NTuple
     # no need to define Base.tail for NTuple
     assignedinds(inds::QuIndices) = filter(!isnoindex,inds)
-    indcopy(inds::QuIndices) = inds
     let
         tuple_len(::Type{NTuple{N,T}}) where {N,T} = N
         global const _QUINDICES_LENGTH = tuple_len(QuIndices)
@@ -444,7 +442,67 @@ QuTerm(Cs::Vector{Corr}) = QuTerm(0,δ[],Param[],ExpVal[],Cs,BaseOpProduct())
 QuTerm(δs::Vector{δ},Es::Vector{ExpVal}) = QuTerm(0,δs,Param[],Es,Corr[],BaseOpProduct())
 QuTerm(δs::Vector{δ},Cs::Vector{Corr})   = QuTerm(0,δs,Param[],ExpVal[],Cs,BaseOpProduct())
 
-Base.isempty(A::QuTerm) = A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs) && isempty(A.bares)
+#################################################################
+## accessors                                                   ##
+#################################################################
+# All code outside of this file should use these functions instead of accessing the fields
+# of the structs directly, so that the underlying storage can be changed. The returned
+# objects should be treated as read-only.
+
+"`nsuminds(t::QuTerm)`: number of summation indices in the term"
+nsuminds(t::QuTerm) = Int(t.nsuminds)
+"`deltas(t::QuTerm)`: the Kronecker deltas `δ` in the term"
+deltas(t::QuTerm) = t.δs
+"`params(t::QuTerm)`: the parameters `Param` in the term"
+params(t::QuTerm) = t.params
+"`expvals(t::QuTerm)`: the expectation values `ExpVal` in the term"
+expvals(t::QuTerm) = t.expvals
+"`corrs(t::QuTerm)`: the correlators `Corr` in the term"
+corrs(t::QuTerm) = t.corrs
+"`bares(t::QuTerm)`: the product of \"bare\" operators (outside expectation values) in the term"
+bares(t::QuTerm) = t.bares
+
+"`optype(A::BaseOperator)`: the `BaseOpType` of an operator"
+optype(A::BaseOperator) = A.t
+"`opname(A)`: the name (as a `QuOpName`) of an operator or parameter"
+opname(A::Union{BaseOperator,Param}) = A.name
+"`inds(A)`: the indices of an operator or parameter (note: can be padded with `NoIndex` for `NTuple` storage, use `assignedinds` to remove those)"
+inds(A::Union{BaseOperator,Param}) = A.inds
+"`parstate(A::Param)`: one of 'r' (real), 'n' (normal/complex) or 'c' (complex conjugate)"
+parstate(A::Param) = A.state
+"`ops(A::Union{ExpVal,Corr})`: the product of operators inside the expectation value or correlator"
+ops(A::Union{ExpVal,Corr}) = A.ops
+
+# BaseOpProduct behaves as a (read-only outside of normal ordering) sequence of BaseOperators
+Base.length(A::BaseOpProduct) = length(A.v)
+Base.iterate(A::BaseOpProduct, args...) = iterate(A.v, args...)
+Base.eltype(::Type{BaseOpProduct}) = BaseOperator
+Base.getindex(A::BaseOpProduct, i) = A.v[i]
+Base.firstindex(A::BaseOpProduct) = firstindex(A.v)
+Base.lastindex(A::BaseOpProduct) = lastindex(A.v)
+Base.eachindex(A::BaseOpProduct) = eachindex(A.v)
+Base.collect(A::BaseOpProduct) = collect(A.v)
+Base.copy(A::BaseOpProduct) = BaseOpProduct(copy(A.v))
+
+"""
+    WorkTerm
+
+Mutable working form of a `QuTerm` used while normal ordering. All vectors are owned by
+the `WorkTerm` and can be modified freely. Convert back with `QuTerm(w::WorkTerm)`.
+"""
+struct WorkTerm
+    nsuminds::IndexInt
+    δs::Vector{δ}
+    params::Vector{Param}
+    expvals::Vector{BaseOpProduct}
+    corrs::Vector{BaseOpProduct}
+    bares::BaseOpProduct
+end
+WorkTerm(t::QuTerm) = WorkTerm(nsuminds(t), copy(deltas(t)), collect(params(t)), [copy(ops(E)) for E in expvals(t)],
+                               [copy(ops(C)) for C in corrs(t)], copy(bares(t)))
+QuTerm(w::WorkTerm) = QuTerm(w.nsuminds, w.δs, w.params, ExpVal.(w.expvals), Corr.(w.corrs), w.bares)
+
+Base.isempty(A::QuTerm) = nsuminds(A) == 0 && isempty(deltas(A)) && isempty(params(A)) && isempty(expvals(A)) && isempty(corrs(A)) && isempty(bares(A))
 
 """
     QuExpr
@@ -738,10 +796,10 @@ Wrap bare operators inside `A` into a formal expectation value ⟨A⟩.
 Accepts `QuTerm` or `QuExpr`; numeric inputs are returned as constant expressions.
 """
 function expval(A::QuTerm)
-    if isempty(A.bares)
+    if isempty(bares(A))
         A
     else
-        QuTerm(A.nsuminds,A.δs,A.params,[A.expvals; ExpVal(A.bares)],A.corrs,BaseOpProduct())
+        QuTerm(nsuminds(A),deltas(A),params(A),[collect(expvals(A)); ExpVal(bares(A))],corrs(A),BaseOpProduct())
     end
 end
 """
@@ -751,10 +809,10 @@ Wrap bare operators inside `A` into a formal connected correlator ⟨A⟩₍c₎
 Accepts `QuTerm` or `QuExpr`; numeric inputs are returned as constant expressions.
 """
 function corr(A::QuTerm)
-    if isempty(A.bares)
+    if isempty(bares(A))
         A
     else
-        QuTerm(A.nsuminds,A.δs,A.params,A.expvals,[A.corrs; Corr(A.bares)],BaseOpProduct())
+        QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),[collect(corrs(A)); Corr(bares(A))],BaseOpProduct())
     end
 end
 
@@ -767,7 +825,7 @@ corr(A::Number) = QuExpr(A)
 "`∑(ind,A::QuExpr)`: return (formal) sum of expression A over index ind."
 function ∑(ind::QuIndex,A::QuTerm)
     (issumindex(ind) || isintindex(ind)) && error("Index $ind to be summed over needs to be symbolic!")
-    sumind = sumindex(A.nsuminds+one(A.nsuminds))
+    sumind = sumindex(nsuminds(A)+1)
     f = replace_inds(ind=>sumind)
     g = reorder_suminds()
     # use the form that also sets nsuminds

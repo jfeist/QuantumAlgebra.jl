@@ -241,7 +241,7 @@ end
             tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*a'(5)*a(5))
             if QuantumAlgebra.using_σpm()
                 @test length(tmp1.terms) == 1
-                @test first(tmp1.terms)[1].bares == first((a'(5)*σp(:k)*a(5)).terms)[1].bares
+                @test QuantumAlgebra.bares(first(tmp1.terms)[1]) == QuantumAlgebra.bares(first((a'(5)*σp(:k)*a(5)).terms)[1])
             else
                 @test length(tmp1.terms) == 4
             end

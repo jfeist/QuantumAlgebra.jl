@@ -1,9 +1,9 @@
 export julia_expression
 
 # to make a variable name from operators
-varname(A::BaseOperator) = string(A.name,BaseOpType_expr[Int(A.t)])
-varname(A::BaseOpProduct) = Symbol(varname.(A.v)...)
-varname(A::Union{ExpVal,Corr}) = varname(A.ops)
+varname(A::BaseOperator) = string(opname(A),BaseOpType_expr[Int(optype(A))])
+varname(A::BaseOpProduct) = Symbol((varname(O) for O in A)...)
+varname(A::Union{ExpVal,Corr}) = varname(ops(A))
 
 # for sum indices use a valid and short symbol that cannot be expressed as a single char, i.e., no risk of collisions with "real" index names
 # (the "standard" symbol '#' is not a variable name, so it becomes var"#")
@@ -20,14 +20,14 @@ correlator symbols; when provided, conjugates may be rewritten to match availabl
 function julia_expression(A::Param,varnames=nothing)
     # the parsing here allows "parameters" that are functions
     # e.g., with names such as "f(t)"
-    x = Meta.parse(string(A.name))
+    x = Meta.parse(string(opname(A)))
     # is it a function call?
     if x isa Expr
         @assert isempty(indices(A))
     else
         x = :( $x[$(indexpr(A)...)] )
     end
-    A.state == 'c' ? :( conj($x) ) : x
+    parstate(A) == 'c' ? :( conj($x) ) : x
 end
 julia_expression(A::δ,varnames=nothing) = :( I[$(indexpr(A)...)] )
 function julia_expression(A::Union{ExpVal,Corr},varnames=nothing)
@@ -47,10 +47,10 @@ end
 num_expr(s::Number) = :( $(isreal(s) ? Float64(s) : ComplexF64(s)) )
 function julia_expression(A::QuTerm,varnames=nothing,s=1)
     isempty(A) && return num_expr(s)
-    isempty(A.bares) || throw(ArgumentError("Cannot convert term $A with bare operators to a julia expression."))
+    isempty(bares(A)) || throw(ArgumentError("Cannot convert term $A with bare operators to a julia expression."))
     sexpr = isone(s) ? [] : num_expr(s)
-    exprs = [sexpr; julia_expression.(A.δs); julia_expression.(A.params);
-             julia_expression.(A.expvals,(varnames,)); julia_expression.(A.corrs,(varnames,))]
+    exprs = [sexpr; julia_expression.(deltas(A)); julia_expression.(params(A));
+             julia_expression.(expvals(A),(varnames,)); julia_expression.(corrs(A),(varnames,))]
     length(exprs)==1 ? exprs[1] : :( *($(exprs...)) )
 end
 function julia_expression(A::QuExpr,varnames=nothing)

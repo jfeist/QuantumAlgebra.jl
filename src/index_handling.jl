@@ -1,11 +1,11 @@
 abstract type IndexFunction end
 
-(f::IndexFunction)(A::BaseOperator) = BaseOperator(A.t,A.name,f.(A.inds))
+(f::IndexFunction)(A::BaseOperator) = BaseOperator(optype(A),opname(A),f.(inds(A)))
 (f::IndexFunction)(d::δ) = δ(f(d.iA),f(d.iB))
-(f::IndexFunction)(par::Param) = Param(par.name,par.state,f.(par.inds))
-(f::IndexFunction)(ops::BaseOpProduct) = BaseOpProduct(f.(ops.v))
-(f::IndexFunction)(ev::T) where T<:Union{ExpVal,Corr} = T(f(ev.ops))
-(f::IndexFunction)(A::QuTerm,nsuminds=A.nsuminds) = QuTerm(nsuminds,f.(A.δs),f.(A.params),f.(A.expvals),f.(A.corrs),f(A.bares))
+(f::IndexFunction)(par::Param) = Param(opname(par),parstate(par),f.(inds(par)))
+(f::IndexFunction)(ops::BaseOpProduct) = BaseOpProduct(BaseOperator[f(O) for O in ops])
+(f::IndexFunction)(ev::T) where T<:Union{ExpVal,Corr} = T(f(ops(ev)))
+(f::IndexFunction)(A::QuTerm,nsuminds=nsuminds(A)) = QuTerm(nsuminds,f.(deltas(A)),f.(params(A)),f.(expvals(A)),f.(corrs(A)),f(bares(A)))
 # some index functions have to be reset for each new term in a sum
 (f::IndexFunction)(A::QuExpr) = _map_quexpr_ops(x->(adapt_for_new_term!(f); f(x)),A)
 # by default, nothing to do
@@ -75,19 +75,19 @@ end
 adapt_for_new_term!(f::popped_out_suminds) = error("popped_out_suminds should not be applied on QuExpr.")
 
 hasind(ind::QuIndex,d::δ) = ind in (d.iA,d.iB)
-hasind(ind::QuIndex,A::Union{BaseOperator,Param}) = ind in A.inds
-hasind(ind::QuIndex,ev::Union{ExpVal,Corr}) = hasind(ind,ev.ops)
-hasind(ind::QuIndex,A::BaseOpProduct) = any(hasind.((ind,),A.v))
+hasind(ind::QuIndex,A::Union{BaseOperator,Param}) = ind in inds(A)
+hasind(ind::QuIndex,ev::Union{ExpVal,Corr}) = hasind(ind,ops(ev))
+hasind(ind::QuIndex,A::BaseOpProduct) = any(O -> hasind(ind,O), A)
 
 split_by_ind(ind::QuIndex,v) = (iwiths = hasind.((ind,),v); (v[.!iwiths], v[iwiths]))
 
 indices(d::δ)::Vector{QuIndex} = [d.iA,d.iB]
-indices(A::Union{BaseOperator,Param})::Vector{QuIndex} = collect(assignedinds(A.inds)) # collect to guarantee copy
+indices(A::Union{BaseOperator,Param})::Vector{QuIndex} = collect(assignedinds(inds(A))) # collect to guarantee copy
 indices(v::AbstractVector)::Vector{QuIndex} = mapreduce(indices, vcat, v; init=QuIndex[])
-indices(A::BaseOpProduct)::Vector{QuIndex} = indices(A.v)
-indices(A::Union{ExpVal,Corr})::Vector{QuIndex} = indices(A.ops)
+indices(A::BaseOpProduct)::Vector{QuIndex} = mapreduce(indices, vcat, A; init=QuIndex[])
+indices(A::Union{ExpVal,Corr})::Vector{QuIndex} = indices(ops(A))
 indices(A::QuTerm, withδs::Bool=true)::Vector{QuIndex} = begin
-    args = withδs ? (A.δs,A.params,A.expvals,A.corrs,A.bares) : (A.params,A.expvals,A.corrs,A.bares)
+    args = withδs ? (deltas(A),params(A),expvals(A),corrs(A),bares(A)) : (params(A),expvals(A),corrs(A),bares(A))
     mapreduce(indices, vcat, args; init=QuIndex[])
 end
 indices(A::QuExpr)::Vector{QuIndex} = mapreduce(indices, vcat, sort!(collect(keys(A.terms))); init=QuIndex[])

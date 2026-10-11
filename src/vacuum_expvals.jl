@@ -2,9 +2,9 @@ export Avac, vacA, vacExpVal
 
 function _get_mode_name(ex::QuExpr)
     opprod = to_opprod(ex)
-    op = unalias(only(opprod.v))
-    isempty(assignedinds(op.inds)) || throw(ArgumentError("Modes in vacuum should be given without indices"))
-    op.name
+    op = unalias(only(opprod))
+    isempty(assignedinds(inds(op))) || throw(ArgumentError("Modes in vacuum should be given without indices"))
+    opname(op)
 end
 
 _parse_modes_in_vacuum(modes::Nothing) = nothing
@@ -15,73 +15,72 @@ _parse_modes_in_vacuum(modes) = Set{QuOpName}(_get_mode_name.(modes))
 # helper function that is only called on normal-ordered terms that only contain
 # operators that are in the vacuum state
 function _Avac(BO::BaseOpProduct,fac)
-    ii = length(BO.v)
+    ii = length(BO)
     while ii >= 1
-        O = BO.v[ii]
-        if O.t in (BosonCreate_,FermionCreate_,TLSCreate_)
-            ii==length(BO.v) && return (BO,fac)
+        O = BO[ii]
+        if optype(O) in (BosonCreate_,FermionCreate_,TLSCreate_)
+            ii==length(BO) && return (BO,fac)
             break
-        elseif O.t in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
+        elseif optype(O) in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
             return (BO,zero(fac))
-        elseif O.t == TLSz_
+        elseif optype(O) == TLSz_
             # vacuum is eigenvalue of σz - since the term is in normal order and
             # we break at TLSx_,TLSy_, we know it acts on the vacuum
             fac = -fac
-        elseif O.t in (TLSx_,TLSy_)
+        elseif optype(O) in (TLSx_,TLSy_)
             break
         else
             error("should not be reached")
         end
         ii -= 1
     end
-    return (BaseOpProduct(BO.v[1:ii]), fac)
+    return (BaseOpProduct(BO[1:ii]), fac)
 end
 
 # helper function that is only called on normal-ordered terms that only contain
 # operators that are in the vacuum state
 function _vacA(BO::BaseOpProduct,fac)
     ii = 1
-    while ii <= length(BO.v)
-        O = BO.v[ii]
-        if O.t in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
+    while ii <= length(BO)
+        O = BO[ii]
+        if optype(O) in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
             ii==1 && return (BO,fac)
             break
-        elseif O.t in (BosonCreate_,FermionCreate_,TLSCreate_)
+        elseif optype(O) in (BosonCreate_,FermionCreate_,TLSCreate_)
             return (BO,zero(fac))
-        elseif O.t == TLSz_
+        elseif optype(O) == TLSz_
             # vacuum is eigenvalue of σz - since the term is in normal order and
             # we break at TLSx_,TLSy_, we know it acts on the vacuum
             fac = -fac
-        elseif O.t in (TLSx_,TLSy_)
+        elseif optype(O) in (TLSx_,TLSy_)
             break
         else
             error("should not be reached")
         end
         ii += 1
     end
-    return (BaseOpProduct(BO.v[ii:end]), fac)
+    return (BaseOpProduct(BO[ii:end]), fac)
 end
 
 function _apply_on_vacuum_modes(func,A::QuTerm,fac,modes_in_vacuum::Nothing)
-    BO, fac = func(A.bares,fac)
-    Anew = BO === A.bares ? A : QuTerm(A.nsuminds,A.δs,A.params,A.expvals,A.corrs,BO)
+    BO, fac = func(bares(A),fac)
+    Anew = BO === bares(A) ? A : QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),corrs(A),BO)
     return (Anew, fac)
 end
 
 function _apply_on_vacuum_modes(func,A::QuTerm,fac,modes_in_vacuum::Set{QuOpName})
-    BO_vacmodes = BaseOpProduct()
-    BO_novacmodes = BaseOpProduct()
-    for O in A.bares.v
-        Oua = unalias(O)
-        BO = Oua.name ∈ modes_in_vacuum ? BO_vacmodes : BO_novacmodes
-        push!(BO.v, O)
+    vacmodes = BaseOperator[]
+    novacmodes = BaseOperator[]
+    for O in bares(A)
+        push!(opname(unalias(O)) ∈ modes_in_vacuum ? vacmodes : novacmodes, O)
     end
+    BO_vacmodes = BaseOpProduct(vacmodes)
     BO_vacnew, fac = func(BO_vacmodes,fac)
     BO_vacnew === BO_vacmodes && return (A,fac)
     # we know that operators were normal ordered and our operations did not
     # change this, so just sort without commutations
-    newv = sort!([BO_novacmodes.v; BO_vacnew.v])
-    Anew = QuTerm(A.nsuminds,A.δs,A.params,A.expvals,A.corrs,BaseOpProduct(newv))
+    newv = sort!([novacmodes; collect(BO_vacnew)])
+    Anew = QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),corrs(A),BaseOpProduct(newv))
     return (Anew, fac)
 end
 
@@ -108,31 +107,31 @@ function _TLS_to_pm_normal(A::QuExpr,shortcut_vacA_zero)
     terms_to_clean = collect(A.terms)
     while !isempty(terms_to_clean)
         (t,s) = pop!(terms_to_clean)
-        v = t.bares.v
-        iTLS = findfirst(A->A.t ∈ (TLSx_,TLSy_,TLSz_), v)
+        v = collect(bares(t))
+        iTLS = findfirst(A->optype(A) ∈ (TLSx_,TLSy_,TLSz_), v)
         if iTLS === nothing
             _add_with_normal_order!(An,t,s,shortcut_vacA_zero) # last argument is shortcut_vacA_zero
         else
             O = v[iTLS]
-            if O.t == TLSx_
+            if optype(O) == TLSx_
                 # σˣ = σ⁺ + σ⁻
-                for On in (TLSCreate(O.name,O.inds),TLSDestroy(O.name,O.inds))
+                for On in (TLSCreate(opname(O),inds(O)),TLSDestroy(opname(O),inds(O)))
                     vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
-                    tn = QuTerm(t.nsuminds,t.δs,t.params,t.expvals,t.corrs,BaseOpProduct(vn))
+                    tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
                     push!(terms_to_clean,tn=>s)
                 end
-            elseif O.t == TLSy_
+            elseif optype(O) == TLSy_
                 # σʸ = -i σ⁺ + i σ⁻
-                for (On,sn) in ((TLSCreate(O.name,O.inds),-1im),(TLSDestroy(O.name,O.inds),1im))
+                for (On,sn) in ((TLSCreate(opname(O),inds(O)),-1im),(TLSDestroy(opname(O),inds(O)),1im))
                     vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
-                    tn = QuTerm(t.nsuminds,t.δs,t.params,t.expvals,t.corrs,BaseOpProduct(vn))
+                    tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
                     push!(terms_to_clean,tn=>s*sn)
                 end
-            elseif O.t == TLSz_
+            elseif optype(O) == TLSz_
                 # σᶻ = 2σ⁺σ⁻ - 1
-                for (On,sn) in (([TLSCreate(O.name,O.inds),TLSDestroy(O.name,O.inds)],2),(BaseOperator[],-1))
+                for (On,sn) in (([TLSCreate(opname(O),inds(O)),TLSDestroy(opname(O),inds(O))],2),(BaseOperator[],-1))
                     vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
-                    tn = QuTerm(t.nsuminds,t.δs,t.params,t.expvals,t.corrs,BaseOpProduct(vn))
+                    tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
                     push!(terms_to_clean,tn=>s*sn)
                 end
             end
@@ -166,7 +165,7 @@ function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()),modes_in_vacuum=no
     vAv = QuExpr()
     for (t,s) in x.terms
         tn,sn = Avac(vacA(t,s,mv)...,mv)
-        isnothing(mv) && @assert sn==0 || isempty(tn.bares)
+        isnothing(mv) && @assert sn==0 || isempty(bares(tn))
         _add_sum_term!(vAv,tn,simplify_number(sn))
     end
     vAv

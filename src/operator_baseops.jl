@@ -3,9 +3,8 @@ import Base: ==, ≈, *, +, -
 
 export normal_form, comm
 
-Base.length(A::BaseOpProduct) = length(A.v)
-Base.length(A::Union{ExpVal,Corr}) = length(A.ops)
-Base.length(A::QuTerm) = length(A.bares) + mapreduce(length,+,A.expvals;init=0) + mapreduce(length,+,A.corrs;init=0)
+Base.length(A::Union{ExpVal,Corr}) = length(ops(A))
+Base.length(A::QuTerm) = length(bares(A)) + mapreduce(length,+,expvals(A);init=0) + mapreduce(length,+,corrs(A);init=0)
 
 Base.zero(::Type{QuExpr}) = QuExpr()
 Base.zero(::QuExpr) = zero(QuExpr)
@@ -24,24 +23,12 @@ function Base.:^(A::Union{QuTerm,QuExpr},n::Int)
 end
 Base.literal_pow(::typeof(^),A::Union{QuTerm,QuExpr},::Val{n}) where n = A^n
 
-noaliascopy(A::Param) = Param(A.name,A.state,indcopy(A.inds))
-# δ is isbitstype
-noaliascopy(A::δ) = A
-noaliascopy(A::BaseOperator) = BaseOperator(A.t,A.name,indcopy(A.inds))
-noaliascopy(A::T) where T<:Union{ExpVal,Corr} = T(noaliascopy(A.ops))
-noaliascopy(A::BaseOpProduct) = BaseOpProduct(noaliascopy(A.v))
-noaliascopy(v::Vector{T}) where T<:Union{δ,Param,BaseOperator,ExpVal,Corr} = noaliascopy.(v)
-noaliascopy(A::QuTerm) = QuTerm(A.nsuminds, noaliascopy(A.δs), noaliascopy(A.params),
-                                noaliascopy(A.expvals), noaliascopy(A.corrs), noaliascopy(A.bares))
-# IMPT: create a dictionary directly here, do not go through _add_sum_term
-noaliascopy(A::QuExpr) = QuExpr(Dict{QuTerm,Number}(noaliascopy(t) => s for (t,s) in A.terms))
-
-==(A::BaseOperator,B::BaseOperator) = A.t == B.t && A.name == B.name && A.inds == B.inds
+==(A::BaseOperator,B::BaseOperator) = optype(A) == optype(B) && opname(A) == opname(B) && inds(A) == inds(B)
 ==(A::BaseOpProduct,B::BaseOpProduct) = A.v == B.v
-==(A::Param,B::Param) = A.name == B.name && A.state == B.state && A.inds == B.inds
-==(A::T,B::T) where T<:Union{ExpVal,Corr} = A.ops == B.ops
-==(A::QuTerm,B::QuTerm) = (A.nsuminds == B.nsuminds && A.δs == B.δs && A.params == B.params &&
-                           A.expvals == B.expvals && A.corrs == B.corrs && A.bares == B.bares)
+==(A::Param,B::Param) = opname(A) == opname(B) && parstate(A) == parstate(B) && inds(A) == inds(B)
+==(A::T,B::T) where T<:Union{ExpVal,Corr} = ops(A) == ops(B)
+==(A::QuTerm,B::QuTerm) = (nsuminds(A) == nsuminds(B) && deltas(A) == deltas(B) && params(A) == params(B) &&
+                           expvals(A) == expvals(B) && corrs(A) == corrs(B) && bares(A) == bares(B))
 ==(A::QuExpr,B::QuExpr) = isequal(A.terms, B.terms)
 
 function ≈(A::QuExpr,B::QuExpr)
@@ -67,15 +54,15 @@ function Base.hash(name::QuOpName,h::UInt)
     h
 end
 function Base.hash(A::BaseOperator,h::UInt)
-    h = hash(UInt(A.t),h)
-    h = hash(A.name,h)
-    h = hash(A.inds,h)
+    h = hash(UInt(optype(A)),h)
+    h = hash(opname(A),h)
+    h = hash(inds(A),h)
     h
 end
 function Base.hash(A::Param,h::UInt)
-    h = hash(A.name,h)
-    h = hash(A.state,h)
-    h = hash(A.inds,h)
+    h = hash(opname(A),h)
+    h = hash(parstate(A),h)
+    h = hash(inds(A),h)
     h
 end
 function Base.hash(A::BaseOpProduct,h::UInt)
@@ -84,15 +71,15 @@ function Base.hash(A::BaseOpProduct,h::UInt)
 end
 function Base.hash(A::T,h::UInt) where T<:Union{ExpVal,Corr}
     h = hash(T,h)
-    h = hash(A.ops,h)
+    h = hash(ops(A),h)
     h
 end
 function Base.hash(A::QuTerm,h::UInt)
-    h = hash(A.nsuminds,h)
-    h = hash(A.δs,h)
-    h = hash(A.expvals,h)
-    h = hash(A.corrs,h)
-    h = hash(A.bares,h)
+    h = hash(nsuminds(A),h)
+    h = hash(deltas(A),h)
+    h = hash(expvals(A),h)
+    h = hash(corrs(A),h)
+    h = hash(bares(A),h)
     h
 end
 function Base.hash(A::QuExpr,h::UInt)
@@ -114,37 +101,37 @@ end
 @inline recursive_cmp(A::Param,B::Param) = cmp(A,B)
 @inline recursive_cmp(A::δ,B::δ) = cmp(A,B)
 @inline recursive_cmp(A::BaseOpProduct,B::BaseOpProduct) = (cc = cmp(length(A),length(B)); cc == 0 ? recursive_cmp(A.v,B.v) : cc)
-@inline recursive_cmp(A::T,B::T) where T<:Union{ExpVal,Corr}  = recursive_cmp(A.ops,B.ops)
+@inline recursive_cmp(A::T,B::T) where T<:Union{ExpVal,Corr}  = recursive_cmp(ops(A),ops(B))
 
-macro _cmpAB(member,rec=true)
+# compare f(A) and f(B), and return from the calling function if they are not equal
+macro _cmpAB(f,rec=true)
     fun = rec ? :recursive_cmp : :cmp
     esc(quote
-        cc = $fun(A.$member,B.$member)
+        cc = $fun($f(A),$f(B))
         cc == 0 || return cc
     end)
 end
 
 @inline function Base.cmp(A::BaseOperator,B::BaseOperator)
-    @_cmpAB t false
-    @_cmpAB name false
+    @_cmpAB optype false
+    @_cmpAB opname false
     @_cmpAB inds false
     # they are equal
     return 0
 end
 
 @inline function Base.cmp(A::Param,B::Param)
-    @_cmpAB name false
-    @_cmpAB state false
+    @_cmpAB opname false
+    @_cmpAB parstate false
     @_cmpAB inds false
     # they are equal
     return 0
 end
 
 @inline function Base.cmp(A::δ,B::δ)
-    @_cmpAB iA false
-    @_cmpAB iB false
-    # they are equal
-    return 0
+    cc = cmp(A.iA,B.iA)
+    cc == 0 || return cc
+    return cmp(A.iB,B.iB)
 end
 
 function Base.cmp(A::QuTerm,B::QuTerm)
@@ -157,7 +144,7 @@ function Base.cmp(A::QuTerm,B::QuTerm)
     @_cmpAB expvals
     @_cmpAB corrs
     @_cmpAB params
-    @_cmpAB δs
+    @_cmpAB deltas
     @_cmpAB nsuminds false
     # they are equal
     return 0
@@ -177,17 +164,17 @@ Compute the commutator ``[A,B] = A*B - B*A``.
 """
 comm(A,B) = A*B - B*A
 
-Base.adjoint(A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(A.t)],A.name,A.inds)
+Base.adjoint(A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(optype(A))],opname(A),inds(A))
 Base.adjoint(A::BaseOpProduct) = BaseOpProduct(adjoint.(view(A.v, lastindex(A.v):-1:1)))
-Base.adjoint(A::T) where {T<:Union{ExpVal,Corr}} = T(adjoint(A.ops))
-Base.adjoint(A::Param) = A.state=='r' ? A : Param(A.name,A.state=='n' ? 'c' : 'n',A.inds)
+Base.adjoint(A::T) where {T<:Union{ExpVal,Corr}} = T(adjoint(ops(A)))
+Base.adjoint(A::Param) = parstate(A)=='r' ? A : Param(opname(A),parstate(A)=='n' ? 'c' : 'n',inds(A))
 function Base.adjoint(A::QuTerm)
-    B = QuTerm(A.nsuminds,A.δs,adjoint.(A.params),adjoint.(A.expvals),adjoint.(A.corrs),adjoint(A.bares))
-    B.nsuminds>0 ? reorder_suminds()(B) : B
+    B = QuTerm(nsuminds(A),deltas(A),adjoint.(params(A)),adjoint.(expvals(A)),adjoint.(corrs(A)),adjoint(bares(A)))
+    nsuminds(B)>0 ? reorder_suminds()(B) : B
 end
 Base.adjoint(A::QuExpr) = QuExpr((adjoint(t),adjoint(s)) for (t,s) in A.terms)
 
-is_normal_form(A::Union{ExpVal,Corr}) = is_normal_form(A.ops)
+is_normal_form(A::Union{ExpVal,Corr}) = is_normal_form(ops(A))
 is_normal_form(ops::BaseOpProduct) = is_normal_form(ops.v)
 function is_normal_form(v::Vector{BaseOperator})
     issorted(v) || return false
@@ -196,10 +183,10 @@ function is_normal_form(v::Vector{BaseOperator})
         O = v[k]
         dosimplify, fac, op = _contract(O,v[k+1])
         dosimplify && return false
-        if O.t in (TLSx_,TLSy_,TLSz_)
+        if optype(O) in (TLSx_,TLSy_,TLSz_)
             # lookahead while we can commute through
             for kp = k+2:length(v)
-                v[kp].t in (TLSx_,TLSy_,TLSz_) || break
+                optype(v[kp]) in (TLSx_,TLSy_,TLSz_) || break
                 _exchange(v[kp-1],v[kp]) == (1,nothing) || break
                 all(m -> _exchange(v[m],v[kp]) == (1,nothing), k+1:kp-2) || continue
                 dosimplify, fac, op = _contract(O,v[kp])
@@ -210,12 +197,12 @@ function is_normal_form(v::Vector{BaseOperator})
     return true
 end
 function is_normal_form(t::QuTerm)
-    (issorted(t.params) && issorted(t.expvals) && issorted(t.corrs)) || return false
-    is_normal_form(t.bares) || return false
-    for EV in t.expvals
+    (issorted(params(t)) && issorted(expvals(t)) && issorted(corrs(t))) || return false
+    is_normal_form(bares(t)) || return false
+    for EV in expvals(t)
         is_normal_form(EV) || return false
     end
-    for CO in t.corrs
+    for CO in corrs(t)
         is_normal_form(CO) || return false
     end
 
@@ -228,13 +215,13 @@ function is_normal_form(t::QuTerm)
         last_sumind = max(ind.num,last_sumind)
     end
 
-    isempty(t.δs) && return true
+    isempty(deltas(t)) && return true
 
     # all indices that are not in δs
     changeable_indices_set = Set{QuIndex}(changeable_indices)
     # accumulate indices that δs want to change (to compare with later δs)
     replace_inds = Set{QuIndex}()
-    for (iδ,dd) in enumerate(t.δs)
+    for (iδ,dd) in enumerate(deltas(t))
         iA,iB = dd.iA, dd.iB
         # δ is not ordered (or disappears if iA == iB)
         iA ≥ iB && return false
@@ -243,7 +230,7 @@ function is_normal_form(t::QuTerm)
         (issumindex(iA) || issumindex(iB)) && return false
         (iA in replace_inds || iB in replace_inds) && return false
         if iδ > 1
-            (dd > @inbounds t.δs[iδ-1]) || return false
+            (dd > @inbounds deltas(t)[iδ-1]) || return false
         end
         iB in changeable_indices_set && return false
         push!(replace_inds, iB)
@@ -252,13 +239,13 @@ function is_normal_form(t::QuTerm)
 end
 is_normal_form(A::QuExpr) = all(is_normal_form, keys(A.terms))
 
-function _normalize_without_commutation(A::QuTerm)::Union{QuTerm,Nothing}
+# returns a WorkTerm (that can be modified freely) or nothing if the term is zero
+function _normalize_without_commutation(A::QuTerm)::Union{WorkTerm,Nothing}
     # first, clean up the δs
-    if isempty(A.δs)
-        # we always want _normalize_without_commutation to return a new object so we can modify it later
-        A = noaliascopy(A)
+    if isempty(deltas(A))
+        W = WorkTerm(A)
     else
-        δs = sort(A.δs)
+        δs = sort(deltas(A))
         #println("in _normalize_without_commutation for A = $A, starting with δs = $δs")
         replacements = Dict{QuIndex,QuIndex}()
         delsuminds = IndexInt[]
@@ -298,7 +285,7 @@ function _normalize_without_commutation(A::QuTerm)::Union{QuTerm,Nothing}
             sumrepls = Dict{QuIndex,QuIndex}()
             sort!(delsuminds)
             for (shift,startind) in enumerate(delsuminds)
-                endind = shift == length(delsuminds) ? A.nsuminds : delsuminds[shift+1]-1
+                endind = shift == length(delsuminds) ? nsuminds(A) : delsuminds[shift+1]-1
                 for num = startind+1:endind
                     sumrepls[sumindex(num)] = sumindex(num-shift)
                 end
@@ -314,16 +301,15 @@ function _normalize_without_commutation(A::QuTerm)::Union{QuTerm,Nothing}
             merge!(sumrepls,replacements)
             replacements = sumrepls
         end
-        nsuminds = A.nsuminds-length(delsuminds)
         f = replace_inds(replacements)
-        #println("in _normalize_without_commutation, deleting sum indices $delsuminds and doing replacements $replacements.")
-        A = QuTerm(nsuminds,δs,f.(A.params),f.(A.expvals),f.(A.corrs),f(A.bares))
+        W = WorkTerm(nsuminds(A)-length(delsuminds), δs, f.(params(A)), [f(ops(E)) for E in expvals(A)],
+                     [f(ops(C)) for C in corrs(A)], f(bares(A)))
     end
     # also sort all the commuting terms
-    sort!(A.params)
-    sort!(A.expvals)
-    sort!(A.corrs)
-    A
+    sort!(W.params)
+    sort!(W.expvals)
+    sort!(W.corrs)
+    W
 end
 
 # levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
@@ -331,8 +317,8 @@ end
 const levicivita_lut = ((0,1,-1), (-1,0,1), (1,-1,0))
 function ϵ_ab(A::BaseOperator,B::BaseOperator)
     # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
-    a = Int(A.t) - Int(TLSx_) + 1
-    b = Int(B.t) - Int(TLSx_) + 1
+    a = Int(optype(A)) - Int(TLSx_) + 1
+    b = Int(optype(B)) - Int(TLSx_) + 1
     c = BaseOpType(Int(TLSx_) - 1 + (6 - a - b))
     s = @inbounds levicivita_lut[a][b]
     c, s
@@ -347,25 +333,25 @@ end
 # rewrite B A as x A B + y, with A < B in our ordering
 # returns (x::Int,y::Union{ExchangeResult,Nothing})
 function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeResult,Nothing}}
-    if A.t == B.t
+    if optype(A) == optype(B)
         # these operators always commute with the same type
-        A.t in (BosonDestroy_,BosonCreate_,TLSCreate_,TLSDestroy_,TLSx_,TLSy_,TLSz_) && return (1,nothing)
+        optype(A) in (BosonDestroy_,BosonCreate_,TLSCreate_,TLSDestroy_,TLSx_,TLSy_,TLSz_) && return (1,nothing)
         # these operators anticommute if they refer to the same species (name), and commute otherwise
-        A.t in (FermionDestroy_,FermionCreate_) && return (A.name == B.name ? -1 : 1,nothing)
+        optype(A) in (FermionDestroy_,FermionCreate_) && return (opname(A) == opname(B) ? -1 : 1,nothing)
     end
 
     # different types of operators commute
-    if A.t in (BosonDestroy_,BosonCreate_) && B.t in (FermionDestroy_,FermionCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
+    if optype(A) in (BosonDestroy_,BosonCreate_) && optype(B) in (FermionDestroy_,FermionCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
         return (1,nothing)
-    elseif A.t in (FermionDestroy_,FermionCreate_) && B.t in (BosonDestroy_,BosonCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
+    elseif optype(A) in (FermionDestroy_,FermionCreate_) && optype(B) in (BosonDestroy_,BosonCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
         return (1,nothing)
-    elseif A.t in (TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_) && B.t in (BosonDestroy_,BosonCreate_,FermionDestroy_,FermionCreate_)
+    elseif optype(A) in (TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_) && optype(B) in (BosonDestroy_,BosonCreate_,FermionDestroy_,FermionCreate_)
         return (1,nothing)
     end
 
     # a(i) a'(j) = a'(j) a(i) + δij
-    if A.t == BosonCreate_ && B.t == BosonDestroy_
-        if A.name == B.name && (dd = δ(A.inds,B.inds)) !== nothing
+    if optype(A) == BosonCreate_ && optype(B) == BosonDestroy_
+        if opname(A) == opname(B) && (dd = δ(inds(A),inds(B))) !== nothing
             return (1, ExchangeResult(1,dd,nothing))
         else
             return (1, nothing)
@@ -373,17 +359,17 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
     end
 
     # f(i) f'(j) = -f'(j) f(i) + δij
-    if A.t == FermionCreate_ && B.t == FermionDestroy_
-        if A.name == B.name
-            dd = δ(A.inds,B.inds)
+    if optype(A) == FermionCreate_ && optype(B) == FermionDestroy_
+        if opname(A) == opname(B)
+            dd = δ(inds(A),inds(B))
             return (-1, dd === nothing ? nothing : ExchangeResult(1,dd,nothing))
         else
             return (1, nothing)
         end
     end
 
-    if A.t == TLSCreate_ && B.t == TLSDestroy_
-        if A.name != B.name || (dd = δ(A.inds,B.inds)) === nothing
+    if optype(A) == TLSCreate_ && optype(B) == TLSDestroy_
+        if opname(A) != opname(B) || (dd = δ(inds(A),inds(B))) === nothing
             return (1,nothing)
         elseif isempty(dd)
             # indices were all the same, σ- σ+ = 1 - σ+ σ-
@@ -392,13 +378,13 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
             # σ-_i σ+_j = σ+_j σ-_i - δij σz_i = σ+_j σ-_i + δij (1 - 2 σ+_i σ-_i)
             # note that we return a TLSz to "fit" in ExchangeResult, but need to undo that later on
             # also note that we pass "+TLSz" instead of "-TLSz" so we do not have to flip the sign of the "1" term in the sort algorithm
-            return (1, ExchangeResult(1, dd, TLSz(A.name,A.inds)))
+            return (1, ExchangeResult(1, dd, TLSz(opname(A),inds(A))))
         end
     end
 
     # B A as x A B + y, with A < B
-    if A.t in (TLSx_,TLSy_,TLSz_) && B.t in (TLSx_,TLSy_,TLSz_)
-        if A.name != B.name || (dd = δ(A.inds,B.inds)) === nothing
+    if optype(A) in (TLSx_,TLSy_,TLSz_) && optype(B) in (TLSx_,TLSy_,TLSz_)
+        if opname(A) != opname(B) || (dd = δ(inds(A),inds(B))) === nothing
             return (1,nothing)
         else
             # we need ϵbac
@@ -407,16 +393,16 @@ function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeRes
                 # indices were all the same,
                 # σb σa = δab + i ϵbac σc
                 # since A < B, we know that a != b
-                return (0, ExchangeResult(im*s,dd,BaseOperator(c,A.name,A.inds)))
+                return (0, ExchangeResult(im*s,dd,BaseOperator(c,opname(A),inds(A))))
             else
                 # [σb_i,σa_j] = 2i εbac δij σc_i =>
                 # σb_j σa_i = σa_i σb_j + 2i εbac δij σc_i
-                return (1, ExchangeResult(2im*s,dd,BaseOperator(c,A.name,A.inds)))
+                return (1, ExchangeResult(2im*s,dd,BaseOperator(c,opname(A),inds(A))))
             end
         end
     end
 
-    if (A.t == TLSCreate_ && B.t in (TLSx_,TLSy_,TLSz_)) || (A.t in (TLSx_,TLSy_,TLSz_) && B.t == TLSDestroy_)
+    if (optype(A) == TLSCreate_ && optype(B) in (TLSx_,TLSy_,TLSz_)) || (optype(A) in (TLSx_,TLSy_,TLSz_) && optype(B) == TLSDestroy_)
         throw(ArgumentError("QuantumAlgebra currently does not support mixing 'normal' (x,y,z) Pauli matrices with jump operators (+,-)."))
     end
 
@@ -426,15 +412,15 @@ end
 const ComplexInt = Complex{Int}
 
 function _contract(A::BaseOperator,B::BaseOperator)::Tuple{Bool,ComplexInt,Union{BaseOperator,Nothing}}
-    if A.t in (TLSCreate_,TLSDestroy_,FermionDestroy_,FermionCreate_) && A == B
+    if optype(A) in (TLSCreate_,TLSDestroy_,FermionDestroy_,FermionCreate_) && A == B
         return (true,zero(ComplexInt),nothing)
-    elseif A.t in (TLSx_,TLSy_,TLSz_) && B.t in (TLSx_,TLSy_,TLSz_) && A.name == B.name && A.inds == B.inds
+    elseif optype(A) in (TLSx_,TLSy_,TLSz_) && optype(B) in (TLSx_,TLSy_,TLSz_) && opname(A) == opname(B) && inds(A) == inds(B)
         # σa σb = δab + i ϵabc σc
-        if B.t == A.t
+        if optype(B) == optype(A)
             return (true,one(ComplexInt),nothing)
         else
             c, s = ϵ_ab(A,B)
-            return (true, ComplexInt(0,s), BaseOperator(c,A.name,A.inds))
+            return (true, ComplexInt(0,s), BaseOperator(c,opname(A),inds(A)))
         end
     else
         return (false,zero(ComplexInt),nothing)
@@ -454,10 +440,10 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
             if exc_res !== nothing
                 if exc_res.op === nothing
                     onew = BaseOpProduct([A[1:j-2]; A[j+1:end]])
-                elseif A[j].t == TLSCreate_
-                    @assert exc_res.op.t == TLSz_
+                elseif optype(A[j]) == TLSCreate_
+                    @assert optype(exc_res.op) == TLSz_
                     # we got σz_i, have to replace it by (1 - 2 σ+_i σ-_i) (which is really -σz, see explanation in _exchange)
-                    onew = BaseOpProduct([A[1:j-2]; TLSCreate(exc_res.op.name,exc_res.op.inds); TLSDestroy(exc_res.op.name,exc_res.op.inds); A[j+1:end]])
+                    onew = BaseOpProduct([A[1:j-2]; TLSCreate(opname(exc_res.op),inds(exc_res.op)); TLSDestroy(opname(exc_res.op),inds(exc_res.op)); A[j+1:end]])
                     t = QuTerm(exc_res.δs, onew)
                     _add_sum_term!(term_collector,t,-2exc_res.pref*prefactor)
                     # this one gives the "1" term that is used below
@@ -477,7 +463,7 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
             A[j-1], A[j] = A[j], A[j-1]
             j -= 1
         end
-        if shortcut_vacA_zero && A[1].t in (BosonCreate_,FermionCreate_,TLSCreate_)
+        if shortcut_vacA_zero && optype(A[1]) in (BosonCreate_,FermionCreate_,TLSCreate_)
             return zero(prefactor)
         end
     end
@@ -506,11 +492,11 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
             # with Anew if it didn't contract with A[k], but let's be safe)
             k > 1 && (k -= 1)
         else
-            if A[k].t in (TLSx_,TLSy_,TLSz_)
+            if optype(A[k]) in (TLSx_,TLSy_,TLSz_)
                 # lookahead while we can commute through
                 # we already checked with k+1, so start at k+2
                 for kp = k+2:length(A)
-                    A[kp].t in (TLSx_,TLSy_,TLSz_) || break
+                    optype(A[kp]) in (TLSx_,TLSy_,TLSz_) || break
                     _exchange(A[kp-1],A[kp]) == (1,nothing) || break
                     # A[kp] has to commute with all operators it is moved past, not just its neighbor
                     all(m -> _exchange(A[m],A[kp]) == (1,nothing), k+1:kp-2) || continue
@@ -546,22 +532,25 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
     prefactor
 end
 
-normal_order!(A::Union{Corr,ExpVal},term_collector) = normal_order!(A.ops,term_collector)
-function normal_order!(v::Vector{T},commterms,pref=1) where {T<:Union{Corr,ExpVal}}
+# normal order (in place) the operator products in v, which are the contents of expectation values
+# or correlators (of type T) in a term. Products that become empty are removed, and v is sorted.
+function normal_order!(v::Vector{BaseOpProduct},::Type{T},commterms,pref=1) where {T<:Union{Corr,ExpVal}}
     for (ii,EC) in enumerate(v)
         newterms = QuExpr()
         pp = normal_order!(EC,newterms)
         for (t,s) in newterms.terms
-            #@assert iszero(t.nsuminds) && isempty(t.params) && isempty(t.expvals) && isempty(t.corrs)
-            nv = [isempty(t.bares) ? T[] : T(t.bares); v[1:ii-1]; v[ii+1:end]]
-            nt = QuTerm(t.δs, noaliascopy(nv))
+            #@assert iszero(nsuminds(t)) && isempty(params(t)) && isempty(expvals(t)) && isempty(corrs(t))
+            # copy the other products since they can still be modified afterwards
+            nv = T[T(copy(v[jj])) for jj in eachindex(v) if jj != ii]
+            isempty(bares(t)) || pushfirst!(nv, T(bares(t)))
+            nt = QuTerm(deltas(t), nv)
             # include current prefactor here
             _add_sum_term!(commterms,nt,pref*s)
         end
         # only modify prefactor after the exchange
         pref *= pp
     end
-    filter!(EC -> !isempty(EC.ops), v)
+    filter!(!isempty, v)
     sort!(v)
     pref
 end
@@ -578,20 +567,21 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
        return
     end
 
-    t = _normalize_without_commutation(t)
-    t === nothing && return
+    W = _normalize_without_commutation(t)
+    W === nothing && return
     newbareterms = QuExpr()
     newexpvterms = QuExpr()
     newcorrterms = QuExpr()
-    prefbare = normal_order!(t.bares,   newbareterms, shortcut_vacA_zero)
-    prefexpv = normal_order!(t.expvals, newexpvterms)
-    prefcorr = normal_order!(t.corrs,   newcorrterms)
+    prefbare = normal_order!(W.bares,   newbareterms, shortcut_vacA_zero)
+    prefexpv = normal_order!(W.expvals, ExpVal, newexpvterms)
+    prefcorr = normal_order!(W.corrs,   Corr,   newcorrterms)
 
     # normal_form(t) = t.prefs * (prefexpv*tN.ev + ev_new) * (prefcorr*tN.co + co_new) * (prefbare*tN.bare + bare_new)
-    # t has already been transformed to tN in-place
+    # W has been transformed to tN in-place
+    t = QuTerm(W)
     pref = prefbare*prefexpv*prefcorr
     if !iszero(pref)
-        if iszero(t.nsuminds)
+        if iszero(nsuminds(t))
             # should be guaranteed to be in normal order
             _add_sum_term!(A,t,s*pref)
         else
@@ -605,12 +595,12 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
     isempty(newexpvterms) && isempty(newcorrterms) && isempty(newbareterms) && return
 
     firstterm = true
-    for (tev,sev) in termsumiter(t.expvals, prefexpv, newexpvterms)
-        #@assert iszero(tev.nsuminds) && isempty(tev.params) && isempty(tev.corrs) && isempty(tev.bares)
-        for (tco,sco) in termsumiter(t.corrs, prefcorr, newcorrterms)
-            #@assert iszero(tco.nsuminds) && isempty(tco.params) && isempty(tco.expvals) && isempty(tco.bares)
-            for (tba,sba) in termsumiter(t.bares, prefbare, newbareterms)
-                #@assert iszero(tba.nsuminds) && isempty(tba.params) && isempty(tba.expvals) && isempty(tba.corrs)
+    for (tev,sev) in termsumiter(expvals(t), prefexpv, newexpvterms)
+        #@assert iszero(nsuminds(tev)) && isempty(params(tev)) && isempty(corrs(tev)) && isempty(bares(tev))
+        for (tco,sco) in termsumiter(corrs(t), prefcorr, newcorrterms)
+            #@assert iszero(nsuminds(tco)) && isempty(params(tco)) && isempty(expvals(tco)) && isempty(bares(tco))
+            for (tba,sba) in termsumiter(bares(t), prefbare, newbareterms)
+                #@assert iszero(nsuminds(tba)) && isempty(params(tba)) && isempty(expvals(tba)) && isempty(corrs(tba))
 
                 if firstterm
                     # the first term has been added above in _add_sum_term!
@@ -620,9 +610,7 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
 
                 pref = sev*sco*sba
                 iszero(pref) && continue
-                # IMPTE: nt is cleaned afterwards with _normalize_without_commutation,
-                # which creates copies of everything, so we can reuse arrays here
-                nt = QuTerm(t.nsuminds,[t.δs;tev.δs;tco.δs;tba.δs],t.params,tev.expvals,tco.corrs,tba.bares)
+                nt = QuTerm(nsuminds(t),[deltas(t);deltas(tev);deltas(tco);deltas(tba)],params(t),expvals(tev),corrs(tco),bares(tba))
                 _add_with_normal_order!(A,nt,s*pref,shortcut_vacA_zero)
             end
         end
@@ -646,27 +634,32 @@ function normal_form(A::QuExpr,shortcut_vacA_zero=false)
 end
 normal_form(A::Number) = QuExpr(A)
 
+*(A::BaseOpProduct,B::BaseOpProduct) = BaseOpProduct(vcat(A.v,B.v))
+
 function *(A::QuTerm,B::QuTerm)
-    nsuminds = A.nsuminds + B.nsuminds
-    if A.nsuminds > 0 && B.nsuminds > 0
-        if A.nsuminds > B.nsuminds
-            A = shift_sumind(B.nsuminds)(A)
+    nA, nB = nsuminds(A), nsuminds(B)
+    if nA > 0 && nB > 0
+        if nA > nB
+            A = shift_sumind(nB)(A)
         else
-            B = shift_sumind(A.nsuminds)(B)
+            B = shift_sumind(nA)(B)
         end
     end
-    if nsuminds > 0
+    if nA + nB > 0
+        # NB: reorder_suminds numbers the sum indices in the order they are encountered,
+        # so the order of the calls below matters (has to be the order of the fields of QuTerm)
         f = reorder_suminds()
         apflat = (args...) -> f.(Iterators.flatten(args))
+        δs = apflat(deltas(A), deltas(B))
+        ps = apflat(params(A), params(B))
+        evs = apflat(expvals(A), expvals(B))
+        cos = apflat(corrs(A), corrs(B))
+        barevec = BaseOpProduct(apflat(bares(A), bares(B)))
+        QuTerm(nA+nB, δs, ps, evs, cos, barevec)
     else
-        apflat = vcat
+        QuTerm(0, vcat(deltas(A), deltas(B)), vcat(params(A), params(B)),
+               vcat(expvals(A), expvals(B)), vcat(corrs(A), corrs(B)), bares(A) * bares(B))
     end
-    δs = apflat(A.δs, B.δs)
-    params = apflat(A.params, B.params)
-    expvals = apflat(A.expvals, B.expvals)
-    corrs = apflat(A.corrs, B.corrs)
-    barevec = apflat(A.bares.v, B.bares.v)
-    QuTerm(nsuminds,δs,params,expvals,corrs,BaseOpProduct(barevec))
 end
 
 *(A::Union{QuExpr,QuTerm}) = A

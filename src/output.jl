@@ -9,29 +9,30 @@ const _SUPERSCRIPTNUMS = collect("⁰¹²³⁴⁵⁶⁷⁸⁹")
 subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digits(abs(i))))
 superscript(i::Integer) = (i<0 ? "⁻" : "") * join(_SUPERSCRIPTNUMS[d+1] for d in reverse(digits(abs(i))))
 
+# print the elements of v separated by spaces, with repeated elements printed as powers
 function printspaced(io::IO,v,trailing_space=false)
     isempty(v) && return
-    print(io,v[1])
-    iprinted = 1
-    exponent = 1
-    for i = 2:length(v)
-        if v[i]==v[iprinted]
+    prev = first(v)
+    exponent = 0
+    for x in v
+        if exponent > 0 && x == prev
             exponent += 1
-            # if the last element is repeated, print the exponent
-            i == length(v) && print(io,superscript(exponent))
         else
-            # print exponent for previous object
-            exponent>1 && print(io,superscript(exponent))
+            if exponent > 0
+                # print exponent for previous object
+                exponent>1 && print(io,superscript(exponent))
+                print(io," ")
+            end
+            print(io,x)
+            prev = x
             exponent = 1
-            print(io," ")
-            print(io,v[i])
-            iprinted = i
         end
     end
+    exponent>1 && print(io,superscript(exponent))
     trailing_space && print(io," ")
 end
 
-Base.print(io::IO,A::BaseOpProduct) = printspaced(io,A.v)
+Base.print(io::IO,A::BaseOpProduct) = printspaced(io,A)
 function Base.print(io::IO,ii::QuIndex)
     if isnoindex(ii)
         return
@@ -43,25 +44,25 @@ function Base.print(io::IO,ii::QuIndex)
     end
 end
 
-Base.print(io::IO,A::BaseOperator) = (B = unalias(A); print(io,B.name,BaseOpType_sym[Int(B.t)],"(",B.inds...,")"))
+Base.print(io::IO,A::BaseOperator) = (B = unalias(A); print(io,opname(B),BaseOpType_sym[Int(optype(B))],"(",inds(B)...,")"))
 Base.print(io::IO,A::δ) = print(io,"δ(",A.iA,A.iB,")")
-Base.print(io::IO,A::Param) = print(io, A.name, A.state=='c' ? "*" : "", isempty(assignedinds(A.inds)) ? "" : "($(A.inds...))")
-Base.print(io::IO,A::ExpVal) = print(io,"⟨", A.ops, "⟩")
-Base.print(io::IO,A::Corr) = print(io,"⟨", A.ops, "⟩c")
+Base.print(io::IO,A::Param) = print(io, opname(A), parstate(A)=='c' ? "*" : "", isempty(assignedinds(inds(A))) ? "" : "($(inds(A)...))")
+Base.print(io::IO,A::ExpVal) = print(io,"⟨", ops(A), "⟩")
+Base.print(io::IO,A::Corr) = print(io,"⟨", ops(A), "⟩c")
 
 function Base.print(io::IO,A::QuTerm)
-    if A.nsuminds > 0
+    if nsuminds(A) > 0
         print(io,"∑")
-        for ii=1:A.nsuminds
+        for ii=1:nsuminds(A)
             print(io,subscript(ii))
         end
         print(io," ")
     end
-    isempty(A.δs) || printspaced(io,A.δs,true)
-    isempty(A.params) || printspaced(io,A.params,true)
-    isempty(A.expvals) || printspaced(io,A.expvals,true)
-    isempty(A.corrs) || printspaced(io,A.corrs,true)
-    isempty(A.bares) || print(io,A.bares)
+    isempty(deltas(A)) || printspaced(io,deltas(A),true)
+    isempty(params(A)) || printspaced(io,params(A),true)
+    isempty(expvals(A)) || printspaced(io,expvals(A),true)
+    isempty(corrs(A)) || printspaced(io,corrs(A),true)
+    isempty(bares(A)) || print(io,bares(A))
 end
 
 function print_as_connector(io,str::String,print_connector::Bool)
@@ -151,10 +152,10 @@ end
 latexindstr(inds) = isempty(assignedinds(inds)) ? "" : "_{$(latexify.(inds)...)}"
 @latexrecipe function f(A::BaseOperator)
     B = unalias(A)
-    return LaTeXString("{$(unicode_to_latex(B.name))}$(latexindstr(B.inds))$(BaseOpType_latex[Int(B.t)])")
+    return LaTeXString("{$(unicode_to_latex(opname(B)))}$(latexindstr(inds(B)))$(BaseOpType_latex[Int(optype(B))])")
 end
 @latexrecipe function f(A::Param)
-    return LaTeXString(string("$(unicode_to_latex(A.name))$(latexindstr(A.inds))", A.state=='c' ? "^{*}" : ""))
+    return LaTeXString(string("$(unicode_to_latex(opname(A)))$(latexindstr(inds(A)))", parstate(A)=='c' ? "^{*}" : ""))
 end
 @latexrecipe function f(A::δ)
     return LaTeXString("\\delta$(latexindstr(make_indices(A.iA,A.iB)))")
@@ -162,28 +163,28 @@ end
 @latexrecipe function f(A::BaseOpProduct)
     mult_symbol --> ""
 
-    isempty(A.v) && return
+    isempty(A) && return
     ex = Expr(:call,:*)
-    _push_exponents!(ex,A.v)
+    _push_exponents!(ex,A)
     return ex
 end
 @latexrecipe function f(A::ExpVal)
     mult_symbol --> ""
 
-    return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle")
+    return Expr(:latexifymerge, "\\langle ", ops(A), "\\rangle")
 end
 @latexrecipe function f(A::Corr)
     mult_symbol --> ""
 
-    return Expr(:latexifymerge, "\\langle ", A.ops, "\\rangle_{c}")
+    return Expr(:latexifymerge, "\\langle ", ops(A), "\\rangle_{c}")
 end
 @latexrecipe function f(A::QuTerm)
     mult_symbol --> ""
 
     isempty(A) && return
     ex = Expr(:call,:*)
-    A.nsuminds > 0 && push!(ex.args,LaTeXString("\\sum_{$(latexify.(sumindex.(1:A.nsuminds))...)}"))
-    _push_exponents!(ex,Iterators.flatten((A.δs,A.params,A.expvals,A.corrs,(A.bares,))))
+    nsuminds(A) > 0 && push!(ex.args,LaTeXString("\\sum_{$(latexify.(sumindex.(1:nsuminds(A)))...)}"))
+    _push_exponents!(ex,Iterators.flatten((deltas(A),params(A),expvals(A),corrs(A),(bares(A),))))
     return ex
 end
 @latexrecipe function f(A::QuExpr)

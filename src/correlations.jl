@@ -2,15 +2,15 @@ using Combinatorics
 
 export expval_as_corrs, corr_as_expvals
 
-function term2corr(A::QuTerm,C::Tuple)
-    corrs = noaliascopy(A.corrs)
-    sizehint!(corrs,length(corrs)+length(C))
+# replace the bare operators `barevec` of A by a product of correlators of groups of them, as given by C
+function term2corr(A::QuTerm,barevec::Vector{BaseOperator},C::Tuple)
+    newcorrs = collect(Corr,corrs(A))
+    sizehint!(newcorrs,length(newcorrs)+length(C))
     for grp in C
-        cc = Corr(BaseOpProduct(collect(map(i -> A.bares.v[i], grp))))
-        push!(corrs,cc)
+        push!(newcorrs,Corr(BaseOpProduct(BaseOperator[barevec[i] for i in grp])))
     end
-    sort!(corrs)
-    QuTerm(A.nsuminds,A.δs,A.params,A.expvals,corrs,BaseOpProduct())
+    sort!(newcorrs)
+    QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),newcorrs,BaseOpProduct())
 end
 
 """
@@ -43,20 +43,21 @@ function _expand_bare_products(add!, A::QuExpr)
         # first calculate the expansion for the term with the "bare" indices, which means that the sum indices
         # are assumed to be distinct from the other indices of the term
         add!(newA,t,s)
-        t.nsuminds>0 && !isempty(t.bares) || continue
+        nsuminds(t)>0 && !isempty(bares(t)) || continue
         # then, for terms where a sum index is equal to one of the non-summed indices, the operator product can
         # change (by reordering or simplification). in that case, subtract the "wrong" expansion where index
         # identity is not taken into account and add the correct one
-        extinds = unique(extindices(t.bares))
-        for ii in 1:t.nsuminds
+        extinds = unique(extindices(bares(t)))
+        for ii in 1:nsuminds(t)
             sumind = sumindex(ii)
             for ind in extinds
-                f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
-                tb = f(t.bares)
+                f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:nsuminds(t))...)
+                tb = f(bares(t))
                 is_normal_form(tb) && continue
-                twrong = _normalize_without_commutation(QuTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
+                W = _normalize_without_commutation(QuTerm(nsuminds(t)-1,f.(deltas(t)),f.(params(t)),f.(expvals(t)),f.(corrs(t)),tb))
                 # if the δs make the term vanish, both the "right" and "wrong" terms are zero
-                twrong === nothing && continue
+                W === nothing && continue
+                twrong = QuTerm(W)
                 # the correct expansion is that of the normal-ordered term (which can consist of several terms)
                 right = QuExpr()
                 _add_with_normal_order!(right,twrong,s)
@@ -71,21 +72,23 @@ function _expand_bare_products(add!, A::QuExpr)
 end
 
 function _add_corrs!(A,t,s,addfun! = _add_sum_term!)
-    if isempty(t.bares)
+    if isempty(bares(t))
         addfun!(A,t,s)
     else
-        for C in expval2corrs_inds(length(t.bares))
-            addfun!(A,term2corr(t,C),s)
+        barevec = collect(bares(t))
+        for C in expval2corrs_inds(length(barevec))
+            addfun!(A,term2corr(t,barevec,C),s)
         end
     end
 end
 
 function _add_expvs!(A,t,s,addfun! = _add_sum_term!)
-    if isempty(t.bares)
+    if isempty(bares(t))
         addfun!(A,t,s)
     else
-        for (C,sC) in corr2expvals_inds(length(t.bares))
-            addfun!(A,term2expvals(t,C),s*sC)
+        barevec = collect(bares(t))
+        for (C,sC) in corr2expvals_inds(length(barevec))
+            addfun!(A,term2expvals(t,barevec,C),s*sC)
         end
     end
 end
@@ -154,19 +157,19 @@ function ncomb_inds(n,inds,used_combs=Set())
     terms
 end
 
-function term2expvals(A::QuTerm,C::Tuple)
-    expvals = noaliascopy(A.expvals)
-    sizehint!(expvals,length(expvals)+length(C))
+# replace the bare operators `barevec` of A by a product of expectation values of groups of them, as given by C
+function term2expvals(A::QuTerm,barevec::Vector{BaseOperator},C::Tuple)
+    newexpvals = collect(ExpVal,expvals(A))
+    sizehint!(newexpvals,length(newexpvals)+length(C))
     for grp in C
-        cc = ExpVal(BaseOpProduct(collect(map(i -> A.bares.v[i], grp))))
-        push!(expvals,cc)
+        push!(newexpvals,ExpVal(BaseOpProduct(BaseOperator[barevec[i] for i in grp])))
     end
-    sort!(expvals)
-    QuTerm(A.nsuminds,A.δs,A.params,expvals,A.corrs,BaseOpProduct())
+    sort!(newexpvals)
+    QuTerm(nsuminds(A),deltas(A),params(A),newexpvals,corrs(A),BaseOpProduct())
 end
 
-_canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(assignedinds(A.inds)))
-_expval2tuple(A::ExpVal) = Tuple(_canon_op_to_num.(A.ops.v))
+_canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(assignedinds(inds(A))))
+_expval2tuple(A::ExpVal) = Tuple(_canon_op_to_num(O) for O in ops(A))
 const _CORR2EXPVALS_CACHE = Dict{Int,Vector{Any}}()
 function corr2expvals_inds(N)
     get!(_CORR2EXPVALS_CACHE,N) do
@@ -177,17 +180,17 @@ function corr2expvals_inds(N)
         # rewrite the lower-order correlators in terms of expectation values
         ncA = QuExpr()
         for (t,s) in cA.terms
-            nt = noaliascopy(t)
-            empty!(nt.corrs)
-            nts = QuExpr(nt)
-            for co in t.corrs
-                nts *= QuExpr((term2expvals(QuTerm(co.ops),C)=>sC for (C,sC) in corr2expvals_inds(length(co))))
+            nts = QuExpr(QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),Corr[],bares(t)))
+            for co in corrs(t)
+                cot = QuTerm(ops(co))
+                cov = collect(bares(cot))
+                nts *= QuExpr((term2expvals(cot,cov,C)=>sC for (C,sC) in corr2expvals_inds(length(co))))
             end
             for (ntt,ns) in nts.terms
                 _add_with_normal_order!(ncA,ntt,ns*s)
             end
         end
-        [Tuple(_expval2tuple.(t.expvals))=>s for (t,s) in sort!(collect(ncA.terms),by=x->x[1])]
+        [Tuple(_expval2tuple.(expvals(t)))=>s for (t,s) in sort!(collect(ncA.terms),by=x->x[1])]
     end
 end
 

@@ -4,15 +4,15 @@ export heisenberg_eom_system, droplen, dropcorr, ExpVal, Corr
 
 to_bareterm(A::QuExpr) = ((t,s) = only(A.terms); @assert isone(s); t)
 to_opprod(A::QuExpr)::BaseOpProduct = to_opprod(to_bareterm(A))
-to_opprod(A::QuTerm)::BaseOpProduct = (@assert A.nsuminds == 0 && isempty(A.δs) && isempty(A.params) && isempty(A.expvals) && isempty(A.corrs); A.bares)
+to_opprod(A::QuTerm)::BaseOpProduct = (@assert nsuminds(A) == 0 && isempty(deltas(A)) && isempty(params(A)) && isempty(expvals(A)) && isempty(corrs(A)); bares(A))
 
-_getECs(A::QuTerm,::Type{Corr})   = (@assert isempty(A.expvals); A.corrs)
-_getECs(A::QuTerm,::Type{ExpVal}) = (@assert isempty(A.corrs); A.expvals)
+_getECs(A::QuTerm,::Type{Corr})   = (@assert isempty(expvals(A)); corrs(A))
+_getECs(A::QuTerm,::Type{ExpVal}) = (@assert isempty(corrs(A)); expvals(A))
 
-expheis(A::ExpVal,args...) = expheis(QuExpr(QuTerm(A.ops)),args...)
+expheis(A::ExpVal,args...) = expheis(QuExpr(QuTerm(ops(A))),args...)
 expheis(A::QuExpr,H::QuExpr,Ls=()) = expval(normal_form(heisenberg_eom(A,H,Ls)));
 
-corrheis(A::Corr,args...) = corrheis(A.ops,args...)
+corrheis(A::Corr,args...) = corrheis(ops(A),args...)
 corrheis(A::QuExpr,args...) = corrheis(to_opprod(A),args...)
 function corrheis(ops::BaseOpProduct,H::QuExpr,Ls=())::QuExpr
     f = canon_inds_remember()
@@ -37,11 +37,11 @@ function _corrheis_cached(ops::BaseOpProduct,H::QuExpr,Ls)::QuExpr
         δcA = corr(A) - expval_as_corrs(A)
         for (t,s) in δcA.terms
             # there should be no more "bare" operators in these expressions
-            @assert isempty(t.bares) && isempty(t.expvals)
-            for ii = 1:length(t.corrs)
-                tn = deepcopy(t)
-                O = tn.corrs[ii]
-                deleteat!(tn.corrs,ii)
+            @assert isempty(bares(t)) && isempty(expvals(t))
+            tcorrs = collect(corrs(t))
+            for ii in eachindex(tcorrs)
+                O = tcorrs[ii]
+                tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),tcorrs[eachindex(tcorrs) .!= ii],bares(t))
                 tt = normal_form(QuExpr((tn=>s,))*corrheis(O,H,Ls))
                 for (t2,s2) in tt.terms
                     _add_sum_term!(cdA,t2,s2)
@@ -59,7 +59,7 @@ Create a filter that drops correlators/expectation values with length greater th
 Useful for truncating hierarchies of equations.
 """
 droplen(n) = Base.Fix1(droplen,n)
-droplen(n,A::QuTerm) = (any(@. length(A.corrs) > n) || any(@. length(A.expvals) > n)) ? 0 : 1
+droplen(n,A::QuTerm) = (any(C -> length(C) > n, corrs(A)) || any(E -> length(E) > n, expvals(A))) ? 0 : 1
 droplen(n,A::QuExpr) = QuExpr((t,droplen(n,t)*s) for (t,s) in A.terms)
 
 """
@@ -79,12 +79,13 @@ function dropcorr(n,A::QuExpr)
     terms_to_do = collect(A.terms)
     while !isempty(terms_to_do)
         (t,s) = pop!(terms_to_do)
-        if all(@. length(t.expvals) <= n)
+        if all(E -> length(E) <= n, expvals(t))
             _add_sum_term!(Anew,t,s)
         else
-            isempty(t.corrs) && isempty(t.bares) || throw(ArgumentError("t.corrs and t.bares should be empty"))
-            iev = findfirst(ev -> length(ev)>n, t.expvals)
-            Otmp = QuExpr(QuTerm(t.nsuminds, t.δs, t.params, t.expvals[1:length(t.expvals) .!== iev], t.corrs, t.expvals[iev].ops))
+            isempty(corrs(t)) && isempty(bares(t)) || throw(ArgumentError("corrs(t) and bares(t) should be empty"))
+            tevs = collect(expvals(t))
+            iev = findfirst(ev -> length(ev)>n, tevs)
+            Otmp = QuExpr(QuTerm(nsuminds(t), deltas(t), params(t), tevs[eachindex(tevs) .!= iev], corrs(t), ops(tevs[iev])))
             # express <Otmp> - <Otmp>c in terms of expvals
             Onew = normal_form(expval(Otmp) - corr_as_expvals(Otmp))
             for (tn,sn) in Onew.terms
@@ -98,9 +99,9 @@ end
 function get_opstodo(ops::Nothing,H)
     opstodo = BaseOperator[]
     for t in keys(H.terms)
-        for A in t.bares.v
+        for A in bares(t)
             # we want to only get the annihilation operators
-            if A.t in (BosonCreate_,FermionCreate_,TLSCreate_)
+            if optype(A) in (BosonCreate_,FermionCreate_,TLSCreate_)
                 A = A'
             end
             push!(opstodo,canon_inds()(A))
@@ -150,10 +151,10 @@ heisenberg_eom_system(H::QuExpr,rhsfilt,Ls=(),ops=nothing) = heisenberg_eom_syst
 heisenberg_eom_system(::Type{LHSfunc},H::QuExpr,maxord::Integer,Ls=(),ops=nothing) where LHSfunc = heisenberg_eom_system(LHSfunc,H,droplen(maxord),Ls,ops)
 heisenberg_eom_system(::Type{LHSfunc},H::QuExpr,rhsfilter,Ls=(),ops=nothing) where LHSfunc = QuEqSys{LHSfunc}(H,rhsfilter,Ls,ops)
 
-function QuEqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
+function QuEqSys{LHSfunc}(H,rhsfilter,Ls=(),lhsops=nothing) where LHSfunc
     Lops = QuantumAlgebra._lindbladterm.(Ls)
     RHSfunc = LHSfunc === ExpVal ? expheis : (LHSfunc === Corr ? corrheis : throw(ArgumentError("LHSfunc must be Corr or ExpVal")))
-    opstodo = LHSfunc.(get_opstodo(ops,H))
+    opstodo = LHSfunc.(get_opstodo(lhsops,H))
     eqs = EqDict{LHSfunc}()
     while length(opstodo)>0
         A = pop!(opstodo)
@@ -162,14 +163,13 @@ function QuEqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
         eqs[A] = RHS
         # go through the terms in sorted order so that the result does not depend on the (hash-dependent) iteration order
         for t in sort!(collect(keys(RHS.terms)))
-            @assert isempty(t.bares)
+            @assert isempty(bares(t))
             for B in _getECs(t,LHSfunc)
                 # we will need to calculate either B.A or B.A' (to use <A> = <A^†>^*)
                 Bcan = canon_inds()(B)
                 # "normal order" Bcand, without worrying about commutation
                 # (since this is just about whether we want it in LHS list)
-                Bcand = B'
-                sort!(Bcand.ops.v)
+                Bcand = LHSfunc(BaseOpProduct(sort!(collect(ops(B')))))
                 Bcand = canon_inds()(Bcand)
                 if !(haskey(eqs,Bcan) || haskey(eqs,Bcand) || Bcan in opstodo || Bcand in opstodo)
                     push!(opstodo, nicety(Bcan)>=nicety(Bcand) ? Bcan : Bcand)
@@ -180,11 +180,11 @@ function QuEqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
     QuEqSys{LHSfunc}(sort!(eqs))
 end
 
-nicety(A::Union{ExpVal,Corr}) = count(A->A.t ∈ (BosonDestroy_,FermionDestroy_,TLSDestroy_), A.ops.v)
+nicety(A::Union{ExpVal,Corr}) = count(O->optype(O) ∈ (BosonDestroy_,FermionDestroy_,TLSDestroy_), ops(A))
 
 Base.getindex(EQ::QuEqSys{LHSfunc},A::QuExpr) where LHSfunc = getindex(EQ,to_bareterm(A))
 Base.getindex(EQ::QuEqSys{LHSfunc},A::QuTerm) where LHSfunc = begin
-    EC = isempty(A.bares) ? only(_getECs(A,LHSfunc)) : LHSfunc(to_opprod(A))
+    EC = isempty(bares(A)) ? only(_getECs(A,LHSfunc)) : LHSfunc(to_opprod(A))
     getindex(EQ,EC)
 end
 Base.getindex(EQ::QuEqSys{LHSfunc},A::LHSfunc) where LHSfunc = EQ.eqs[A]
