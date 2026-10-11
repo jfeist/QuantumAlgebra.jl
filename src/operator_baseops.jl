@@ -201,6 +201,7 @@ function is_normal_form(v::Vector{BaseOperator})
             for kp = k+2:length(v)
                 v[kp].t in (TLSx_,TLSy_,TLSz_) || break
                 _exchange(v[kp-1],v[kp]) == (1,nothing) || break
+                all(m -> _exchange(v[m],v[kp]) == (1,nothing), k+1:kp-2) || continue
                 dosimplify, fac, op = _contract(O,v[kp])
                 dosimplify && return false
             end
@@ -511,6 +512,8 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
                 for kp = k+2:length(A)
                     A[kp].t in (TLSx_,TLSy_,TLSz_) || break
                     _exchange(A[kp-1],A[kp]) == (1,nothing) || break
+                    # A[kp] has to commute with all operators it is moved past, not just its neighbor
+                    all(m -> _exchange(A[m],A[kp]) == (1,nothing), k+1:kp-2) || continue
                     dosimplify, fac, op = _contract(A[k],A[kp])
                     if dosimplify
                         did_contractions = true

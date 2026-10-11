@@ -222,6 +222,14 @@ end
             @test normal_form(σx(1) * σx(2) * σy(1)^2) == normal_form(σx(1) * σx(2))
             @test normal_form(σx(1) * σy(1)^2 * σx(2)) == normal_form(σx(1) * σx(2))
 
+            # contracting non-adjacent Pauli matrices must not move an operator past one it does not commute with
+            # (here, σz(:j) cannot be moved past σy(:i) since they do not commute for i=j)
+            @tlsxyz_ops s
+            tmp = σx(:j)*σy(:i)*sz(1)*σz(:j)
+            fij = QuantumAlgebra.replace_inds(QuIndex(:i)=>QuIndex(:j))
+            @test normal_form(fij(normal_form(tmp))) == normal_form(fij(tmp)) == 1im*sz(1)
+            @test_is_normal_form tmp
+
             @test_throws ArgumentError normal_form(QuExpr(TLSx(:σ)) * QuExpr(TLSCreate(:σ)))
 
             tmp1 = normal_form(3*Pc"ω"*Pc"g"*expval(σp(:k))*σp(:k)*a'(5)*a(5))
