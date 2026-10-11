@@ -20,7 +20,6 @@ This is a patch release with bug fixes:
 - Remove a method of `Base.hash` for vectors of QuantumAlgebra objects (see
   [#32](https://github.com/jfeist/QuantumAlgebra.jl/issues/32)).
 - Allow OrderedCollections v2.
-- The minimum supported Julia version is now 1.10 (the current LTS).
 
 ## v1.6.0 (2025-12-05)
 This is a minor release with internal improvements and new features:
