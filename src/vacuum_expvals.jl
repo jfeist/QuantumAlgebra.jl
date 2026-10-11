@@ -13,52 +13,34 @@ _parse_modes_in_vacuum(modes::QuExpr) = _parse_modes_in_vacuum((modes,))
 _parse_modes_in_vacuum(modes) = Set{QuOpName}(_get_mode_name.(modes))
 
 # helper function that is only called on normal-ordered terms that only contain
-# operators that are in the vacuum state
+# operators that are in the vacuum state: act with the operators on the vacuum
+# to the right as long as the vacuum is an eigenstate of them
 function _Avac(BO::BaseOpProduct,fac)
     ii = length(BO)
     while ii >= 1
-        O = BO[ii]
-        if optype(O) in (BosonCreate_,FermionCreate_,TLSCreate_)
-            ii==length(BO) && return (BO,fac)
-            break
-        elseif optype(O) in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
-            return (BO,zero(fac))
-        elseif optype(O) == TLSz_
-            # vacuum is eigenvalue of σz - since the term is in normal order and
-            # we break at TLSx_,TLSy_, we know it acts on the vacuum
-            fac = -fac
-        elseif optype(O) in (TLSx_,TLSy_)
-            break
-        else
-            error("should not be reached")
-        end
+        λ = vacuum_eigenvalue_right(BO[ii])
+        λ === nothing && break
+        iszero(λ) && return (BO,zero(fac))
+        fac *= λ
         ii -= 1
     end
+    ii == length(BO) && return (BO,fac)
     return (BaseOpProduct(BO[1:ii]), fac)
 end
 
 # helper function that is only called on normal-ordered terms that only contain
-# operators that are in the vacuum state
+# operators that are in the vacuum state: act with the operators on the vacuum
+# to the left as long as the vacuum is an eigenstate of them
 function _vacA(BO::BaseOpProduct,fac)
     ii = 1
     while ii <= length(BO)
-        O = BO[ii]
-        if optype(O) in (BosonDestroy_,FermionDestroy_,TLSDestroy_)
-            ii==1 && return (BO,fac)
-            break
-        elseif optype(O) in (BosonCreate_,FermionCreate_,TLSCreate_)
-            return (BO,zero(fac))
-        elseif optype(O) == TLSz_
-            # vacuum is eigenvalue of σz - since the term is in normal order and
-            # we break at TLSx_,TLSy_, we know it acts on the vacuum
-            fac = -fac
-        elseif optype(O) in (TLSx_,TLSy_)
-            break
-        else
-            error("should not be reached")
-        end
+        λ = vacuum_eigenvalue_left(BO[ii])
+        λ === nothing && break
+        iszero(λ) && return (BO,zero(fac))
+        fac *= λ
         ii += 1
     end
+    ii == 1 && return (BO,fac)
     return (BaseOpProduct(BO[ii:end]), fac)
 end
 

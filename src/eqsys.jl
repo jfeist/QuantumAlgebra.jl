@@ -101,7 +101,7 @@ function get_opstodo(ops::Nothing,H)
     for t in keys(H.terms)
         for A in bares(t)
             # we want to only get the annihilation operators
-            if optype(A) in (BosonCreate_,FermionCreate_,TLSCreate_)
+            if ladder(A) > 0
                 A = A'
             end
             push!(opstodo,canon_inds()(A))
@@ -180,7 +180,7 @@ function QuEqSys{LHSfunc}(H,rhsfilter,Ls=(),lhsops=nothing) where LHSfunc
     QuEqSys{LHSfunc}(sort!(eqs))
 end
 
-nicety(A::Union{ExpVal,Corr}) = count(O->optype(O) ∈ (BosonDestroy_,FermionDestroy_,TLSDestroy_), ops(A))
+nicety(A::Union{ExpVal,Corr}) = count(O->ladder(O) < 0, ops(A))
 
 Base.getindex(EQ::QuEqSys{LHSfunc},A::QuExpr) where LHSfunc = getindex(EQ,to_bareterm(A))
 Base.getindex(EQ::QuEqSys{LHSfunc},A::QuTerm) where LHSfunc = begin

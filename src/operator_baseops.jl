@@ -180,22 +180,12 @@ function is_normal_form(v::Vector{BaseOperator})
     issorted(v) || return false
     # now check that no contractions occur
     for k in 1:length(v)-1
-        O = v[k]
-        dosimplify, fac, op = _contract(O,v[k+1])
-        dosimplify && return false
-        if optype(O) in (TLSx_,TLSy_,TLSz_)
-            # lookahead while we can commute through
-            for kp = k+2:length(v)
-                optype(v[kp]) in (TLSx_,TLSy_,TLSz_) || break
-                _exchange(v[kp-1],v[kp]) == (1,nothing) || break
-                all(m -> _exchange(v[m],v[kp]) == (1,nothing), k+1:kp-2) || continue
-                dosimplify, fac, op = _contract(O,v[kp])
-                dosimplify && return false
-            end
-        end
+        contract!(_NoEmit(),v[k],v[k+1]) === nothing || return false
+        _contraction_partner(v,k) == 0 || return false
     end
     return true
 end
+
 function is_normal_form(t::QuTerm)
     (issorted(params(t)) && issorted(expvals(t)) && issorted(corrs(t))) || return false
     is_normal_form(bares(t)) || return false
@@ -312,121 +302,56 @@ function _normalize_without_commutation(A::QuTerm)::Union{WorkTerm,Nothing}
     W
 end
 
-# levicivita_lut[a,b] contains the Levi-Cevita symbol ϵ_abc
-# for c=6-a-b, i.e, when a,b,c is a permutation of 1,2,3
-const levicivita_lut = ((0,1,-1), (-1,0,1), (1,-1,0))
-function ϵ_ab(A::BaseOperator,B::BaseOperator)
-    # a+b+c == 6 (since a,b,c is a permutation of 1,2,3)
-    a = Int(optype(A)) - Int(TLSx_) + 1
-    b = Int(optype(B)) - Int(TLSx_) + 1
-    c = BaseOpType(Int(TLSx_) - 1 + (6 - a - b))
-    s = @inbounds levicivita_lut[a][b]
-    c, s
+# For operators where some contractions are not between neighbors in the normal order (e.g., σˣ₁ σˣ₂ σʸ₁),
+# find the first operator A[kp] (with kp ≥ k+2) that contracts with A[k] and can be moved next to it,
+# i.e., that commutes with all operators in between. Returns kp, or 0 if there is no such operator.
+function _contraction_partner(A::Vector{BaseOperator},k)
+    lookahead_contraction(A[k]) || return 0
+    fam = opfamily(A[k])
+    for kp = k+2:length(A)
+        (opfamily(A[kp]) == fam && lookahead_contraction(A[kp])) || break
+        commutes(A[kp-1],A[kp]) || break
+        # A[kp] has to commute with all operators it is moved past, not just its neighbor
+        all(m -> commutes(A[m],A[kp]), k+1:kp-2) || continue
+        contract!(_NoEmit(),A[k],A[kp]) === nothing || return kp
+    end
+    return 0
 end
 
-struct ExchangeResult
-    pref::Complex{Rational{Int}}
-    δs::Vector{δ}
-    op::Union{Nothing,BaseOperator}
+# emitter that ignores the passed terms
+struct _NoEmit end
+(::_NoEmit)(args...) = nothing
+
+# emitter used in normal_order!: e(c, δs, ops...) adds the term obtained from replacing A[i1] and A[i2]
+# (with i1 < i2) in the operator product A by ops (at position i1), with prefactor c*e.prefactor
+# and the additional Kronecker deltas δs, to e.collector
+struct _ReplaceEmitter{T}
+    A::Vector{BaseOperator}
+    i1::Int
+    i2::Int
+    collector::QuExpr
+    prefactor::T
+end
+function (e::_ReplaceEmitter)(c, δs::Vector{δ}, newops::BaseOperator...)
+    iszero(c) && return nothing
+    A, i1, i2 = e.A, e.i1, e.i2
+    v = BaseOperator[]
+    sizehint!(v, length(A) - 2 + length(newops))
+    append!(v, view(A, 1:i1-1))
+    append!(v, newops)
+    append!(v, view(A, i1+1:i2-1))
+    append!(v, view(A, i2+1:length(A)))
+    _add_sum_term!(e.collector, QuTerm(δs, BaseOpProduct(v)), c*e.prefactor)
+    nothing
 end
 
-# rewrite B A as x A B + y, with A < B in our ordering
-# returns (x::Int,y::Union{ExchangeResult,Nothing})
-function _exchange(A::BaseOperator,B::BaseOperator)::Tuple{Int,Union{ExchangeResult,Nothing}}
-    if optype(A) == optype(B)
-        # these operators always commute with the same type
-        optype(A) in (BosonDestroy_,BosonCreate_,TLSCreate_,TLSDestroy_,TLSx_,TLSy_,TLSz_) && return (1,nothing)
-        # these operators anticommute if they refer to the same species (name), and commute otherwise
-        optype(A) in (FermionDestroy_,FermionCreate_) && return (opname(A) == opname(B) ? -1 : 1,nothing)
-    end
+"""
+    normal_order!(ops::BaseOpProduct, term_collector, shortcut_vacA_zero=false, prefactor=1)
 
-    # different types of operators commute
-    if optype(A) in (BosonDestroy_,BosonCreate_) && optype(B) in (FermionDestroy_,FermionCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
-        return (1,nothing)
-    elseif optype(A) in (FermionDestroy_,FermionCreate_) && optype(B) in (BosonDestroy_,BosonCreate_,TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_)
-        return (1,nothing)
-    elseif optype(A) in (TLSx_,TLSy_,TLSz_,TLSDestroy_,TLSCreate_) && optype(B) in (BosonDestroy_,BosonCreate_,FermionDestroy_,FermionCreate_)
-        return (1,nothing)
-    end
-
-    # a(i) a'(j) = a'(j) a(i) + δij
-    if optype(A) == BosonCreate_ && optype(B) == BosonDestroy_
-        if opname(A) == opname(B) && (dd = δ(inds(A),inds(B))) !== nothing
-            return (1, ExchangeResult(1,dd,nothing))
-        else
-            return (1, nothing)
-        end
-    end
-
-    # f(i) f'(j) = -f'(j) f(i) + δij
-    if optype(A) == FermionCreate_ && optype(B) == FermionDestroy_
-        if opname(A) == opname(B)
-            dd = δ(inds(A),inds(B))
-            return (-1, dd === nothing ? nothing : ExchangeResult(1,dd,nothing))
-        else
-            return (1, nothing)
-        end
-    end
-
-    if optype(A) == TLSCreate_ && optype(B) == TLSDestroy_
-        if opname(A) != opname(B) || (dd = δ(inds(A),inds(B))) === nothing
-            return (1,nothing)
-        elseif isempty(dd)
-            # indices were all the same, σ- σ+ = 1 - σ+ σ-
-            return (-1, ExchangeResult(1, dd, nothing))
-        else
-            # σ-_i σ+_j = σ+_j σ-_i - δij σz_i = σ+_j σ-_i + δij (1 - 2 σ+_i σ-_i)
-            # note that we return a TLSz to "fit" in ExchangeResult, but need to undo that later on
-            # also note that we pass "+TLSz" instead of "-TLSz" so we do not have to flip the sign of the "1" term in the sort algorithm
-            return (1, ExchangeResult(1, dd, TLSz(opname(A),inds(A))))
-        end
-    end
-
-    # B A as x A B + y, with A < B
-    if optype(A) in (TLSx_,TLSy_,TLSz_) && optype(B) in (TLSx_,TLSy_,TLSz_)
-        if opname(A) != opname(B) || (dd = δ(inds(A),inds(B))) === nothing
-            return (1,nothing)
-        else
-            # we need ϵbac
-            c, s = ϵ_ab(B,A)
-            if isempty(dd)
-                # indices were all the same,
-                # σb σa = δab + i ϵbac σc
-                # since A < B, we know that a != b
-                return (0, ExchangeResult(im*s,dd,BaseOperator(c,opname(A),inds(A))))
-            else
-                # [σb_i,σa_j] = 2i εbac δij σc_i =>
-                # σb_j σa_i = σa_i σb_j + 2i εbac δij σc_i
-                return (1, ExchangeResult(2im*s,dd,BaseOperator(c,opname(A),inds(A))))
-            end
-        end
-    end
-
-    if (optype(A) == TLSCreate_ && optype(B) in (TLSx_,TLSy_,TLSz_)) || (optype(A) in (TLSx_,TLSy_,TLSz_) && optype(B) == TLSDestroy_)
-        throw(ArgumentError("QuantumAlgebra currently does not support mixing 'normal' (x,y,z) Pauli matrices with jump operators (+,-)."))
-    end
-
-    error("_exchange should never reach this! A=$A, B=$B.")
-end
-
-const ComplexInt = Complex{Int}
-
-function _contract(A::BaseOperator,B::BaseOperator)::Tuple{Bool,ComplexInt,Union{BaseOperator,Nothing}}
-    if optype(A) in (TLSCreate_,TLSDestroy_,FermionDestroy_,FermionCreate_) && A == B
-        return (true,zero(ComplexInt),nothing)
-    elseif optype(A) in (TLSx_,TLSy_,TLSz_) && optype(B) in (TLSx_,TLSy_,TLSz_) && opname(A) == opname(B) && inds(A) == inds(B)
-        # σa σb = δab + i ϵabc σc
-        if optype(B) == optype(A)
-            return (true,one(ComplexInt),nothing)
-        else
-            c, s = ϵ_ab(A,B)
-            return (true, ComplexInt(0,s), BaseOperator(c,opname(A),inds(A)))
-        end
-    else
-        return (false,zero(ComplexInt),nothing)
-    end
-end
-
+Bring the operator product `ops` into normal order in place. Returns the prefactor `p` of the
+reordered product, such that the original `prefactor*ops` is equal to `p*ops` (after reordering)
+plus the terms that are added to `term_collector` (which still have to be normal ordered).
+"""
 function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=false,prefactor=one(ComplexInt))
     # do an insertion sort to get to normal ordering
     # reference: https://en.wikipedia.org/wiki/Insertion_sort
@@ -434,96 +359,50 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
     for i = 2:length(A)
         j = i
         while j>1 && A[j]<A[j-1]
-            # need to commute A[j-1] and A[j]
-            pp, exc_res = _exchange(A[j],A[j-1])
-            #println("exchanging A[$j] = $(A[j]) and A[$(j-1)] = $(A[j-1]) gave result: $pp, $exc_res.")
-            if exc_res !== nothing
-                if exc_res.op === nothing
-                    onew = BaseOpProduct([A[1:j-2]; A[j+1:end]])
-                elseif optype(A[j]) == TLSCreate_
-                    @assert optype(exc_res.op) == TLSz_
-                    # we got σz_i, have to replace it by (1 - 2 σ+_i σ-_i) (which is really -σz, see explanation in _exchange)
-                    onew = BaseOpProduct([A[1:j-2]; TLSCreate(opname(exc_res.op),inds(exc_res.op)); TLSDestroy(opname(exc_res.op),inds(exc_res.op)); A[j+1:end]])
-                    t = QuTerm(exc_res.δs, onew)
-                    _add_sum_term!(term_collector,t,-2exc_res.pref*prefactor)
-                    # this one gives the "1" term that is used below
-                    onew = BaseOpProduct([A[1:j-2]; A[j+1:end]])
-                else
-                    onew = BaseOpProduct([A[1:j-2]; exc_res.op; A[j+1:end]])
-                end
-                t = QuTerm(exc_res.δs, onew)
-                _add_sum_term!(term_collector,t,exc_res.pref*prefactor)
-                #println("adding term = $(exc_res.pref*prefactor) * $t, term_collector = $(term_collector)")
-            end
-            # only modify prefactor after the exchange
-            prefactor *= pp
+            # rewrite A[j-1] A[j] = x A[j] A[j-1] + R, where R is added to term_collector
+            # (with the prefactor before the exchange)
+            x = exchange!(_ReplaceEmitter(A,j-1,j,term_collector,prefactor),A[j-1],A[j])
+            prefactor *= x
             iszero(prefactor) && return prefactor
-
-            # now finally exchange the two
             A[j-1], A[j] = A[j], A[j-1]
             j -= 1
         end
-        if shortcut_vacA_zero && optype(A[1]) in (BosonCreate_,FermionCreate_,TLSCreate_)
-            return zero(prefactor)
-        end
+        # ⟨0| A[1] ... = 0
+        shortcut_vacA_zero && annihilates_vacuum_left(A[1]) && return zero(prefactor)
     end
     # check if we have any products that simplify
     did_contractions = false
     k = 1
     while k < length(A)
-        dosimplify, fac, op = _contract(A[k],A[k+1])
-        if dosimplify
-            did_contractions = true
-            prefactor *= fac
-            iszero(prefactor) && return prefactor
-            if op === nothing
-                deleteat!(A,(k,k+1))
-                #println("deleted indices $(k-1) and $k, A is now: $A, prefactor is now: $prefactor")
-            else
-                A[k] = op
-                deleteat!(A,k+1)
-                #println("deleted index $k and replaced $(k-1) by $op. A is now: $A, prefactor is now: $prefactor")
+        kp = k+1
+        res = contract!(_ReplaceEmitter(A,k,kp,term_collector,prefactor),A[k],A[kp])
+        if res === nothing
+            kp = _contraction_partner(A,k)
+            if kp > 0
+                res = contract!(_ReplaceEmitter(A,k,kp,term_collector,prefactor),A[k],A[kp])
             end
-            # we replaced [...,A[k-1],A[k],A[k+1],A[k+2],...]
-            # with        [...,A[k-1],A[k+2],...]
-            # or with     [...,A[k-1],Anew,A[k+2]...]
-            # so reduce k by one to compare the new operator at k with A[k-1] as well
-            # (with the ordering we have, it's probably impossible for A[k-1] to contract
-            # with Anew if it didn't contract with A[k], but let's be safe)
-            k > 1 && (k -= 1)
-        else
-            if optype(A[k]) in (TLSx_,TLSy_,TLSz_)
-                # lookahead while we can commute through
-                # we already checked with k+1, so start at k+2
-                for kp = k+2:length(A)
-                    optype(A[kp]) in (TLSx_,TLSy_,TLSz_) || break
-                    _exchange(A[kp-1],A[kp]) == (1,nothing) || break
-                    # A[kp] has to commute with all operators it is moved past, not just its neighbor
-                    all(m -> _exchange(A[m],A[kp]) == (1,nothing), k+1:kp-2) || continue
-                    dosimplify, fac, op = _contract(A[k],A[kp])
-                    if dosimplify
-                        did_contractions = true
-                        prefactor *= fac
-                        iszero(prefactor) && return prefactor
-                        if op === nothing
-                            deleteat!(A,(k,kp))
-                            #println("deleted indices $k and $kp, A is now: $A, prefactor is now: $prefactor")
-                        else
-                            A[k] = op
-                            deleteat!(A,kp)
-                            #println("deleted index $kp and replaced $k by $op. A is now: $A, prefactor is now: $prefactor")
-                        end
-                        # k -= 2 here because we have k += 1 just below
-                        k > 1 && (k -= 2)
-                        break
-                    end
-                end
-            end
-            k += 1
         end
+        if res === nothing
+            k += 1
+            continue
+        end
+        did_contractions = true
+        fac, op = res
+        prefactor *= fac
+        iszero(prefactor) && return prefactor
+        # replace A[k] A[kp] by op (where op === nothing is the identity)
+        if op === nothing
+            deleteat!(A,(k,kp))
+        else
+            A[k] = op
+            deleteat!(A,kp)
+        end
+        # we replaced [...,A[k-1],A[k],A[k+1],...,A[kp],...]
+        # with        [...,A[k-1],A[k+1],...] or [...,A[k-1],Anew,A[k+1]...]
+        # so reduce k by one to compare the new operator at k with A[k-1] as well
+        k > 1 && (k -= 1)
     end
     if did_contractions
-        #println("after contractions, A is: $A, prefactor is: $prefactor, term_collector is: $term_collector")
         # do another round of normal ordering since this could have changed after contractions
         # the prefactor of the term we were working on needs to be passed to normal_order!
         # to include in the term_collector terms

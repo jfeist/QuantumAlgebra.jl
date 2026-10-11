@@ -5,6 +5,7 @@ using PackageExtensionCompat
 include("tools.jl")
 include("operator_defs.jl")
 include("index_handling.jl")
+include("operator_rules.jl")
 include("operator_baseops.jl")
 include("alias.jl")
 include("output.jl")
