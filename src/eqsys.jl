@@ -160,7 +160,8 @@ function QuEqSys{LHSfunc}(H,rhsfilter,Ls=(),ops=nothing) where LHSfunc
         RHS = rhsfilter(RHSfunc(A,H,Lops))
         # println("$A = $RHS")
         eqs[A] = RHS
-        for t in keys(RHS.terms)
+        # go through the terms in sorted order so that the result does not depend on the (hash-dependent) iteration order
+        for t in sort!(collect(keys(RHS.terms)))
             @assert isempty(t.bares)
             for B in _getECs(t,LHSfunc)
                 # we will need to calculate either B.A or B.A' (to use <A> = <A^†>^*)
