@@ -31,38 +31,44 @@ a_{n}^\\dagger a_{m} \\rangle_{c}``.
 
 See also: [`expval`](@ref), [`corr`](@ref)"""
 function expval_as_corrs(A::QuExpr)
-    newA = QuExpr()
-    corrterms = QuExpr()
-    for (t,s) in A.terms
-        # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
-        # is assumed to be distinct from the indices of the expressions
-        # then, calculate the correction expression for the term where the sum index is the same as any of the non-summed indices,
-        # and add the correction between that and the "incorrect" term where index identity is not taken into account
-        _add_corrs!(newA,t,s)
+    _expand_bare_products(_add_corrs!, A)
+end
+expval_as_corrs(A::Number) = expval_as_corrs(QuExpr(A))
 
-        if t.nsuminds>0 && !isempty(t.bares)
-            extinds = unique(extindices(t.bares))
-            for ii in 1:t.nsuminds
-                sumind = sumindex(ii)
-                for ind in extinds
-                    f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
-                    tb = f(t.bares)
-                    tbc = noaliascopy(tb)
-                    normal_order!(tb,corrterms)
-                    @assert isempty(corrterms)
-                    if tb != tbc
-                        tright = _normalize_without_commutation(QuTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
-                        _add_corrs!(newA,tright,s)
-                        twrong = QuTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
-                        _add_corrs!(newA,twrong,-s,_add_with_normal_order!)
-                    end
+# Rewrite (the expectation value or correlator of) the bare operators in each term of A as a sum of
+# products of correlators (add! = _add_corrs!) or of expectation values (add! = _add_expvs!).
+function _expand_bare_products(add!, A::QuExpr)
+    newA = QuExpr()
+    for (t,s) in A.terms
+        # first calculate the expansion for the term with the "bare" indices, which means that the sum indices
+        # are assumed to be distinct from the other indices of the term
+        add!(newA,t,s)
+        t.nsuminds>0 && !isempty(t.bares) || continue
+        # then, for terms where a sum index is equal to one of the non-summed indices, the operator product can
+        # change (by reordering or simplification). in that case, subtract the "wrong" expansion where index
+        # identity is not taken into account and add the correct one
+        extinds = unique(extindices(t.bares))
+        for ii in 1:t.nsuminds
+            sumind = sumindex(ii)
+            for ind in extinds
+                f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
+                tb = f(t.bares)
+                is_normal_form(tb) && continue
+                twrong = _normalize_without_commutation(QuTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
+                # if the δs make the term vanish, both the "right" and "wrong" terms are zero
+                twrong === nothing && continue
+                # the correct expansion is that of the normal-ordered term (which can consist of several terms)
+                right = QuExpr()
+                _add_with_normal_order!(right,twrong,s)
+                for (tr,sr) in right.terms
+                    add!(newA,tr,sr)
                 end
+                add!(newA,twrong,-s,_add_with_normal_order!)
             end
         end
     end
     newA
 end
-expval_as_corrs(A::Number) = expval_as_corrs(QuExpr(A))
 
 function _add_corrs!(A,t,s,addfun! = _add_sum_term!)
     if isempty(t.bares)
@@ -191,36 +197,7 @@ end
 Rewrite connected correlators in `A` into ordinary expectation values.
 """
 function corr_as_expvals(A::QuExpr)
-    newA = QuExpr()
-    corrterms = QuExpr()
-    for (t,s) in A.terms
-        # first calculate the correlation for the term in the sum with the "bare" indices, which means that the sum index
-        # is assumed to be distinct from the indices of the expressions
-        # then, calculate the correction expression for the term where the sum index is the same as any of the non-summed indices,
-        # and add the correction between that and the "incorrect" term where index identity is not taken into account
-        _add_expvs!(newA,t,s)
-
-        if t.nsuminds>0 && !isempty(t.bares)
-            extinds = unique(extindices(t.bares))
-            for ii in 1:t.nsuminds
-                sumind = sumindex(ii)
-                for ind in extinds
-                    f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:t.nsuminds)...)
-                    tb = f(t.bares)
-                    tbc = noaliascopy(tb)
-                    fac = normal_order!(tb,corrterms)
-                    @assert isempty(corrterms)
-                    if tb != tbc
-                        tright = _normalize_without_commutation(QuTerm(t.nsuminds-1,f.(t.δs),f.(t.params),f.(t.expvals),f.(t.corrs),tb))
-                        _add_expvs!(newA,tright,fac*s)
-                        twrong = QuTerm(tright.nsuminds,tright.δs,tright.params,tright.expvals,tright.corrs,tbc)
-                        _add_expvs!(newA,twrong,-s,_add_with_normal_order!)
-                    end
-                end
-            end
-        end
-    end
-    newA
+    _expand_bare_products(_add_expvs!, A)
 end
 
 corr_as_expvals(A::Number) = corr_as_expvals(QuExpr(A))

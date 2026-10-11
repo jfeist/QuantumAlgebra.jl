@@ -357,11 +357,19 @@ end
             if QuantumAlgebra.using_σpm()
                 @test expval_as_corrs(-param(:g,'r',1)*σp(1)) == -param(:g,'r',1)*corr(σp(1))
                 @test expval_as_corrs(∑(:i,σp(:i)*σm(:n))) == ∑(:i,corr(σp(:i)*σm(:n))) + ∑(:i,corr(σp(:i))*corr(σm(:n)))
-                @test corr_as_expvals(∑(:i,σp(:i)*σp(:j))) == ∑(:i,expval(σp(:i)*σp(:j))) - ∑(:i,expval(σp(:i))*expval(σp(:j)))
+                @test corr_as_expvals(∑(:i,σp(:i)*σp(:j))) == ∑(:i,expval(σp(:i)*σp(:j))) - ∑(:i,expval(σp(:i))*expval(σp(:j))) + expval(σp(:j))*expval(σp(:j))
             else
                 @test expval_as_corrs(-param(:g,'r',1)*σz(1)) == -param(:g,'r',1)*corr(σz(1))
                 @test expval_as_corrs(∑(:i,σy(:i)*σy(:n))) == ∑(:i,corr(σy(:i)*σy(:n))) + ∑(:i,corr(σy(:i))*corr(σy(:n))) - corr(σy(:n))*corr(σy(:n))
                 @test corr_as_expvals(∑(:i,σx(:i)*σy(:j))) == ∑(:i,expval(σx(:i)*σy(:j))) - ∑(:i,expval(σx(:i))*expval(σy(:j))) + expval(σx(:j))*expval(σy(:j))
+            end
+
+            # sums where the operators simplify when the sum index is equal to another index
+            if QuantumAlgebra.using_σpm()
+                @test expval_as_corrs(∑(:i,σp(:i)*σp(:n))) == ∑(:i,corr(σp(:i)*σp(:n))) + ∑(:i,corr(σp(:i))*corr(σp(:n))) - corr(σp(:n))*corr(σp(:n))
+            else
+                @test expval_as_corrs(∑(:i,σx(:i)*σy(:n))) == ∑(:i,corr(σx(:i)*σy(:n))) + ∑(:i,corr(σx(:i))*corr(σy(:n))) - corr(σx(:n))*corr(σy(:n))
+                @test corr_as_expvals(∑(:i,σx(:i)*σy(:n))) == ∑(:i,expval(σx(:i)*σy(:n))) - ∑(:i,expval(σx(:i))*expval(σy(:n))) + expval(σx(:n))*expval(σy(:n))
             end
 
             @test corr_as_expvals(3) == QuExpr(3)
@@ -589,6 +597,8 @@ end
 
         EQ = heisenberg_eom_system(Corr,H,maxord,Ls)
         @test length(EQ.eqs) == 15
+        # at third order, the expansion of sums involves products of Pauli matrices that simplify
+        @test length(heisenberg_eom_system(Corr,H,3,Ls).eqs) == 39
         lhs = Corr(to_opprod(a(:i)a(:j)))
         rhs = -1im*corr(∑(:k, Pr"g_j,k"*σx(:k)*a(:i) + Pr"g_i,k"*σx(:k)*a(:j)) + (Pr"ω_i"+Pr"ω_j")*a(:i)a(:j))
         @test EQ.eqs[lhs] == normal_form(rhs)
