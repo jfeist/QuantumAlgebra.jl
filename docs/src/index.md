@@ -113,6 +113,27 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   0
   ```
 
+- `qudit_ops(name, d)` returns a constructor for the operators of a `d`-level
+  system (qudit), where `q(i,j,inds...)` is the transition operator ``|i⟩⟨j|``
+  and level 1 is the ground state (the vacuum). Internally, all operators are
+  expressed through ``|i⟩⟨1|`` and ``|1⟩⟨i|`` (with ``i ≥ 2``), which for `d = 2`
+  are equivalent to ``σ^{+}`` and ``σ^{-}``. `gellmann_ops(q)` returns
+  constructors for the generalized Gell-Mann matrices of the qudit (with
+  unnormalized diagonal matrices, so that all coefficients are exact).
+  ```jldoctest
+  julia> q = qudit_ops(:q, 3)
+  q (constructor for 3-level qudit)
+
+  julia> q(2,3,:i)
+  q²¹(i) q¹³(i)
+
+  julia> normal_form(q(1,2,:i)*q(2,3,:i))
+  q¹³(i)
+
+  julia> q(1,1)
+  1 - q²¹() q¹²() - q³¹() q¹³()
+  ```
+
 - `param(name::Symbol,state='n',inds...)` to create a named parameter. `state` must be
   one of `'r'`, `'n'`, or `'c'` for purely real, non-conjugated complex, and
   conjugated complex parameters. More conveniently, parameters can be entered

@@ -1,7 +1,7 @@
 export julia_expression
 
 # to make a variable name from operators
-varname(A::BaseOperator) = string(opname(A),BaseOpType_expr[Int(optype(A))])
+varname(A::BaseOperator) = string(opname(A),opsymbol(A,:expr))
 varname(A::OpProduct) = Symbol((varname(O) for O in A)...)
 varname(A::Union{ExpVal,Corr}) = varname(ops(A))
 

@@ -23,13 +23,17 @@
 #       +1 for creation, -1 for annihilation and 0 for other operators
 #   vacuum_eigenvalue_right(::Val{F}, A) / vacuum_eigenvalue_left(::Val{F}, A)
 #       λ if A|0⟩ = λ|0⟩ (⟨0|A = λ⟨0|), including λ=0, and `nothing` otherwise
+#   op_adjoint(::Val{F}, A)
+#       the adjoint of the operator A
+#   opsymbol(::Val{F}, A, style)
+#       the symbol appended to the operator name when printing (style is :text, :expr or :latex)
 
-@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily
+@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily
 
 const ComplexInt = Complex{Int}
 
-#                           BosonCreate_ FermionCreate_ TLSCreate_ TLSx_     TLSy_     TLSz_     TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, TLSFamily, TLSFamily, TLSFamily, TLSFamily, FermionFamily, BosonFamily)
+#                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ TLSx_      TLSy_      TLSz_      QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, TLSFamily, TLSFamily, TLSFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
 
 opfamily(t::BaseOpType) = @inbounds BaseOpType_family[Int(t)]
 opfamily(A::BaseOperator) = opfamily(optype(A))
@@ -42,6 +46,8 @@ opfamily(A::BaseOperator) = opfamily(optype(A))
         f(Val(FermionFamily), args...)
     elseif fam == TLSFamily
         f(Val(TLSFamily), args...)
+    elseif fam == QuditFamily
+        f(Val(QuditFamily), args...)
     else
         error("unknown operator family $fam")
     end
@@ -77,6 +83,9 @@ ladder(A::BaseOperator) = _with_family(ladder, opfamily(A), A)
 vacuum_eigenvalue_right(A::BaseOperator) = _with_family(vacuum_eigenvalue_right, opfamily(A), A)
 vacuum_eigenvalue_left(A::BaseOperator) = _with_family(vacuum_eigenvalue_left, opfamily(A), A)
 
+op_adjoint(A::BaseOperator) = _with_family(op_adjoint, opfamily(A), A)
+opsymbol(A::BaseOperator, style::Symbol) = _with_family(opsymbol, opfamily(A), A, style)
+
 "`annihilates_vacuum_left(A)`: whether ⟨0|A = 0"
 annihilates_vacuum_left(A::BaseOperator) = (λ = vacuum_eigenvalue_left(A); λ !== nothing && iszero(λ))
 
@@ -84,7 +93,12 @@ annihilates_vacuum_left(A::BaseOperator) = (λ = vacuum_eigenvalue_left(A); λ !
 lookahead_contraction(::Val, ::BaseOpType) = false
 function ladder(::Val, A::BaseOperator)
     t = optype(A)
-    t in (BosonCreate_, FermionCreate_, TLSCreate_) ? 1 : t in (BosonDestroy_, FermionDestroy_, TLSDestroy_) ? -1 : 0
+    t in (BosonCreate_, FermionCreate_, TLSCreate_, QuditCreate_) ? 1 : t in (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_) ? -1 : 0
+end
+op_adjoint(::Val, A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(optype(A))],opname(A),inds(A),opextra(A))
+function opsymbol(::Val, A::BaseOperator, style::Symbol)
+    t = Int(optype(A))
+    style === :text ? BaseOpType_sym[t] : style === :expr ? BaseOpType_expr[t] : BaseOpType_latex[t]
 end
 # for ladder operators, the vacuum is annihilated by the annihilation operators (and their adjoints from the left)
 vacuum_eigenvalue_right(F::Val, A::BaseOperator) = ladder(F, A) < 0 ? 0 : nothing
@@ -218,3 +232,90 @@ lookahead_contraction(::Val{TLSFamily}, t::BaseOpType) = ispauli(t)
 # σᶻ|0⟩ = -|0⟩, where |0⟩ is the ground state
 vacuum_eigenvalue_right(F::Val{TLSFamily}, A::BaseOperator) = optype(A) == TLSz_ ? -1 : ladder(F, A) < 0 ? 0 : nothing
 vacuum_eigenvalue_left(F::Val{TLSFamily}, A::BaseOperator) = optype(A) == TLSz_ ? -1 : ladder(F, A) > 0 ? 0 : nothing
+
+#################################################################
+## qudits (d-level systems)                                    ##
+#################################################################
+# The operators of a d-level system are written in terms of the "creation" operators
+# b_i† = |i⟩⟨1| and the "annihilation" operators b_i = |1⟩⟨i| (i = 2…d), where level 1 is
+# the ground state (the vacuum). All other transition operators are products of these,
+# |i⟩⟨j| = b_i† b_j for i,j ≥ 2, and |1⟩⟨1| = 1 - ∑_{k≥2} b_k† b_k. On the same qudit,
+# b_i† b_j† = b_i b_j = 0 and b_j b_i† = δ_ij |1⟩⟨1|, so the normal-ordered products of
+# operators on one qudit are 1, b_i†, b_j and b_i† b_j, i.e., d² operators that form a basis.
+# For d = 2, b_2† and b_2 are equivalent to σ⁺ and σ⁻.
+# The extra information stored with each operator is d:8 | i:8 | j:8 for |i⟩⟨j|.
+
+_qudit_extra(d::Integer, i::Integer, j::Integer) = (d << 16) | (i << 8) | j
+"`qudit_levels(A)`: (d,i,j) for a qudit operator A = |i⟩⟨j| (with i == 1 or j == 1) of a d-level system"
+function qudit_levels(A::BaseOperator)
+    x = opextra(A)
+    (Int(x >> 16), Int((x >> 8) & 0xff), Int(x & 0xff))
+end
+# the level i ≥ 2 of b_i† = |i⟩⟨1| or b_i = |1⟩⟨i|
+_qudit_level(A::BaseOperator) = ((_, i, j) = qudit_levels(A); max(i,j))
+
+"`qudit_op(name, d, i, j, inds)`: the operator |i⟩⟨j| of a d-level system, with either i == 1 or j == 1 (but not both)"
+function qudit_op(name::QuOpName, d::Integer, i::Integer, j::Integer, inds::AbstractVector{QuIndex})
+    2 ≤ d ≤ 255 || throw(ArgumentError("the number of levels of a qudit has to be between 2 and 255, got $d"))
+    (1 ≤ i ≤ d && 1 ≤ j ≤ d) || throw(ArgumentError("levels have to be between 1 and $d, got ($i,$j)"))
+    (i == 1) ⊻ (j == 1) || throw(ArgumentError("only |i⟩⟨1| and |1⟩⟨i| (i ≥ 2) are basis operators, got |$i⟩⟨$j|"))
+    BaseOperator(j == 1 ? QuditCreate_ : QuditDestroy_, name, inds, _qudit_extra(d,i,j))
+end
+# b_k† and b_k on the same qudit (and with the same indices) as A
+_qudit_create_like(A::BaseOperator, k) = qudit_op(opname(A), qudit_levels(A)[1], k, 1, inds(A))
+_qudit_destroy_like(A::BaseOperator, k) = qudit_op(opname(A), qudit_levels(A)[1], 1, k, inds(A))
+
+function exchange!(::Val{QuditFamily}, emit, B, A)
+    # operators of the same kind commute (on the same qudit, both orders give zero)
+    optype(A) == optype(B) && return 1
+    maybe_same_site(A,B) || return 1
+    qudit_levels(A)[1] == qudit_levels(B)[1] || throw(ArgumentError("qudit $(opname(A)) is used with different numbers of levels"))
+    # A = b_i† and B = b_j, and we need B A = b_j b_i†
+    i, j = _qudit_level(A), _qudit_level(B)
+    d = qudit_levels(A)[1]
+    dd = site_deltas(A,B)
+    if isempty(dd)
+        # on the same qudit, b_j b_i† = δ_ij |1⟩⟨1| = δ_ij (1 - ∑_k b_k† b_k)
+        i == j || return 0
+        emit(1, dd)
+        for k = 2:d
+            k == i || emit(-1, dd, _qudit_create_like(A,k), _qudit_destroy_like(A,k))
+        end
+        return -1
+    else
+        # b_j b_i† = b_i† b_j + δ_site (δ_ij |1⟩⟨1| - |i⟩⟨j|) = b_i† b_j + δ_site (δ_ij (1 - ∑_k b_k† b_k) - b_i† b_j)
+        if i == j
+            emit(1, dd)
+            for k = 2:d
+                emit(k == i ? -2 : -1, dd, _qudit_create_like(A,k), _qudit_destroy_like(A,k))
+            end
+        else
+            emit(-1, dd, _qudit_create_like(A,i), _qudit_destroy_like(A,j))
+        end
+        return 1
+    end
+end
+
+# on the same qudit, b_i† b_j† = b_i b_j = 0
+function contract!(::Val{QuditFamily}, emit, A, B)
+    (optype(A) == optype(B) && opname(A) == opname(B) && inds(A) == inds(B)) || return nothing
+    (zero(ComplexInt), nothing)
+end
+
+commutes(::Val{QuditFamily}, A, B) = optype(A) == optype(B) || !maybe_same_site(A,B)
+
+# operators on the same qudit are not necessarily next to each other in the normal order (e.g., b₂†(1) b₂†(2) b₃†(1))
+lookahead_contraction(::Val{QuditFamily}, ::BaseOpType) = true
+
+op_adjoint(::Val{QuditFamily}, A::BaseOperator) = ((d,i,j) = qudit_levels(A); qudit_op(opname(A), d, j, i, inds(A)))
+
+function opsymbol(::Val{QuditFamily}, A::BaseOperator, style::Symbol)
+    _, i, j = qudit_levels(A)
+    if style === :latex
+        "^{$i$(max(i,j) ≥ 10 ? "," : "")$j}"
+    elseif style === :expr
+        "_$(i)_$(j)"
+    else
+        max(i,j) ≥ 10 ? "⁽$(superscript(i))'$(superscript(j))⁾" : "$(superscript(i))$(superscript(j))"
+    end
+end

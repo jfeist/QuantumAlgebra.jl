@@ -4,7 +4,7 @@ using OrderedCollections
 export QuExpr
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops, @anticommuting_fermion_group
-export tlspm_ops, tlsxyz_ops
+export tlspm_ops, tlsxyz_ops, qudit_ops, gellmann_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
@@ -212,11 +212,12 @@ const NoName = QuOpName(Symbol())
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
 # start the counting at 1 so we can index into the tuples defined below with Int(BaseOpType)
-@enum BaseOpType        BosonCreate_=1 FermionCreate_   TLSCreate_   TLSx_  TLSy_  TLSz_  TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_adj = (BosonDestroy_, FermionDestroy_, TLSDestroy_, TLSx_, TLSy_, TLSz_, TLSCreate_, FermionCreate_, BosonCreate_)
-const BaseOpType_sym  = ("†", "†", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
-const BaseOpType_expr = ("ᴴ", "ᴴ", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "", "")
-const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "", "")
+# (for qudits, the symbols are determined from the levels of the transition operators |i⟩⟨1| and |1⟩⟨i|)
+@enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ TLSx_  TLSy_  TLSz_  QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, TLSx_, TLSy_, TLSz_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
+const BaseOpType_sym   = ("†", "†", "⁺", "", "ˣ", "ʸ", "ᶻ", "", "⁻", "", "")
+const BaseOpType_expr  = ("ᴴ", "ᴴ", "⁺", "", "ˣ", "ʸ", "ᶻ", "", "⁻", "", "")
+const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "", "^{x}", "^{y}", "^{z}", "", "^{-}", "", "")
 
 # a struct representing a delta function with unequal indices
 @concrete struct δ
@@ -552,6 +553,89 @@ function tlsxyz_ops(name::Symbol)
     tlsy = QuExprConstructor(namey, (args...) -> using_σpm() ? QuExpr((QuTerm(TLSDestroy(op_name,args...))=>1im, QuTerm(TLSCreate(op_name,args...))=>-1im)) : QuExpr(TLSy(op_name,args...)))
     tlsz = QuExprConstructor(namez, (args...) -> using_σpm() ? QuExpr((QuTerm(BaseOpProduct([TLSCreate(op_name,args...),TLSDestroy(op_name,args...)]))=>2, QuTerm()=>-1)) : QuExpr(TLSz(op_name,args...)))
     tlsx, tlsy, tlsz
+end
+
+"""
+    QuditOps
+
+Constructor for the transition operators of a qudit (see [`qudit_ops`](@ref)).
+"""
+struct QuditOps
+    name::QuOpName
+    d::Int
+end
+
+"""
+    qudit_ops(name::Symbol, d::Integer)
+
+Return a constructor `q` for the operators of a `d`-level system (qudit) with the given `name`.
+`q(i, j, inds...)` gives the transition operator ``|i⟩⟨j|`` (with levels `1 ≤ i,j ≤ d`)
+acting on the qudit with indices `inds`. Level 1 is the ground state, i.e., the vacuum.
+
+Internally, all operators are expressed through the "creation" operators ``|i⟩⟨1|`` and
+"annihilation" operators ``|1⟩⟨i|`` (with ``i ≥ 2``), using ``|i⟩⟨j| = |i⟩⟨1|1⟩⟨j|`` and
+``|1⟩⟨1| = 1 - \\sum_{k≥2} |k⟩⟨1|1⟩⟨k|``, which gives a unique normal form. For `d=2`, `q(2,1)`
+and `q(1,2)` are equivalent to ``σ^{+}`` and ``σ^{-}``.
+
+# Examples
+```julia
+q = qudit_ops(:q, 3)
+q(2,1,:i)                  # |2⟩⟨1| acting on qudit i
+q(2,3,:i)                  # |2⟩⟨3| = |2⟩⟨1|1⟩⟨3|
+normal_form(q(1,2)*q(2,3)) # |1⟩⟨3|
+q(1,1)                     # 1 - |2⟩⟨2| - |3⟩⟨3|
+```
+"""
+function qudit_ops(name::Symbol, d::Integer)
+    2 ≤ d ≤ 255 || throw(ArgumentError("the number of levels of a qudit has to be between 2 and 255, got $d"))
+    QuditOps(QuOpName(name), d)
+end
+function (q::QuditOps)(i::Integer, j::Integer, inds...)
+    (1 ≤ i ≤ q.d && 1 ≤ j ≤ q.d) || throw(ArgumentError("levels have to be between 1 and $(q.d), got ($i,$j)"))
+    ii = make_indices(inds...)
+    # |i⟩⟨j| = |i⟩⟨1|1⟩⟨j|
+    ij(i,j) = i == 1 ? QuTerm(qudit_op(q.name,q.d,1,j,ii)) : j == 1 ? QuTerm(qudit_op(q.name,q.d,i,1,ii)) :
+                       QuTerm(BaseOpProduct([qudit_op(q.name,q.d,i,1,ii), qudit_op(q.name,q.d,1,j,ii)]))
+    if (i,j) == (1,1)
+        # |1⟩⟨1| = 1 - ∑_{k≥2} |k⟩⟨k|
+        QuExpr(Iterators.flatten((((QuTerm(),1),), ((ij(k,k),-1) for k=2:q.d))))
+    else
+        QuExpr(((ij(i,j),1),))
+    end
+end
+Base.print(io::IO, q::QuditOps) = print(io, q.name, " (constructor for ", q.d, "-level qudit)")
+Base.show(io::IO, q::QuditOps) = print(io, q)
+
+"""
+    gellmann_ops(q::QuditOps)
+
+Return constructors for the `d²-1` generalized Gell-Mann matrices of the `d`-level qudit `q`
+(see [`qudit_ops`](@ref)), with diagonal matrices that are not normalized (so that all matrix
+elements are integers). For `k = 2, …, d`, these are (in this order) the pairs
+``X_{jk} = |j⟩⟨k| + |k⟩⟨j|`` and ``Y_{jk} = -i|j⟩⟨k| + i|k⟩⟨j|`` for ``j = 1, …, k-1``, followed by
+``D_{k-1}``, where ``D_l = \\sum_{m≤l} |m⟩⟨m| - l |l+1⟩⟨l+1|``. The standard (normalized)
+Gell-Mann matrices are obtained as ``\\sqrt{2/(l(l+1))} D_l``, i.e., for `d = 3` the returned
+matrices are ``λ_1, …, λ_7`` and ``\\sqrt{3} λ_8``. Note that since level 1 is the ground state,
+for `d = 2` they correspond to ``(σ^x, -σ^y, -σ^z)``.
+
+# Examples
+```julia
+q = qudit_ops(:q, 3)
+λ = gellmann_ops(q)
+normal_form(comm(λ[1](:i), λ[2](:i)))  # 2i λ₃(i)
+```
+"""
+function gellmann_ops(q::QuditOps)
+    cstrs = QuExprConstructor[]
+    for k = 2:q.d
+        for j = 1:k-1
+            push!(cstrs, QuExprConstructor("X$(subscript(j))$(subscript(k))", (inds...) -> q(j,k,inds...) + q(k,j,inds...)))
+            push!(cstrs, QuExprConstructor("Y$(subscript(j))$(subscript(k))", (inds...) -> -1im*q(j,k,inds...) + 1im*q(k,j,inds...)))
+        end
+        l = k-1
+        push!(cstrs, QuExprConstructor("D$(subscript(l))", (inds...) -> sum(q(m,m,inds...) for m=1:l) - l*q(l+1,l+1,inds...)))
+    end
+    cstrs
 end
 
 "`@boson_ops name`: define function `\$name` for creating bosonic annihilation operators with name `name` (also defines deprecated `\$(name)dag`, use `\$(name)'` instead) "

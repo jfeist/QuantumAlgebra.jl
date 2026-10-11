@@ -606,4 +606,8 @@ end
         rhs = -1im*corr(∑(:k, Pr"g_j,k"*σx(:k)*a(:i) + Pr"g_i,k"*σx(:k)*a(:j)) + (Pr"ω_i"+Pr"ω_j")*a(:i)a(:j))
         @test EQ.eqs[lhs] == normal_form(rhs)
     end
+
+    # the matrix representation helpers are used in the qudit tests as well
+    include("test_matrix_representation.jl")
+    include("test_qudits.jl")
 end

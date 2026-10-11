@@ -144,7 +144,7 @@ Compute the commutator ``[A,B] = A*B - B*A``.
 """
 comm(A,B) = A*B - B*A
 
-Base.adjoint(A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(optype(A))],opname(A),inds(A),opextra(A))
+Base.adjoint(A::BaseOperator) = op_adjoint(A)
 Base.adjoint(A::OpProduct) = BaseOpProduct(reverse!(BaseOperator[adjoint(O) for O in A]))
 Base.adjoint(A::T) where {T<:Union{ExpVal,Corr}} = T(adjoint(ops(A)))
 Base.adjoint(A::Param) = parstate(A)=='r' ? A : Param(opname(A),parstate(A)=='n' ? 'c' : 'n',inds(A))
