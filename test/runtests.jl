@@ -167,8 +167,11 @@ end
             @test_throws ErrorException indf(a())
 
             H = ∑((:i,:j,:k,:l),Pr"ω_i,j,k,l"*a'(:i,:j)*a(:k,:l))
+            # the (canonical) numbering of sum indices in normal-ordered terms is not necessarily in order of
+            # appearance, so explicitly renumber them in order of appearance
+            tH = QuantumAlgebra.reorder_suminds()(first(only(H.terms)))
             indf = QuantumAlgebra.popped_out_suminds(QuantumAlgebra.sumindex(1))
-            @test indf(first(only(H.terms))) == first(only(∑((:x,:y,:z,:w), Pr"ω_x,i,j,k"*a'(:x,:l)*a(:m,:n)).terms))
+            @test normal_form(QuExpr(indf(tH))) == normal_form(∑((:x,:y,:z,:w), Pr"ω_x,i,j,k"*a'(:x,:l)*a(:m,:n)))
             @test indf.icurr == 6
             @test indf.suminds == QuantumAlgebra.sumindex.([2,3,4,2,3,4])
             @test_throws ErrorException indf(a())
@@ -291,15 +294,12 @@ end
                     @test xsqn == normal_form(xn*xn)
 
                     # do normal_form already on the first partial product, otherwise computation time explodes.
-                    # NOTE: this test is broken not because of an error as far as I can tell, but because
-                    # depending on the order of computation it produces equivalent terms that we cannot
-                    # identify as equal yet, such as:
-                    # ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₁) and
-                    # ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₂)
-                    #
-                    # For use_σxyz, this is even worse, since even though non-adjacent operators are contracted,
-                    # there are ambiguities in sums that even lead to different numbers of terms
-                    if auto_norm
+                    # NOTE: this test is broken for use_σxyz since even though non-adjacent operators are
+                    # contracted, there are ambiguities in sums that lead to different numbers of terms
+                    # (for use_σpm, it used to be broken because terms that only differ in the numbering of
+                    # sum indices were not identified as equal, e.g., ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₁) and
+                    # ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₂))
+                    if auto_norm || QuantumAlgebra.using_σpm()
                         @test normal_form(xsqn*x) == normal_form(xn*xn*xn)
                     else
                         @test_broken normal_form(xsqn*x) == normal_form(xn*xn*xn)

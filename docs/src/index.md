@@ -179,7 +179,10 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   an expression written as a single product can turn into a sum of expressions.
   The order is essentially normal ordering (creation before annihilation
   operators, with σˣʸᶻ in the middle), with some additional conventions to make
-  the normal form (hopefully) unique. In some contexts (e.g., interactive work),
+  the normal form (hopefully) unique. In particular, sum indices are numbered
+  canonically, so that terms that only differ in the naming of summed indices
+  are identified (e.g., `normal_form(∑(:i,∑(:j,a(:i)*a'(:j))) - ∑(:j,∑(:i,a(:j)*a'(:i))))`
+  is zero). In some contexts (e.g., interactive work),
   it can be convenient to automatically transform all expressions to normal
   form. This can be enabled by calling `QuantumAlgebra.auto_normal_form(true)`.
   To make the setting permanent, call `QuantumAlgebra.auto_normal_form(true; set_preference=true)`

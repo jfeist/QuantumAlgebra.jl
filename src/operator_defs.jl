@@ -182,6 +182,9 @@ assignedinds(inds) = inds
 
 const _NameTable = Dict{Symbol,IndexInt}()
 const _NameTableInv = Symbol[]
+# hashes of the names that only depend on their content (FNV-1a), used to number sum indices canonically
+const _NameStableHash = UInt64[]
+_fnv1a(s::AbstractString) = foldl((h,b) -> (h ⊻ b) * 0x00000100000001b3, codeunits(s); init=0xcbf29ce484222325)
 # names are ordered alphabetically, _NameRank[][i] is the position of the name with id i in that order
 const _NameRank = Ref(IndexInt[])
 
@@ -190,6 +193,7 @@ const _NameRank = Ref(IndexInt[])
     function QuOpName(name::Symbol)
         i = get!(_NameTable,name) do
             push!(_NameTableInv,name)
+            push!(_NameStableHash,_fnv1a(string(name)))
             length(_NameTableInv) < 2^24 || error("too many operator names")
             # replace (instead of modifying) the rank vector so that it is always valid
             ranks = similar(_NameRank[], length(_NameTableInv))

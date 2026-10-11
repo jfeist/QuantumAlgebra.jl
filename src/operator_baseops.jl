@@ -171,7 +171,10 @@ function is_normal_form(A::Union{Vector{BaseOperator},OpSeq})
     return true
 end
 
-function is_normal_form(t::QuTerm)
+is_normal_form(t::QuTerm) = _is_normal_form_except_suminds(t) && _suminds_canonical(t)
+
+# whether the term is in normal form, apart from the numbering of the sum indices
+function _is_normal_form_except_suminds(t::QuTerm)
     (issorted(params(t)) && issorted(expvals(t)) && issorted(corrs(t))) || return false
     is_normal_form(bares(t)) || return false
     for EV in expvals(t)
@@ -180,10 +183,6 @@ function is_normal_form(t::QuTerm)
     for CO in corrs(t)
         is_normal_form(CO) || return false
     end
-
-    # ensure that sum indices are ordered, i.e., numbered in order of appearance (outside of the δs)
-    _, ordered = _foldl_indices((sumind_ordered, ind) -> _check_sumind_order(sumind_ordered, ind), (sumindex(0).num, true), t, false)
-    ordered || return false
 
     isempty(deltas(t)) && return true
 
@@ -457,11 +456,25 @@ termsumiter(t,s,sum::QuExpr) = termsumiter(QuTerm(t),s,sum)
 const _NO_NEW_TERMS = QuExpr()
 
 function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
-    # no need to do anything since everything is in normal order
-    # in particular, no copy necessary!
-    if is_normal_form(t)
-       _add_sum_term!(A,t,s)
-       return
+    if _is_normal_form_except_suminds(t)
+        if nsuminds(t) ≤ 1
+            # no need to do anything since everything is in normal order
+            # in particular, no copy necessary!
+            if _suminds_canonical(t)
+                _add_sum_term!(A,t,s)
+                return
+            end
+        else
+            # only the sum indices might have to be renumbered
+            res = _canonicalize_suminds(t)
+            res === nothing && return
+            tc, sgn, isnormal = res
+            if isnormal
+                _add_sum_term!(A,tc,s*sgn)
+                return
+            end
+            t, s = tc, s*sgn
+        end
     end
 
     W = _normalize_without_commutation(t)
@@ -483,10 +496,13 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
             # should be guaranteed to be in normal order
             _add_sum_term!(A,t,s*pref)
         else
-            # might need to reorder sum indices, which can "break" our normal order
-            tn = _reorder_suminds(t)
-            # this will check again if it is in normal form to make sure
-            _add_with_normal_order!(A,tn,s*pref,shortcut_vacA_zero)
+            # number the sum indices canonically (which can change the order of operators)
+            res = _canonicalize_suminds(t)
+            if res !== nothing
+                tc, sgn, isnormal = res
+                # if tc is not guaranteed to be in normal form, this will check again
+                isnormal ? _add_sum_term!(A,tc,s*pref*sgn) : _add_with_normal_order!(A,tc,s*pref*sgn,shortcut_vacA_zero)
+            end
         end
     end
 

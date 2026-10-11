@@ -47,16 +47,35 @@ function _fullmat(O::QA.BaseOperator, modes::Vector)
     foldl(kron, mats)
 end
 
+# (arbitrary) numerical values for parameters with integer indices
+function _paramval(p::QA.Param)
+    x = 1.3 + 0.37*length(string(QA.opname(p))) + sum(i -> 0.731*i.num, QA.inds(p); init=0.0)
+    v = QA.parstate(p) == 'r' ? complex(x) : complex(x, 0.41*x+0.2)
+    QA.parstate(p) == 'c' ? conj(v) : v
+end
+
 function matrep(A::QuExpr, modes::Vector)
     D = prod(last, modes; init=1)
     M = zeros(ComplexF64, D, D)
     for (t,s) in A.terms
-        @assert isempty(QA.params(t)) && isempty(QA.expvals(t)) && isempty(QA.corrs(t)) && QA.nsuminds(t) == 0
+        @assert isempty(QA.expvals(t)) && isempty(QA.corrs(t)) && QA.nsuminds(t) == 0
         @assert all(d -> QA.isintindex(d.iA) && QA.isintindex(d.iB), QA.deltas(t))
         all(d -> d.iA == d.iB, QA.deltas(t)) || continue
-        M .+= s .* foldl(*, (_fullmat(O,modes) for O in QA.bares(t)); init=Matrix{ComplexF64}(I,D,D))
+        pv = prod(_paramval, QA.params(t); init=complex(1.0))
+        M .+= (s*pv) .* foldl(*, (_fullmat(O,modes) for O in QA.bares(t)); init=Matrix{ComplexF64}(I,D,D))
     end
     M
+end
+# write out the sums in A explicitly, with sum indices taking the values in vals
+function expand_sums(A::QuExpr, vals)
+    B = QuExpr()
+    for (t,s) in A.terms
+        for assignment in Iterators.product(ntuple(_ -> vals, QA.nsuminds(t))...)
+            f = QA.replace_inds((QA.sumindex(k) => QA.QuIndex(v) for (k,v) in enumerate(assignment))...)
+            QA._add_sum_term!(B, f(t,0), s)
+        end
+    end
+    B
 end
 function samematrix(A::QuExpr, B::QuExpr)
     modes = sort!(collect(merge(_modes(A), _modes(B))), by=first)
@@ -117,6 +136,29 @@ end
             A, B, C = (prod(rand(pool, rand(1:2))) for _=1:3)
             @test normal_form(normal_form(A*B)*C) == normal_form(A*normal_form(B*C))
         end
+    end
+
+    # sums (expanded explicitly with indices taking values 1 and 2), including the canonical numbering of sum indices
+    @testset "sums" begin
+        r = qudit_ops(:r, 3)
+        sumpool(s) = QuExpr[f(s), f'(s), σp(s), σm(s), r(2,1,s), r(1,3,s), r(3,2,s), param(:g,'r',s)*f(s)]
+        for _ = 1:150
+            P1 = prod(rand(sumpool(:k), rand(1:2)))
+            P2 = prod(rand([sumpool(:l); sumpool(1)], rand(1:3)))
+            # P3 contains the free index l (that is not summed over)
+            P3 = prod(rand([sumpool(:m); sumpool(:l)], rand(0:2)); init=QuExpr(1))
+            X = ∑(:k, P1) * ∑(:l, P2) * ∑(:m, P3)
+            Xn = normal_form(X)
+            for lval in 1:2
+                fl = QA.replace_inds(QA.QuIndex(:l) => QA.QuIndex(lval))
+                @test samematrix(expand_sums(fl(Xn), 1:2), expand_sums(fl(X), 1:2))
+            end
+            # the order and nesting of sums does not matter
+            @test Xn == normal_form(∑(:m, ∑(:k, P1 * ∑(:l, P2) * P3)))
+        end
+        # terms that only differ in the numbering of sum indices are combined
+        @test iszero(normal_form(∑(:i,∑(:j,f(:i)*f(:j)))))
+        @test iszero(normal_form(∑((:i,:j),Pr"g_i"*r(2,1,:i)*r(3,1,:j)) - ∑((:j,:i),Pr"g_i"*r(3,1,:j)*r(2,1,:i))))
     end
     QA.use_σpm(false)
 end
