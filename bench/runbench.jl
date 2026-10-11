@@ -70,7 +70,8 @@ function make_cases()
     xsum2 = a(:i) * a(:j)' * σz(:α) * σy(:β) * σx(:α)
     Anf_sum = ∑(:c, ∑(:i, ∑(:α, 3 * expval(xsum1) * xsum2)))
     Anf_tls = prod(fill(σx(:i) * σy(:i) * σz(:i), 4))
-    Anf_poly = (a(:i) * a(:j)' + b(:j) * b(:i)' + σx(:k) * σy(:k) + expval(a(:i)' * b(:j)))^3
+    Anf_poly_base = a(:i) * a(:j)' + b(:j) * b(:i)' + σx(:k) * σy(:k) + expval(a(:i)' * b(:j))
+    Anf_poly = Anf_poly_base^3
 
     push!(suites, (name = "normal_form_stress", cases = [
         (name = "normal_form_sum_nested", f = normal_form, args = (Anf_sum,)),
@@ -112,6 +113,29 @@ function make_cases()
             (name = "mixed_lindblad_eqsys_ord3", f = heisenberg_eom_system, args = (Hmixed, 3, Lmixed, (a(), b(), a()' * b()))),
         ]))
     end
+
+    # larger cases, closer to production use (each runs for ~0.01-0.3 s)
+    Hsum = ∑(:i, Pr"ω_i" * a(:i)' * a(:i)) + ∑(:α, 1 // 2 * Pr"ωe_α" * σz(:α)) +
+           ∑(:α, ∑(:i, Pr"g_i,α" * (a(:i)' + a(:i)) * σx(:α)))
+    Lsum = ((:α, Pr"γe_α", σx(:α)),)
+    ops_large = Tuple(sort([a.(1:6)..., σz.(1:2)..., adjoint.(a.(1:3))...], by = op -> first(op.terms)[1]))
+    Svac = normal_form((1 + Pr"α" * a(1)' + Pr"β" * a(2)' + Pr"χ" * σx(1))^4)
+    Avac = normal_form((a(1)' + a(1) + a(2)' + a(2))^4 + σx(1) * (a(1)' * a(2) + a(2)' * a(1)))
+    large_cases = Any[
+        (name = "large_commutator_n7", f = nested_comm, args = (H, Acomm, 7)),
+        (name = "large_prodcorr_n11", f = expval_as_corrs, args = (normal_form(8 * Pr"g_i" * prod(ops_large)),)),
+        (name = "large_vacexpval", f = vacExpVal, args = (Avac, Svac)),
+        (name = "large_polynomial_power_7", f = normal_form, args = (Anf_poly_base^7,)),
+        (name = "large_eqsys_expval_sum_ord4", f = heisenberg_eom_system, args = (ExpVal, Hsum, 4, Lsum)),
+    ]
+    if isdefined(QuantumAlgebra, :qudit_ops)
+        q = qudit_ops(:q, 3)
+        # atoms with Λ-type level schemes in a cavity (cavity couples 1↔3, laser couples 2↔3)
+        Hq = Pr"ωc" * a()' * a() + ∑(:i, Pr"Δ" * q(3, 3, :i) + Pr"δ" * q(2, 2, :i) +
+                                       Pr"g" * (a()' * q(1, 3, :i) + q(3, 1, :i) * a()) + Pr"Ω" * (q(3, 2, :i) + q(2, 3, :i)))
+        push!(large_cases, (name = "large_qudit_commutator_n6", f = nested_comm, args = (Hq, q(1, 2, :j), 6)))
+    end
+    push!(suites, (name = "large", cases = large_cases))
 
     return suites
 end
