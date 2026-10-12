@@ -14,6 +14,8 @@ module QAMigration
 
 import JuliaSyntax as JS
 import JSON
+import Latexify
+import REPL
 using OrderedCollections: OrderedDict
 
 export migrate_source, migrate_notebook, migrate_file
@@ -197,13 +199,45 @@ end
 
 mutable struct Parameter
     name::Symbol
+    var::Symbol             # the variable in the new interface (the name, or a unicode name for a name in LaTeX)
     complex::Set{Bool}
     ndims::Set{Int}
     uses::Vector{Any}       # (unit index, unit, node, conjugated, index arguments or index string)
     assigns::Vector{Any}    # (unit index, unit, assignment node) of statements `name = param(:name, …)` in global scope
     problems::Vector{String}
 end
-Parameter(name) = Parameter(name, Set{Bool}(), Set{Int}(), Any[], Any[], String[])
+Parameter(name) = Parameter(name, something(unicode_name(string(name)), name), Set{Bool}(), Set{Int}(), Any[], Any[], String[])
+
+# for a name in LaTeX (e.g., `\bar{b}`, `\tilde{\Omega}` or `\omega`), the unicode name with the same LaTeX output
+# (`b̄`, `Ω̃`, `ω`) if that is a valid variable name, or nothing
+function unicode_name(s::AbstractString)
+    Base.isidentifier(s) && return nothing
+    parts = String[]
+    pos = 1
+    while pos ≤ ncodeunits(s)
+        # an accent on a character or a LaTeX symbol (e.g., `\bar{b}` or `\bar{\omega}`), a LaTeX symbol, or a character
+        m = match(r"\G(?:\\([A-Za-z]+)\{(\\[A-Za-z]+|[^{}\\])\}|(\\[A-Za-z]+)|([^{}\\]))", s, pos)
+        m === nothing && return nothing
+        if m[1] !== nothing
+            accent = get(REPL.REPLCompletions.latex_symbols, "\\" * m[1], nothing)
+            base = startswith(m[2], "\\") ? get(REPL.REPLCompletions.latex_symbols, m[2], nothing) : m[2]
+            (accent === nothing || base === nothing) && return nothing
+            push!(parts, base * accent)
+        elseif m[3] !== nothing
+            c = get(REPL.REPLCompletions.latex_symbols, m[3], nothing)
+            c === nothing && return nothing
+            push!(parts, c)
+        else
+            push!(parts, m[4])
+        end
+        pos += ncodeunits(m.match)
+    end
+    u = Base.Unicode.normalize(join(parts), :NFC)
+    # QuantumAlgebra converts names to LaTeX with Latexify
+    Base.isidentifier(u) && Latexify.unicode2latex(u) == s ? Symbol(u) : nothing
+end
+# a string literal with the value s (raw"…" for strings with backslashes)
+stringliteral(s) = occursin('\\', s) && !occursin('"', s) && !endswith(s, "\\") ? "raw\"$s\"" : repr(s)
 
 # the name and indices of a parameter string `name_inds` (as in Pr"…"/Pc"…"), with the indices as code
 function parse_paramstr(s::AbstractString)
@@ -435,21 +469,25 @@ function migrate_units!(units::Vector{Unit})
     for p in values(params)
         length(p.complex) > 1 && push!(p.problems, "used both as a real and a complex parameter")
         length(p.ndims) > 1 && push!(p.problems, "used with different numbers of indices ($(join(sort!(collect(p.ndims)), ", ")))")
-        clash = p.name in opnames || p.name in RESERVED
+        clash = p.var in opnames || p.var in RESERVED || any(q -> q !== p && q.var == p.var, values(params))
         if isempty(p.assigns)
-            clash |= haskey(idents, p.name) || haskey(bindings, p.name)
+            clash |= haskey(idents, p.var) || haskey(bindings, p.var)
         else
             # `name = param(:name)` becomes the declaration `@qparam name`, so `name` must not be used before or
             # bound otherwise
             first_assign = minimum(((k, first(JS.byte_range(a))) for (k, _, a) in p.assigns))
-            clash |= get(bindings, p.name, 0) > length(p.assigns) ||
-                     any(<(first_assign), get(idents, p.name, ())) ||
+            clash |= get(bindings, p.var, 0) > length(p.assigns) ||
+                     any(<(first_assign), get(idents, p.var, ())) ||
                      any(((k, _, n),) -> (k, first(JS.byte_range(n))) < first_assign, p.uses)
         end
-        if !Base.isidentifier(p.name)
-            push!(p.problems, "`$(p.name)` is not a valid variable name")
+        if !Base.isidentifier(p.var)
+            # suggest a declaration with a variable name (which has to be chosen by the user)
+            var = filter(c -> Base.is_id_char(c), string(p.name))
+            Base.isidentifier(var) || (var = "x")
+            decl = "@qparam $var$(length(p.ndims) == 1 ? dimsstring(only(p.ndims)) : "")$(p.complex == Set([true]) ? "::Complex" : "")=$(stringliteral(string(p.name)))"
+            push!(p.problems, "`$(p.name)` is not a valid variable name, declare it with a variable name of your choice, e.g., `$decl`")
         elseif clash
-            push!(p.problems, "the new variable `$(p.name)` would clash with a name that is used in the code")
+            push!(p.problems, "the new variable `$(p.var)` would clash with a name that is used in the code")
         end
     end
 
@@ -488,19 +526,20 @@ function migrate_units!(units::Vector{Unit})
             continue
         end
         cplx, nd = only(p.complex), only(p.ndims)
-        decl = "@qparam $(p.name)$(dimsstring(nd))$(cplx ? "::Complex" : "")"
+        decl = "@qparam $(p.var)$(dimsstring(nd))$(cplx ? "::Complex" : "")"
         isempty(p.assigns) && push!(newdecls, decl)
         foreach(((_, u, a),) -> push!(u.edits, Edit(JS.byte_range(a), decl)), p.assigns)
         for (_, u, n, conj, args) in p.uses
             any(((_, _, a),) -> last(children(a)) === n, p.assigns) && continue
-            v = string(p.name) * (conj ? "'" : "")
+            v = string(p.var) * (conj ? "'" : "")
             if args isa String
                 push!(u.edits, Edit(JS.byte_range(n), isempty(args) ? v : "$v[$args]"))
             else
                 replace_call!(u, n, v, args)
             end
         end
-        push!(msgs, "migrated parameter `$(p.name)`: $(nindices(nd)), $(cplx ? "complex" : "real"), $(length(p.uses)) uses")
+        renamed = p.var == p.name ? "" : " as `$(p.var)` (which gives the same LaTeX output)"
+        push!(msgs, "migrated parameter `$(p.name)`$renamed: $(nindices(nd)), $(cplx ? "complex" : "real"), $(length(p.uses)) uses")
     end
 
     # declarations of default operators and parameters, inserted after `using QuantumAlgebra`
@@ -525,7 +564,7 @@ function addparamuse!(p::Parameter, k, u, n, stack, cplx, conj, nd, args)
     push!(p.uses, (k, u, n, conj, args))
     length(stack) ≥ 2 || return
     a, ctx = stack[end], stack[end-1]
-    if nd == 0 && !conj && isassignment(a, ctx) && last(children(a)) === n && isident(first(children(a)), p.name) &&
+    if nd == 0 && !conj && isassignment(a, ctx) && last(children(a)) === n && isident(first(children(a)), p.var) &&
        kind(ctx) in (JS.K"toplevel", JS.K"block") && scopeof(stack) === nothing && !isconditional(stack)
         push!(p.assigns, (k, u, a))
     end

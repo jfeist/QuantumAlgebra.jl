@@ -25,10 +25,16 @@ automatically, which is left unchanged:
   parameters,
 - operators that are used as values (e.g., passed as functions to `map`),
 - operators that are declared conditionally (e.g., inside `if`),
-- parameters whose names are not valid variable names (e.g., `Pr"f(t)"`), and
+- parameters whose names are not valid variable names (e.g., `Pr"f(t)"`), for which the tool
+  suggests a declaration with a variable name of your choice (e.g., `@qparam ft="f(t)"`), and
 - new variables (e.g., `σ` for `σp`/`σm`, or `g` for `Pr"g"`) whose names are already used for
   something else in the code. An assignment `α = param(:α, 'n')` (or `α = Pc"α"`) becomes the
   declaration `@qparam α::Complex`.
+
+Parameters whose names are written in LaTeX, e.g., `Pc"\bar{b}"` or `Pr"\tilde{\Omega}"`, become
+parameters with unicode names (`b̄`, `Ω̃`) if these give the same LaTeX output (in text output, they
+are then shown as `b̄` instead of `\bar{b}`). Since names are ordered alphabetically, this can change
+the order of terms in results.
 
 Since both interfaces can be used together in QuantumAlgebra 1.x, the migrated code still works in
 these cases. Operators that are used with different numbers of indices can be migrated by hand by

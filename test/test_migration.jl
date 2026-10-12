@@ -103,7 +103,8 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
     Base.include_string(mnew, new)
     @test (mold.X, mold.Y, mold.Z) == (mnew.X, mnew.Y, mnew.Z)
 
-    # conditional declarations, clashes with local operators, invalid names, and quoted code
+    # conditional declarations, clashes with local operators, names that are not valid variable names (where a
+    # name in LaTeX becomes a unicode name with the same LaTeX output), and quoted code
     old = raw"""
     using QuantumAlgebra
     if true
@@ -122,6 +123,7 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
     @test new == raw"""
     using QuantumAlgebra
     # operators and parameters (migrated from the legacy QuantumAlgebra interface)
+    @qparam b̄::Complex
     @qparam κ[:]
     if true
         @boson_ops b
@@ -133,16 +135,21 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
     for x in 1:2
         ex = Expr(:(=), :y, x)
     end
-    V = b(1)*Pr"f(t)"*Pc"\bar{b}"*κ[:k]
+    V = b(1)*Pr"f(t)"*b̄*κ[:k]
     """
     @test any(m -> occursin("`b` (declared at code:3): declared conditionally", m), msgs)
     @test any(m -> occursin("parameter `d`: the new variable `d` would clash", m), msgs)
-    @test any(m -> occursin("parameter `f(t)`: `f(t)` is not a valid variable name", m), msgs)
-    @test any(m -> occursin("is not a valid variable name", m) && occursin("bar{b}", m), msgs)
+    @test any(m -> occursin("parameter `f(t)`: `f(t)` is not a valid variable name, declare it with a variable name of your choice, e.g., `@qparam ft=\"f(t)\"`", m), msgs)
+    @test any(m -> occursin("migrated parameter `\\bar{b}` as `b̄`", m), msgs)
     mold, mnew = Module(), Module()
     Base.include_string(mold, old)
     Base.include_string(mnew, new)
-    @test (mold.V, mold.W) == (mnew.V, mnew.W)
+    @test mold.W == mnew.W
+    @test latex(mold.V) == latex(mnew.V)
+    @test QAMigration.unicode_name(raw"\tilde{\Omega}") == :Ω̃
+    @test QAMigration.unicode_name(raw"\omega") == :ω
+    # (ä is converted to LaTeX differently, and \mathcal has no unicode equivalent)
+    @test QAMigration.unicode_name(raw"\ddot{a}") === QAMigration.unicode_name(raw"\mathcal{H}") === nothing
 
     # `x = param(:x)` becomes the declaration of `x`, and indices can be variables or tuples
     old = raw"""
