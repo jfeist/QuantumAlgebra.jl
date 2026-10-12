@@ -199,10 +199,11 @@ mutable struct Parameter
     name::Symbol
     complex::Set{Bool}
     ndims::Set{Int}
-    uses::Vector{Any}       # (unit, node, conjugated, index code)
+    uses::Vector{Any}       # (unit index, unit, node, conjugated, index arguments or index string)
+    assigns::Vector{Any}    # (unit index, unit, assignment node) of statements `name = param(:name, …)` in global scope
     problems::Vector{String}
 end
-Parameter(name) = Parameter(name, Set{Bool}(), Set{Int}(), Any[], String[])
+Parameter(name) = Parameter(name, Set{Bool}(), Set{Int}(), Any[], Any[], String[])
 
 # the name and indices of a parameter string `name_inds` (as in Pr"…"/Pc"…"), with the indices as code
 function parse_paramstr(s::AbstractString)
@@ -391,8 +392,8 @@ function migrate_units!(units::Vector{Unit})
 
     # parameters
     params = OrderedDict{Symbol,Parameter}()
-    for u in parsed
-        walk(u.tree) do n, _
+    for (k, u) in enumerate(parsed)
+        walk(u.tree) do n, stack
             kind(n) == JS.K"quote" && return :skip
             m = macroname(n)
             if m in (Symbol("@Pr_str"), Symbol("@Pc_str"))
@@ -403,7 +404,7 @@ function migrate_units!(units::Vector{Unit})
                 if any(isnothing, inds)
                     push!(p.problems, "the indices of `$(text(u, n))` at $(location(u, n)) cannot be converted automatically")
                 else
-                    addparamuse!(p, m == Symbol("@Pc_str"), false, length(inds), (u, n, false, join(inds, ",")))
+                    addparamuse!(p, k, u, n, stack, m == Symbol("@Pc_str"), false, length(inds), join(inds, ","))
                 end
                 return :skip
             end
@@ -412,13 +413,19 @@ function migrate_units!(units::Vector{Unit})
                 (!isempty(args) && kind(args[1]) == JS.K"quote" && length(children(args[1])) == 1 && isident(only(children(args[1])))) || return nothing
                 name = only(children(args[1])).val
                 p = get!(() -> Parameter(name), params, name)
-                state = length(args) ≥ 2 ? charval(args[2]) : nothing
-                inds = args[(state === nothing ? 2 : 3):end]
-                if any(a -> !(kind(a) == JS.K"Integer" || (kind(a) == JS.K"quote" && length(children(a)) == 1 && isident(only(children(a))))), inds)
+                rest = args[2:end]
+                # the second argument is the state ('r', 'n' or 'c') if it is a character
+                state = isempty(rest) ? 'n' : charval(rest[1])
+                if state === nothing && kind(rest[1]) ∉ (JS.K"Integer", JS.K"quote", JS.K"tuple")
+                    push!(p.problems, "`$(text(u, n))` at $(location(u, n)) cannot be converted automatically")
+                    return nothing
+                end
+                state === nothing ? (state = 'n') : (rest = rest[2:end])
+                inds = indexargs(rest)
+                if inds === nothing || first(inds) === nothing
                     push!(p.problems, "`$(text(u, n))` at $(location(u, n)) cannot be converted automatically")
                 else
-                    st = state === nothing ? 'n' : state
-                    addparamuse!(p, st != 'r', st == 'c', length(inds), (u, n, st == 'c', join((text(u, a) for a in inds), ",")))
+                    addparamuse!(p, k, u, n, stack, state != 'r', state == 'c', first(inds), last(inds))
                 end
             end
             nothing
@@ -428,7 +435,17 @@ function migrate_units!(units::Vector{Unit})
     for p in values(params)
         length(p.complex) > 1 && push!(p.problems, "used both as a real and a complex parameter")
         length(p.ndims) > 1 && push!(p.problems, "used with different numbers of indices ($(join(sort!(collect(p.ndims)), ", ")))")
-        clash = p.name in opnames || p.name in RESERVED || haskey(idents, p.name) || haskey(bindings, p.name)
+        clash = p.name in opnames || p.name in RESERVED
+        if isempty(p.assigns)
+            clash |= haskey(idents, p.name) || haskey(bindings, p.name)
+        else
+            # `name = param(:name)` becomes the declaration `@qparam name`, so `name` must not be used before or
+            # bound otherwise
+            first_assign = minimum(((k, first(JS.byte_range(a))) for (k, _, a) in p.assigns))
+            clash |= get(bindings, p.name, 0) > length(p.assigns) ||
+                     any(<(first_assign), get(idents, p.name, ())) ||
+                     any(((k, _, n),) -> (k, first(JS.byte_range(n))) < first_assign, p.uses)
+        end
         if !Base.isidentifier(p.name)
             push!(p.problems, "`$(p.name)` is not a valid variable name")
         elseif clash
@@ -471,10 +488,17 @@ function migrate_units!(units::Vector{Unit})
             continue
         end
         cplx, nd = only(p.complex), only(p.ndims)
-        push!(newdecls, "@qparam $(p.name)$(dimsstring(nd))$(cplx ? "::Complex" : "")")
-        for (u, n, conj, inds) in p.uses
+        decl = "@qparam $(p.name)$(dimsstring(nd))$(cplx ? "::Complex" : "")"
+        isempty(p.assigns) && push!(newdecls, decl)
+        foreach(((_, u, a),) -> push!(u.edits, Edit(JS.byte_range(a), decl)), p.assigns)
+        for (_, u, n, conj, args) in p.uses
+            any(((_, _, a),) -> last(children(a)) === n, p.assigns) && continue
             v = string(p.name) * (conj ? "'" : "")
-            push!(u.edits, Edit(JS.byte_range(n), isempty(inds) ? v : "$v[$inds]"))
+            if args isa String
+                push!(u.edits, Edit(JS.byte_range(n), isempty(args) ? v : "$v[$args]"))
+            else
+                replace_call!(u, n, v, args)
+            end
         end
         push!(msgs, "migrated parameter `$(p.name)`: $(nindices(nd)), $(cplx ? "complex" : "real"), $(length(p.uses)) uses")
     end
@@ -494,11 +518,17 @@ function migrate_units!(units::Vector{Unit})
     msgs
 end
 
-# record a use of a parameter
-function addparamuse!(p::Parameter, cplx, conj, nd, use)
+# record a use of a parameter (and whether it is the right-hand side of `name = …` in global scope)
+function addparamuse!(p::Parameter, k, u, n, stack, cplx, conj, nd, args)
     push!(p.complex, cplx)
     push!(p.ndims, nd)
-    push!(p.uses, use)
+    push!(p.uses, (k, u, n, conj, args))
+    length(stack) ≥ 2 || return
+    a, ctx = stack[end], stack[end-1]
+    if nd == 0 && !conj && isassignment(a, ctx) && last(children(a)) === n && isident(first(children(a)), p.name) &&
+       kind(ctx) in (JS.K"toplevel", JS.K"block") && scopeof(stack) === nothing && !isconditional(stack)
+        push!(p.assigns, (k, u, a))
+    end
 end
 
 # where to insert new declarations: after the (first) statement `using QuantumAlgebra`, or at the beginning

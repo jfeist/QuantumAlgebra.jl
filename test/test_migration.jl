@@ -144,6 +144,29 @@ include(joinpath(@__DIR__, "..", "tools", "migration", "migrate.jl"))
     Base.include_string(mnew, new)
     @test (mold.V, mold.W) == (mnew.V, mnew.W)
 
+    # `x = param(:x)` becomes the declaration of `x`, and indices can be variables or tuples
+    old = raw"""
+    using QuantumAlgebra
+    α = param(:α,'n')
+    gs(s) = param(:g,'r',s) + param(:κ,'r',(:i,:j))
+    V = α*α'*gs(:i)*Pr"κ_k,l"
+    """
+    new, msgs = QAMigration.migrate_source(old)
+    @test new == raw"""
+    using QuantumAlgebra
+    # operators and parameters (migrated from the legacy QuantumAlgebra interface)
+    @qparam g[:]
+    @qparam κ[:,:]
+    @qparam α::Complex
+    gs(s) = g[s] + κ[:i,:j]
+    V = α*α'*gs(:i)*κ[:k,:l]
+    """
+    @test all(m -> startswith(m, "migrated"), msgs)
+    mold, mnew = Module(), Module()
+    Base.include_string(mold, old)
+    Base.include_string(mnew, new)
+    @test mold.V == mnew.V
+
     # a file is migrated together with the files it includes (with the includes pointing to the migrated files)
     mktempdir() do dir
         write(joinpath(dir, "main.jl"), "using QuantumAlgebra\ninclude(\"part.jl\")\nY = X + a(:j)\n")

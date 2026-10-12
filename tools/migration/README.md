@@ -27,7 +27,8 @@ automatically, which is left unchanged:
 - operators that are declared conditionally (e.g., inside `if`),
 - parameters whose names are not valid variable names (e.g., `Pr"f(t)"`), and
 - new variables (e.g., `σ` for `σp`/`σm`, or `g` for `Pr"g"`) whose names are already used for
-  something else in the code.
+  something else in the code. An assignment `α = param(:α, 'n')` (or `α = Pc"α"`) becomes the
+  declaration `@qparam α::Complex`.
 
 Since both interfaces can be used together in QuantumAlgebra 1.x, the migrated code still works in
 these cases. Operators that are used with different numbers of indices can be migrated by hand by
