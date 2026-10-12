@@ -25,8 +25,8 @@ _mode_names(x) = throw(ArgumentError("modes in vacuum have to be given as operat
 
 _parse_modes_in_vacuum(modes::Nothing) = nothing
 _parse_modes_in_vacuum(modes::Set{QuOpName}) = modes
-_parse_modes_in_vacuum(modes::Union{QuExpr,QuExprCstrctArrAlias,_PairVariable}) = _mode_names(modes)
-_parse_modes_in_vacuum(modes) = mapreduce(_mode_names, union, modes; init=Set{QuOpName}())
+_parse_modes_in_vacuum(modes::Union{Tuple,AbstractArray,AbstractSet}) = mapreduce(_mode_names, union, modes; init=Set{QuOpName}())
+_parse_modes_in_vacuum(modes) = _mode_names(modes)
 
 # helper function that is only called on normal-ordered terms that only contain
 # operators that are in the vacuum state: act with the operators on the vacuum
