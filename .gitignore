@@ -10,3 +10,4 @@
 .ipynb_checkpoints/
 .CondaPkg/
 bench/results/
+tools/migration/Manifest.toml

@@ -619,4 +619,5 @@ end
     include("test_so.jl")
     include("test_comm.jl")
     include("test_threads.jl")
+    include("test_migration.jl")
 end

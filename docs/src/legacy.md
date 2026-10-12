@@ -93,6 +93,15 @@ are treated as different modes) therefore need different names.
 | `boson_ops(:b)` etc. | `boson(:b; ndims=2)` etc. |
 | default operators `a`, `f`, `σx`, ... | define them, e.g., `@boson a[:]` |
 
+The script [`tools/migration/migrate.jl`](https://github.com/jfeist/QuantumAlgebra.jl/tree/main/tools/migration)
+in the QuantumAlgebra repository converts Julia files and Jupyter notebooks
+automatically (it reports the code that it cannot convert, e.g., operators that
+are used with different numbers of indices, and leaves it unchanged):
+```sh
+julia --project=tools/migration -e 'using Pkg; Pkg.instantiate()'
+julia --project=tools/migration tools/migration/migrate.jl file.jl notebook.ipynb
+```
+
 In addition, QuantumAlgebra currently prints operators with parentheses (e.g.,
 `b†(i2)` and `b()`). With `QuantumAlgebra.use_bracket_display(true)`, they are
 printed in the syntax of the new interface (e.g., `b†[i,2]` and `b`), which will
