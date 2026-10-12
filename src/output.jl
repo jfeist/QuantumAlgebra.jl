@@ -10,7 +10,7 @@ subscript(i::Integer) = (i<0 ? "₋" : "") * join('₀'+d for d in reverse(digit
 superscript(i::Integer) = (i<0 ? "⁻" : "") * join(_SUPERSCRIPTNUMS[d+1] for d in reverse(digits(abs(i))))
 
 # print the elements of v separated by spaces, with repeated elements printed as powers
-function printspaced(io::IO,v,trailing_space=false)
+function printspaced(io::IO,v)
     isempty(v) && return
     prev = first(v)
     exponent = 0
@@ -29,7 +29,6 @@ function printspaced(io::IO,v,trailing_space=false)
         end
     end
     exponent>1 && print(io,superscript(exponent))
-    trailing_space && print(io," ")
 end
 
 Base.print(io::IO,A::OpProduct) = printspaced(io,_display_items(A))
@@ -96,18 +95,21 @@ Base.print(io::IO,A::ExpVal) = print(io,"⟨", ops(A), "⟩")
 Base.print(io::IO,A::Corr) = print(io,"⟨", ops(A), "⟩c")
 
 function Base.print(io::IO,A::QuTerm)
+    # the parts of the term, separated by spaces
+    sep = false
     if nsuminds(A) > 0
         print(io,"∑")
         for ii=1:nsuminds(A)
             print(io,subscript(ii))
         end
-        print(io," ")
+        sep = true
     end
-    isempty(deltas(A)) || printspaced(io,deltas(A),true)
-    isempty(params(A)) || printspaced(io,params(A),true)
-    isempty(expvals(A)) || printspaced(io,expvals(A),true)
-    isempty(corrs(A)) || printspaced(io,corrs(A),true)
-    isempty(bares(A)) || print(io,bares(A))
+    for part in (deltas(A), params(A), expvals(A), corrs(A), bares(A))
+        isempty(part) && continue
+        sep && print(io," ")
+        part isa OpProduct ? print(io,part) : printspaced(io,part)
+        sep = true
+    end
 end
 
 function print_as_connector(io,str::String,print_connector::Bool)

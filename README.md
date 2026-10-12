@@ -247,7 +247,7 @@ not been used yet; the default operators can be disabled with the preference
   a[:]
 
   julia> normal_form(a[:i]*a'[:j])
-  δ(ij)  + a†(j) a(i)
+  δ(ij) + a†(j) a(i)
   ```
 
 - `expval(A::QuExpr)` to represent an expectation value.
@@ -264,7 +264,7 @@ not been used yet; the default operators can be disabled with the preference
   julia> @boson a[:];
 
   julia> expval_as_corrs(a'[:j]*a[:i])
-  ⟨a†(j)⟩c ⟨a(i)⟩c  + ⟨a†(j) a(i)⟩c
+  ⟨a†(j)⟩c ⟨a(i)⟩c + ⟨a†(j) a(i)⟩c
   ```
 
 - `comm(A::QuExpr,B::QuExpr)` to calculate the commutator $[A,B] = AB - BA$
@@ -428,9 +428,9 @@ not been used yet; the default operators can be disabled with the preference
   julia> Ls = ((γ,a),);
 
   julia> heisenberg_eom_system(H,2,Ls,a)
-  dₜ⟨a()⟩ = -1//2 γ ⟨a()⟩  - 1i ω ⟨a()⟩  - 2i χ ⟨a†() a()⟩  - 1i χ ⟨a()²⟩ 
-  dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩ 
-  dₜ⟨a()²⟩ = -2i χ ⟨a()⟩  - γ ⟨a()²⟩  - 2i ω ⟨a()²⟩  
+  dₜ⟨a()⟩ = -1//2 γ ⟨a()⟩ - 1i ω ⟨a()⟩ - 2i χ ⟨a†() a()⟩ - 1i χ ⟨a()²⟩
+  dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩
+  dₜ⟨a()²⟩ = -2i χ ⟨a()⟩ - γ ⟨a()²⟩ - 2i ω ⟨a()²⟩  
   ```
   The `heisenberg_eom_system` function can also be passed either `ExpVal` or
   `Corr` as a first argument, which will give the equations of motion of the
@@ -444,7 +444,7 @@ not been used yet; the default operators can be disabled with the preference
   julia> Ls = ((γ,a),);
 
   julia> heisenberg_eom_system(Corr,H,1,Ls,a)
-  dₜ⟨a()⟩c = -1//2 γ ⟨a()⟩c  - 1i ω ⟨a()⟩c  - 2i χ ⟨a†()⟩c ⟨a()⟩c  - 1i χ ⟨a()⟩c² 
+  dₜ⟨a()⟩c = -1//2 γ ⟨a()⟩c - 1i ω ⟨a()⟩c - 2i χ ⟨a†()⟩c ⟨a()⟩c - 1i χ ⟨a()⟩c² 
   ```
 
 - `julia_expression(A)` to obtain a julia expression that can be used to
