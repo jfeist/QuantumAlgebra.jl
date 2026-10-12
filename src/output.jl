@@ -34,7 +34,7 @@ end
 
 Base.print(io::IO,A::OpProduct) = printspaced(io,_display_items(A))
 
-# For display, products |i⟩⟨1| |1⟩⟨j| of operators on the same qudit (see `qudit_ops`) are shown as |i⟩⟨j|
+# For display, products |i⟩⟨1| |1⟩⟨j| of operators on the same qudit (see `qudit`) are shown as |i⟩⟨j|
 struct _QuditTransition
     create::BaseOperator
     destroy::BaseOperator

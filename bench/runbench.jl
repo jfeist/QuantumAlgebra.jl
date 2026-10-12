@@ -128,8 +128,10 @@ function make_cases()
         (name = "large_polynomial_power_7", f = normal_form, args = (Anf_poly_base^7,)),
         (name = "large_eqsys_expval_sum_ord4", f = heisenberg_eom_system, args = (ExpVal, Hsum, 4, Lsum)),
     ]
-    if isdefined(QuantumAlgebra, :qudit_ops)
-        q = qudit_ops(:q, 3)
+    if isdefined(QuantumAlgebra, :qudit_ops) || isdefined(QuantumAlgebra, :qudit)
+        # (qudit_ops only existed before v1.7 was released)
+        q = isdefined(QuantumAlgebra, :qudit) ? (q3 = QuantumAlgebra.qudit(:q, 3; ndims=1); (i, j, k) -> q3(i, j)[k]) :
+                                                QuantumAlgebra.qudit_ops(:q, 3)
         # atoms with Λ-type level schemes in a cavity (cavity couples 1↔3, laser couples 2↔3)
         Hq = Pr"ωc" * a()' * a() + ∑(:i, Pr"Δ" * q(3, 3, :i) + Pr"δ" * q(2, 2, :i) +
                                        Pr"g" * (a()' * q(1, 3, :i) + q(3, 1, :i) * a()) + Pr"Ω" * (q(3, 2, :i) + q(2, 3, :i)))

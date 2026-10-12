@@ -4,12 +4,12 @@ using OrderedCollections
 export QuExpr
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops, @anticommuting_fermion_group
-export tlspm_ops, tlsxyz_ops, qudit_ops, gellmann_ops, spin_ops, so_ops
+export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
-export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @param
-export qindex, boson, fermion, anticommuting_fermions, tls, tlsxyz
+export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @qudit, @spin, @so, @param
+export qindex, boson, fermion, anticommuting_fermions, tls, tlsxyz, qudit, gellmann, spin, so
 export map_scalar_function
 
 # compile-time options
@@ -578,39 +578,12 @@ function tlsxyz_ops(name::Symbol)
     tlsx, tlsy, tlsz
 end
 
-"""
-    QuditOps
-
-Constructor for the transition operators of a qudit (see [`qudit_ops`](@ref)).
-"""
+# constructor for the transition operators of a qudit, q(i, j, inds...) = |i⟩⟨j| (see `qudit`)
 struct QuditOps
     name::QuOpName
     d::Int
 end
-
-"""
-    qudit_ops(name::Symbol, d::Integer)
-
-Return a constructor `q` for the operators of a `d`-level system (qudit) with the given `name`.
-`q(i, j, inds...)` gives the transition operator ``|i⟩⟨j|`` (with levels `1 ≤ i,j ≤ d`)
-acting on the qudit with indices `inds`. Level 1 is the ground state, i.e., the vacuum.
-
-Internally, all operators are expressed through the "creation" operators ``|i⟩⟨1|`` and
-"annihilation" operators ``|1⟩⟨i|`` (with ``i ≥ 2``), using ``|i⟩⟨j| = |i⟩⟨1|1⟩⟨j|`` and
-``|1⟩⟨1| = 1 - \\sum_{k≥2} |k⟩⟨1|1⟩⟨k|``, which gives a unique normal form. For `d=2`, `q(2,1)`
-and `q(1,2)` are equivalent to ``σ^{+}`` and ``σ^{-}``. When printing, products ``|i⟩⟨1|1⟩⟨j|``
-acting on the same qudit are shown as ``|i⟩⟨j|`` (written `qⁱʲ`).
-
-# Examples
-```julia
-q = qudit_ops(:q, 3)
-q(2,1,:i)                  # |2⟩⟨1| acting on qudit i
-q(2,3,:i)                  # |2⟩⟨3| = |2⟩⟨1|1⟩⟨3|
-normal_form(q(1,2)*q(2,3)) # |1⟩⟨3|
-q(1,1)                     # 1 - |2⟩⟨2| - |3⟩⟨3|
-```
-"""
-function qudit_ops(name::Symbol, d::Integer)
+function _qudit_ops(name::Symbol, d::Integer)
     2 ≤ d ≤ 255 || throw(ArgumentError("the number of levels of a qudit has to be between 2 and 255, got $d"))
     QuditOps(QuOpName(name), d)
 end
@@ -627,34 +600,9 @@ function (q::QuditOps)(i::Integer, j::Integer, inds...)
         QuExpr(((ij(i,j),1),))
     end
 end
-Base.print(io::IO, q::QuditOps) = print(io, q.name, " (constructor for ", q.d, "-level qudit)")
-Base.show(io::IO, q::QuditOps) = print(io, q)
 
-"""
-    gellmann_ops(q::QuditOps; sqrt=Base.sqrt)
-
-Return constructors for the `d²-1` generalized Gell-Mann matrices ``λ_1, …, λ_{d²-1}`` of the
-`d`-level qudit `q` (see [`qudit_ops`](@ref)), with the standard normalization
-``\\mathrm{Tr}(λ_a λ_b) = 2δ_{ab}``. For `k = 2, …, d`, these are (in this order) the pairs
-``|j⟩⟨k| + |k⟩⟨j|`` and ``-i|j⟩⟨k| + i|k⟩⟨j|`` for ``j = 1, …, k-1``, followed by the diagonal matrix
-``\\sqrt{2/(l(l+1))} (\\sum_{m≤l} |m⟩⟨m| - l |l+1⟩⟨l+1|)`` with ``l = k-1``. For `d = 3`, these are
-the Gell-Mann matrices ``λ_1, …, λ_8`` in their usual order. Note that since level 1 is the ground
-state, for `d = 2` they correspond to ``(σ^x, -σ^y, -σ^z)``.
-
-The normalization factors ``\\sqrt{2/(l(l+1))}`` of the diagonal matrices are computed by calling
-`sqrt` with the rational number `2//(l*(l+1))` (unless the result is rational, e.g., for `l = 1`).
-By default, this gives `Float64` numbers. To keep them exact, pass a function that computes the
-square root symbolically, e.g., `sqrt = x -> sqrt(SymPyPythonCall.Sym(x))`.
-
-# Examples
-```julia
-q = qudit_ops(:q, 3)
-λ = gellmann_ops(q)
-normal_form(comm(λ[1](:i), λ[2](:i)))  # 2i λ₃(i)
-λ[8](:i)                               # 0.57735 - 1.73205 q³³(i)
-```
-"""
-function gellmann_ops(q::QuditOps; sqrt=Base.sqrt)
+# constructors for the generalized Gell-Mann matrices of a qudit (see `gellmann`)
+function _gellmann_ops(q::QuditOps, sqrt)
     cstrs = QuExprConstructor[]
     λname() = "λ$(subscript(length(cstrs)+1))"
     for k = 2:q.d
@@ -715,18 +663,8 @@ macro tlsxyz_ops(name)
     :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
 end
 
-"""
-    spin_ops(name::Symbol, j=nothing)
-
-Return constructors `(Jp, Jm, Jz)` for the operators ``J_+``, ``J_-`` and ``J_z`` of a spin, i.e.,
-of the Lie algebra su(2) ≅ so(3), with ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. If `j` is not
-given, only these commutation relations are used, which hold in any representation (e.g., for
-collective spins). If the spin `j` is given (any number, e.g., `1//2`, `3`, or a symbolic variable),
-products ``J_+ J_-`` acting on the same spin are replaced by ``j(j+1) - J_z^2 + J_z``, and the vacuum
-is the lowest-weight state with ``J_-|0⟩ = 0`` and ``J_z|0⟩ = -j|0⟩``. Note that other relations that
-hold for a specific `j` (e.g., ``J_+^2 = 0`` for `j = 1//2`) are not used.
-"""
-function spin_ops(name::Symbol, j=nothing)
+# constructors (J₊, J₋, J_z) for the operators of a spin (see `spin`)
+function _spin_ops(name::Symbol, j=nothing)
     op_name = QuOpName(name)
     extra = _spin_extra(j)
     cstr(t) = (args...) -> QuExpr(BaseOperator(t, op_name, make_indices(args...), extra))
@@ -734,37 +672,12 @@ function spin_ops(name::Symbol, j=nothing)
     (Jp, Jp', QuExprConstructor(string(name,"ᶻ"), cstr(SpinZ_)))
 end
 
-"""
-    SOOps
-
-Constructor for the generators of so(n) (see [`so_ops`](@ref)).
-"""
+# constructor for the generators of so(n), L(a, b, inds...) = L_ab (see `so`)
 struct SOOps
     name::QuOpName
     n::Int
 end
-
-"""
-    so_ops(name::Symbol, n::Integer)
-
-Return a constructor `L` for the generators ``L_{ab} = -L_{ba}`` (``a,b = 1,…,n``) of the Lie algebra
-so(n) of rotations in `n` dimensions, called as `L(a, b, inds...)`. The generators are Hermitian, with
-```math
-[L_{ab}, L_{cd}] = i (δ_{ac} L_{bd} - δ_{ad} L_{bc} - δ_{bc} L_{ad} + δ_{bd} L_{ac}),
-```
-as, e.g., for the angular momenta ``L_{ab} = x_a p_b - x_b p_a`` of a particle in `n` dimensions (for
-`n = 3`, ``(L_x, L_y, L_z) = (L_{23}, L_{31}, L_{12})``). Only these commutation relations are used,
-so that results hold in any representation. Operators are stored and printed as ``L_{ab}`` with
-``a < b``.
-
-# Examples
-```julia
-L = so_ops(:L, 4)
-L(2,1,:i)                          # -L¹²(i)
-normal_form(comm(L(1,2), L(2,3)))  # -i L¹³()
-```
-"""
-function so_ops(name::Symbol, n::Integer)
+function _so_ops(name::Symbol, n::Integer)
     2 ≤ n ≤ 255 || throw(ArgumentError("so(n) is only supported for 2 ≤ n ≤ 255, got n = $n"))
     SOOps(QuOpName(name), n)
 end
@@ -775,8 +688,6 @@ function (L::SOOps)(a::Integer, b::Integer, inds...)
     A = QuExpr(so_op(L.name, L.n, min(a,b), max(a,b), make_indices(inds...)))
     a < b ? A : -A
 end
-Base.print(io::IO, L::SOOps) = print(io, L.name, " (constructor for so(", L.n, ") generators)")
-Base.show(io::IO, L::SOOps) = print(io, L)
 
 struct QuExprCstrctArrAlias{T}
     constructor::T
@@ -953,6 +864,173 @@ macro anticommuting_fermions(exprs...)
     all(==(ndims), last.(namesndims)) || throw(ArgumentError("all fermionic species in a group must have the same number of indices, got $(join(exprs,", "))."))
     :( ($(esc.(names)...),) = anticommuting_fermions($(QuoteNode.(names)...); ndims=$ndims) )
 end
+
+"""
+    QuditVariable
+
+A qudit created by [`qudit`](@ref) or [`@qudit`](@ref): `q(i,j)` is the transition operator ``|i⟩⟨j|``
+(for a qudit with indices, an object that is indexed with the indices, `q(i,j)[k]`).
+"""
+struct QuditVariable
+    ops::QuditOps
+    ndims::Int
+end
+"""
+    SOVariable
+
+The generators of so(n) created by [`so`](@ref) or [`@so`](@ref): `L(a,b)` is the generator ``L_{ab}``
+(for generators with indices, an object that is indexed with the indices, `L(a,b)[k]`).
+"""
+struct SOVariable
+    ops::SOOps
+    ndims::Int
+end
+const _PairVariable = Union{QuditVariable,SOVariable}
+function (v::_PairVariable)(a::Integer, b::Integer)
+    iszero(v.ndims) && return v.ops(a,b)
+    name = "$(v.ops.name)($a,$b)"
+    f = (inds...) -> v.ops(a,b,inds...)
+    QuExprCstrctArrAlias(QuExprConstructor(name, f, name*"†", (inds...) -> f(inds...)'), v.ndims)
+end
+_dimsstring(v::_PairVariable) = iszero(v.ndims) ? "" : "[$(join(fill(":",v.ndims),","))]"
+Base.print(io::IO, q::QuditVariable) = print(io, q.ops.name, _dimsstring(q), " (", q.ops.d, "-level qudit)")
+Base.print(io::IO, L::SOVariable) = print(io, L.ops.name, _dimsstring(L), " (so(", L.ops.n, ") generators)")
+Base.show(io::IO, v::_PairVariable) = print(io, v)
+_checkndims(ndims) = ndims ≥ 0 ? Int(ndims) : throw(ArgumentError("the number of indices cannot be negative, got ndims = $ndims"))
+
+"""
+    qudit(name::Symbol, d::Integer; ndims=0)
+
+Return the qudit (`d`-level system) `name` (the function version of [`@qudit`](@ref)), such that
+`q(i,j)` is the transition operator ``|i⟩⟨j|`` (with levels `1 ≤ i,j ≤ d`). With `ndims > 0`, the
+qudit has `ndims` indices, given as `q(i,j)[k,…]`. Level 1 is the ground state, i.e., the vacuum.
+
+Internally, all operators are expressed through the "creation" operators ``|i⟩⟨1|`` and
+"annihilation" operators ``|1⟩⟨i|`` (with ``i ≥ 2``), using ``|i⟩⟨j| = |i⟩⟨1|1⟩⟨j|`` and
+``|1⟩⟨1| = 1 - \\sum_{k≥2} |k⟩⟨1|1⟩⟨k|``, which gives a unique normal form. For `d=2`, `q(2,1)`
+and `q(1,2)` are equivalent to ``σ^{+}`` and ``σ^{-}``. When printing, products ``|i⟩⟨1|1⟩⟨j|``
+acting on the same qudit are shown as ``|i⟩⟨j|`` (written `qⁱʲ`).
+
+# Examples
+```julia
+q = qudit(:q, 3)
+normal_form(q(1,2)*q(2,3)) # |1⟩⟨3|
+q(1,1)                     # 1 - |2⟩⟨2| - |3⟩⟨3|
+r = qudit(:r, 3; ndims=1)
+r(2,3)[:i]                 # |2⟩⟨3| = |2⟩⟨1|1⟩⟨3| acting on qudit i
+```
+"""
+qudit(name::Symbol, d::Integer; ndims::Integer=0) = QuditVariable(_qudit_ops(name, d), _checkndims(ndims))
+
+"""
+    gellmann(q::QuditVariable; sqrt=Base.sqrt)
+
+Return the `d²-1` generalized Gell-Mann matrices ``λ_1, …, λ_{d²-1}`` of the `d`-level qudit `q` (see
+[`qudit`](@ref)), with the standard normalization ``\\mathrm{Tr}(λ_a λ_b) = 2δ_{ab}`` (for a qudit
+with indices, as objects that are indexed with the indices, `λ[1][k]`). For `k = 2, …, d`, these
+are (in this order) the pairs ``|j⟩⟨k| + |k⟩⟨j|`` and ``-i|j⟩⟨k| + i|k⟩⟨j|`` for ``j = 1, …, k-1``,
+followed by the diagonal matrix ``\\sqrt{2/(l(l+1))} (\\sum_{m≤l} |m⟩⟨m| - l |l+1⟩⟨l+1|)`` with
+``l = k-1``. For `d = 3`, these are the Gell-Mann matrices ``λ_1, …, λ_8`` in their usual order.
+Note that since level 1 is the ground state, for `d = 2` they correspond to ``(σ^x, -σ^y, -σ^z)``.
+
+The normalization factors ``\\sqrt{2/(l(l+1))}`` of the diagonal matrices are computed by calling
+`sqrt` with the rational number `2//(l*(l+1))` (unless the result is rational, e.g., for `l = 1`).
+By default, this gives `Float64` numbers. To keep them exact, pass a function that computes the
+square root symbolically, e.g., `sqrt = x -> sqrt(SymPyPythonCall.Sym(x))`.
+
+# Examples
+```julia
+q = qudit(:q, 3)
+λ = gellmann(q)
+normal_form(comm(λ[1], λ[2]))  # 2i λ₃
+λ[8]                           # 0.57735 - 1.73205 q³³()
+```
+"""
+function gellmann(q::QuditVariable; sqrt=Base.sqrt)
+    cstrs = _gellmann_ops(q.ops, sqrt)
+    iszero(q.ndims) ? [c() for c in cstrs] : [QuExprCstrctArrAlias(c, q.ndims) for c in cstrs]
+end
+
+"""
+    spin(name::Symbol, j=nothing; ndims=0)
+
+Return the operators `(Jp, Jm, Jz)`, i.e., ``J_+``, ``J_-`` and ``J_z``, of the spin `name` (the function
+version of [`@spin`](@ref)), see [`boson`](@ref) for `ndims`. They generate the Lie algebra
+su(2) ≅ so(3), with ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. If `j` is not given, only these
+commutation relations are used, which hold in any representation (e.g., for collective spins). If
+the spin `j` is given (any number, e.g., `1//2`, `3`, or a symbolic variable), products ``J_+ J_-``
+acting on the same spin are replaced by ``j(j+1) - J_z^2 + J_z``, and the vacuum is the
+lowest-weight state with ``J_-|0⟩ = 0`` and ``J_z|0⟩ = -j|0⟩``. Note that other relations that hold
+for a specific `j` (e.g., ``J_+^2 = 0`` for `j = 1//2`) are not used.
+"""
+spin(name::Symbol, j=nothing; ndims::Integer=0) = map(c -> _opvariable(c, ndims), _spin_ops(name, j))
+
+"""
+    so(name::Symbol, n::Integer; ndims=0)
+
+Return the generators `L` of the Lie algebra so(n) of rotations in `n` dimensions (the function
+version of [`@so`](@ref)), such that `L(a,b)` is the generator ``L_{ab} = -L_{ba}`` (``a,b = 1,…,n``).
+With `ndims > 0`, the generators have `ndims` indices, given as `L(a,b)[k,…]`. The generators are
+Hermitian, with
+```math
+[L_{ab}, L_{cd}] = i (δ_{ac} L_{bd} - δ_{ad} L_{bc} - δ_{bc} L_{ad} + δ_{bd} L_{ac}),
+```
+as, e.g., for the angular momenta ``L_{ab} = x_a p_b - x_b p_a`` of a particle in `n` dimensions (for
+`n = 3`, ``(L_x, L_y, L_z) = (L_{23}, L_{31}, L_{12})``). Only these commutation relations are used,
+so that results hold in any representation. Operators are stored and printed as ``L_{ab}`` with
+``a < b``.
+
+# Examples
+```julia
+L = so(:L, 4)
+L(2,1)                             # -L¹²()
+normal_form(comm(L(1,2), L(2,3)))  # -i L¹³()
+```
+"""
+so(name::Symbol, n::Integer; ndims::Integer=0) = SOVariable(_so_ops(name, n), _checkndims(ndims))
+
+"""
+    @qudit d q
+    @qudit d q[:,:]
+
+Define the variable `q` for a qudit with `d` levels (see [`qudit`](@ref)), such that `q(i,j)`
+is the transition operator ``|i⟩⟨j|``. With `q[:,:]` (with any number of `:`), the qudit has indices,
+which are given as `q(i,j)[k,l]`.
+
+# Examples
+```julia
+@qudit 3 q
+q(2,1) * q(1,3)        # |2⟩⟨3|
+@qudit 3 m[:]
+∑(:k, m(2,1)[:k] * m(1,2)[:k])
+```
+"""
+macro qudit(d, expr) _opvariable_macro(qudit, expr, d) end
+
+"""
+    @spin J
+    @spin j J
+    @spin j J[:,:]
+
+Define the variables `Jp`, `Jm` and `Jz` for the operators ``J_+``, ``J_-`` and ``J_z`` of a spin
+`J` (see [`spin`](@ref)), optionally with fixed spin `j`. With `J[:,:]` (with any number of `:`),
+the spin has indices, given as, e.g., `Jp[i,j]`.
+"""
+macro spin(args...)
+    length(args) ∈ (1,2) || throw(ArgumentError("usage: @spin J or @spin j J"))
+    length(args) == 1 ? _opvariable_macro(spin, args[1]; postfixes=(:p,:m,:z)) :
+                        _opvariable_macro(spin, args[2], args[1]; postfixes=(:p,:m,:z))
+end
+
+"""
+    @so n L
+    @so n L[:,:]
+
+Define the variable `L` for the generators of so(n) (see [`so`](@ref)), such that `L(a,b)` is the
+generator ``L_{ab}``. With `L[:,:]` (with any number of `:`), the generators have indices, which are
+given as `L(a,b)[k,l]`.
+"""
+macro so(n, expr) _opvariable_macro(so, expr, n) end
 
 macro param(name)
     partype = :Real

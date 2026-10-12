@@ -13,7 +13,7 @@
     js = [k//7 for k = 1:100]
     Jzs = Vector{QuExpr}(undef, length(js))
     Threads.@threads for k in eachindex(js)
-        Jzs[k] = spin_ops(:S, js[k])[3](k)
+        Jzs[k] = spin(:S, js[k]; ndims=1)[3][k]
     end
     @test all(QA.spin_j(only(QA.bares(only(keys(Jzs[k].terms))))) == js[k] for k in eachindex(js))
 
@@ -23,10 +23,10 @@
     @boson_ops a
     @fermion_ops f
     @tlspm_ops σ
-    q = qudit_ops(:q, 3)
-    Jp, Jm, Jz = spin_ops(:J)
+    @qudit 3 q[:]
+    @spin J[:]
     Random.seed!(99)
-    pool(s) = QuExpr[a(s), a'(s), f(s)*f'(s), σp(s), σm(s), q(2,3,s), Jp(s), Jz(s), Pr"g"*a(s)]
+    pool(s) = QuExpr[a(s), a'(s), f(s)*f'(s), σp(s), σm(s), q(2,3)[s], Jp[s], Jz[s], Pr"g"*a(s)]
     randexpr(sites) = sum(prod((rand(pool(rand(sites))) for _ in 1:rand(1:3)); init=QuExpr(1)) for _ in 1:rand(1:3))
     exprs = [(randexpr((:i,:j,1)), randexpr((:i,:j,1))) for _ = 1:200]
     H = ∑(:k, Pr"ω_k"*a'(:k)*a(:k)) + ∑(:k, Pr"g_k"*(a'(:k)*σm(:k) + σp(:k)*a(:k)))

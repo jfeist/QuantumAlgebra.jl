@@ -113,59 +113,64 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   0
   ```
 
-- `qudit_ops(name, d)` returns a constructor for the operators of a `d`-level
-  system (qudit), where `q(i,j,inds...)` is the transition operator ``|i⟩⟨j|``
-  and level 1 is the ground state (the vacuum). Internally, all operators are
-  expressed through ``|i⟩⟨1|`` and ``|1⟩⟨i|`` (with ``i ≥ 2``), which for `d = 2`
-  are equivalent to ``σ^{+}`` and ``σ^{-}``. `gellmann_ops(q)` returns
-  constructors for the generalized Gell-Mann matrices of the qudit, normalized
-  as ``\mathrm{Tr}(λ_a λ_b) = 2δ_{ab}`` (where the normalization of the diagonal
+- `@qudit d q` (or `q = qudit(:q, d)`) defines the operators of a `d`-level
+  system (qudit), where `q(i,j)` is the transition operator ``|i⟩⟨j|``
+  and level 1 is the ground state (the vacuum). With `@qudit d q[:]` (with any
+  number of `:`), the qudit has indices, given as `q(i,j)[k]`. Internally, all
+  operators are expressed through ``|i⟩⟨1|`` and ``|1⟩⟨i|`` (with ``i ≥ 2``), which
+  for `d = 2` are equivalent to ``σ^{+}`` and ``σ^{-}``. `gellmann(q)` returns
+  the generalized Gell-Mann matrices of the qudit, normalized as
+  ``\mathrm{Tr}(λ_a λ_b) = 2δ_{ab}`` (where the normalization of the diagonal
   matrices uses `Float64` square roots by default, see the docstring for how to keep
   them exact).
   ```jldoctest
-  julia> q = qudit_ops(:q, 3)
-  q (constructor for 3-level qudit)
+  julia> @qudit 3 q[:]
+  q[:] (3-level qudit)
 
-  julia> q(2,3,:i)
+  julia> q(2,3)[:i]
   q²³(i)
 
-  julia> normal_form(q(1,2,:i)*q(2,3,:i))
+  julia> normal_form(q(1,2)[:i]*q(2,3)[:i])
   q¹³(i)
 
-  julia> q(1,1)
-  1 - q²²() - q³³()
+  julia> @qudit 3 r;
+
+  julia> r(1,1)
+  1 - r²²() - r³³()
   ```
 
-- `spin_ops(name, j=nothing)` returns constructors for the operators ``J_+``,
-  ``J_-``, ``J_z`` of a spin (the Lie algebra su(2) ≅ so(3)), with commutation
-  relations ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. Without `j`, only these
-  are used, so that results hold in any representation (e.g., for collective
-  spins). With fixed spin `j` (which can also be symbolic), products
-  ``J_+ J_-`` on the same site are replaced using the Casimir operator,
-  ``J_+ J_- = j(j+1) - J_z^2 + J_z``, and the vacuum is the lowest-weight state.
+- `@spin J` (or `Jp, Jm, Jz = spin(:J)`) defines the operators `Jp`, `Jm`, `Jz`,
+  i.e., ``J_+``, ``J_-``, ``J_z``, of a spin (the Lie algebra su(2) ≅ so(3)), with
+  commutation relations ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. Without
+  fixed spin `j`, only these are used, so that results hold in any representation
+  (e.g., for collective spins). With fixed spin `j` (`@spin j J`, where `j` can
+  also be symbolic), products ``J_+ J_-`` on the same site are replaced using the
+  Casimir operator, ``J_+ J_- = j(j+1) - J_z^2 + J_z``, and the vacuum is the
+  lowest-weight state.
   ```jldoctest
-  julia> Jp, Jm, Jz = spin_ops(:J);
+  julia> @spin J;
 
-  julia> normal_form(comm(Jp(), Jm()))
+  julia> normal_form(comm(Jp, Jm))
   2 Jᶻ()
 
-  julia> Sp, Sm, Sz = spin_ops(:S, 1//2);
+  julia> @spin 1//2 S;
 
-  julia> normal_form(Sp()*Sm())
+  julia> normal_form(Sp*Sm)
   3//4 + Sᶻ() - Sᶻ()²
   ```
 
-- `so_ops(name, n)` returns a constructor for the generators ``L_{ab} = -L_{ba}``
-  of the Lie algebra so(n) of rotations in ``n`` dimensions, called as
-  `L(a,b,inds...)`. The generators are Hermitian, with commutation relations
+- `@so n L` (or `L = so(:L, n)`) defines the generators ``L_{ab} = -L_{ba}``
+  of the Lie algebra so(n) of rotations in ``n`` dimensions, given as `L(a,b)`
+  (or `L(a,b)[k]` with `@so n L[:]`). The generators are Hermitian, with
+  commutation relations
   ``[L_{ab}, L_{cd}] = i(δ_{ac} L_{bd} - δ_{ad} L_{bc} - δ_{bc} L_{ad} + δ_{bd} L_{ac})``
   (e.g., ``L_{ab} = x_a p_b - x_b p_a``). As for spins without fixed `j`, only
   these relations are used, so that results hold in any representation.
   ```jldoctest
-  julia> L = so_ops(:L, 4);
+  julia> @so 4 L;
 
-  julia> L(2,1,:i)
-  -L¹²(i)
+  julia> L(2,1)
+  -L¹²()
 
   julia> normal_form(comm(L(1,2), L(2,3)))
   -1i L¹³()

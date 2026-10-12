@@ -102,8 +102,8 @@ end
 @testset "matrix representation" begin
     Random.seed!(1234)
     QA.use_σpm(true)
-    q = qudit_ops(:q, 3)
-    p = qudit_ops(:p, 2)
+    q = qudit(:q, 3; ndims=1)
+    p = qudit(:p, 2; ndims=1)
     @tlspm_ops σ
     @fermion_ops f
     # τ, ρ: Pauli matrices (note that tlsxyz_ops depends on use_σpm, so create them directly)
@@ -115,8 +115,8 @@ end
     function oppool(sites, pauli)
         ops = QuExpr[]
         for s in sites
-            append!(ops, [q(i,j,s) for i=1:3, j=1:3])
-            append!(ops, [p(i,j,s) for i=1:2, j=1:2])
+            append!(ops, [q(i,j)[s] for i=1:3, j=1:3])
+            append!(ops, [p(i,j)[s] for i=1:2, j=1:2])
             append!(ops, [σp(s), σm(s)])
             pauli && append!(ops, [τx(s), τy(s), τz(s), ρx(s), ρz(s)])
             append!(ops, [f(s), f'(s)])
@@ -157,8 +157,8 @@ end
 
     # sums (expanded explicitly with indices taking values 1 and 2), including the canonical numbering of sum indices
     @testset "sums" begin
-        r = qudit_ops(:r, 3)
-        sumpool(s) = QuExpr[f(s), f'(s), σp(s), σm(s), r(2,1,s), r(1,3,s), r(3,2,s), param(:g,'r',s)*f(s)]
+        r = qudit(:r, 3; ndims=1)
+        sumpool(s) = QuExpr[f(s), f'(s), σp(s), σm(s), r(2,1)[s], r(1,3)[s], r(3,2)[s], param(:g,'r',s)*f(s)]
         for _ = 1:150
             P1 = prod(rand(sumpool(:k), rand(1:2)))
             P2 = prod(rand([sumpool(:l); sumpool(1)], rand(1:3)))
@@ -175,15 +175,15 @@ end
         end
         # terms that only differ in the numbering of sum indices are combined
         @test iszero(normal_form(∑(:i,∑(:j,f(:i)*f(:j)))))
-        @test iszero(normal_form(∑((:i,:j),Pr"g_i"*r(2,1,:i)*r(3,1,:j)) - ∑((:j,:i),Pr"g_i"*r(3,1,:j)*r(2,1,:i))))
+        @test iszero(normal_form(∑((:i,:j),Pr"g_i"*r(2,1)[:i]*r(3,1)[:j]) - ∑((:j,:i),Pr"g_i"*r(3,1)[:j]*r(2,1)[:i])))
     end
 
     @testset "spins (abstract: j=$jabs)" for jabs in (1, 3//2)
         _ABSTRACT_SPIN_J[] = jabs
-        Jp, Jm, Jz = spin_ops(:J)
-        Kp, Km, Kz = spin_ops(:K, 1//2)
-        Lp, Lm, Lz = spin_ops(:L, 3//2)
-        spinpool(s) = QuExpr[Jp(s), Jm(s), Jz(s), Kp(s), Km(s), Kz(s), Lp(s), Lm(s), Lz(s), f(s)]
+        @spin J[:]
+        @spin 1//2 K[:]
+        @spin 3//2 L[:]
+        spinpool(s) = QuExpr[Jp[s], Jm[s], Jz[s], Kp[s], Km[s], Kz[s], Lp[s], Lm[s], Lz[s], f(s)]
         for _ = 1:200
             X = prod(rand(spinpool(1), rand(1:5)))
             @test samematrix(normal_form(X), X)
@@ -203,9 +203,9 @@ end
 
     # so(n) only uses the commutation relations, so it can be checked in any representation
     @testset "so(n) (in the defining representation)" begin
-        L = so_ops(:L, 3)
-        M = so_ops(:M, 4)
-        sopool(s) = QuExpr[[L(a,b,s) for a=1:3 for b=a+1:3]; [M(a,b,s) for a=1:4 for b=a+1:4]; f(s)]
+        @so 3 L[:]
+        @so 4 M[:]
+        sopool(s) = QuExpr[[L(a,b)[s] for a=1:3 for b=a+1:3]; [M(a,b)[s] for a=1:4 for b=a+1:4]; f(s)]
         for _ = 1:200
             X = prod(rand(sopool(1), rand(1:5)))
             @test samematrix(normal_form(X), X)
