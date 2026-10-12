@@ -12,7 +12,7 @@ export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @param
 export map_scalar_function
 
 # compile-time options
-const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", false)
+const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", true)
 
 """
     set_define_default_ops(t::Bool)
