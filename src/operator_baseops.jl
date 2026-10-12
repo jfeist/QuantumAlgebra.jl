@@ -27,10 +27,8 @@ Base.literal_pow(::typeof(^),A::Union{QuTerm,QuExpr},::Val{n}) where n = A^n
 function ≈(A::QuExpr,B::QuExpr)
     length(A.terms) != length(B.terms) && return false
     for (tA,sA) in A.terms
-        sB = get(B.terms,tA) do
-            return false
-        end
-        sA ≈ sB || return false
+        haskey(B.terms,tA) || return false
+        sA ≈ B.terms[tA] || return false
     end
     return true
 end
