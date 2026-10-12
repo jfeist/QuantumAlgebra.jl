@@ -41,7 +41,7 @@ struct _QuditTransition
 end
 Base.:(==)(A::_QuditTransition,B::_QuditTransition) = A.create == B.create && A.destroy == B.destroy
 _levels(T::_QuditTransition) = (qudit_levels(T.create)[2], qudit_levels(T.destroy)[3])
-Base.print(io::IO,T::_QuditTransition) = print(io,opname(T.create),_qudit_symbol(_levels(T)...,:text),"(",inds(T.create)...,")")
+Base.print(io::IO,T::_QuditTransition) = (print(io,opname(T.create),_qudit_symbol(_levels(T)...,:text)); _print_inds(io,inds(T.create),true))
 
 # the items to display for a product of operators: operators, and pairs of operators on the same qudit that
 # are merged into a transition operator (if the second one commutes with all operators between them)
@@ -76,9 +76,22 @@ function Base.print(io::IO,ii::QuIndex)
     end
 end
 
-Base.print(io::IO,A::BaseOperator) = (B = unalias(A); print(io,opname(B),opsymbol(B,:text),"(",inds(B)...,")"))
+# print the indices of an operator or parameter as, e.g., (ij₂k), or as [i,j₂,k] with use_bracket_display (where
+# operators without indices are printed without brackets). With parentheses, these are only printed
+# for no indices if `always` is true.
+function _print_inds(io::IO,inds,always::Bool)
+    if using_bracket_display()
+        isempty(inds) && return
+        print(io,"[")
+        join(io,inds,",")
+        print(io,"]")
+    elseif always || !isempty(inds)
+        print(io,"(",inds...,")")
+    end
+end
+Base.print(io::IO,A::BaseOperator) = (B = unalias(A); print(io,opname(B),opsymbol(B,:text)); _print_inds(io,inds(B),true))
 Base.print(io::IO,A::δ) = print(io,"δ(",A.iA,A.iB,")")
-Base.print(io::IO,A::Param) = print(io, opname(A), parstate(A)=='c' ? "*" : "", isempty(assignedinds(inds(A))) ? "" : "($(inds(A)...))")
+Base.print(io::IO,A::Param) = (print(io, opname(A), parstate(A)=='c' ? "*" : ""); _print_inds(io,assignedinds(inds(A)),false))
 Base.print(io::IO,A::ExpVal) = print(io,"⟨", ops(A), "⟩")
 Base.print(io::IO,A::Corr) = print(io,"⟨", ops(A), "⟩c")
 

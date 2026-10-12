@@ -32,6 +32,7 @@ function __init__()
     auto_normal_form(auto_normal)
 
     use_σpm(@load_preference("use_σpm", false))
+    use_bracket_display(@load_preference("bracket_display", false))
 end
 
 end # module

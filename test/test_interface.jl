@@ -49,4 +49,24 @@
     @test h == Pc"h" && h' == (Pc"h")'
     @param k[:,:]::Complex
     @test k'[1,:j] == (Pc"k_1,j")'
+
+    # printing in the syntax of the new interface (opt-in)
+    @test string(c[:i,2]) == "c(i2)"
+    QuantumAlgebra.use_bracket_display(true)
+    try
+        @test QuantumAlgebra.using_bracket_display()
+        @test string(c[:i,2]) == "c[i,2]"
+        @test string(c'[i,j[2]]) == "c†[i,j₂]"
+        @test string(b'*b) == "b† b"
+        @test string(normal_form(b*b')) == "1 + b† b"
+        @test string(b^2) == "b²"
+        @test rstrip(string(Pr"g_i,j_2")) == "g[i,j₂]"
+        @test rstrip(string(h')) == "h*"
+        @test rstrip(string(expval(c'[:i,:j]*c[:j,1]))) == "⟨c†[i,j] c[j,1]⟩"
+        @test string(qudit(:q, 3; ndims=1)(2,3)[:i]) == "q²³[i]"
+        @test string(qudit(:q, 3)(2,3)) == "q²³"
+        @test string(∑(:i, c'[:i,1]*c[:i,1])) == "∑₁ c†[#₁,1] c[#₁,1]"
+    finally
+        QuantumAlgebra.use_bracket_display(false)
+    end
 end

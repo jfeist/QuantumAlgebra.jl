@@ -493,6 +493,13 @@ permanently (this uses [Preferences.jl](https://github.com/JuliaPackaging/Prefer
     `QuantumAlgebra.use_σpm(true/false)`, and can be made permanent with
     `QuantumAlgebra.use_σpm(true/false; set_preference=true)` or with
     `Preferences.set_preferences!(QuantumAlgebra,"use_σpm"=>true/false)`.
+  - `"bracket_display"`: Choose whether operators and parameters are printed in
+    the syntax of the interface with operator variables, e.g., `a†[i,j]`, `g[i]`
+    and `a` (for `true`), or with parentheses, e.g., `a†(ij)`, `g(i)` and `a()`
+    (for `false`, the default). This can be changed in a single session by calling
+    `QuantumAlgebra.use_bracket_display(true/false)`, and can be made permanent
+    with `QuantumAlgebra.use_bracket_display(true/false; set_preference=true)`.
+    Printing with brackets will become the default in version 2.0.
   - `"quindices_type"`: Deprecated and ignored. Terms are now always stored in a
     compact form that supports an arbitrary number of indices per operator.
 

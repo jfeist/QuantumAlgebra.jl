@@ -90,6 +90,27 @@ Return whether automatic normal-ordering is currently enabled.
 """
 using_auto_normal_form() = _auto_normal_form[]
 
+const _bracket_display = Ref(false)
+"""
+    use_bracket_display(t::Bool=true; set_preference=false)
+
+Select whether operators and parameters are printed in the syntax of the interface with operator
+variables (see [`@boson`](@ref)), e.g., `a†[i,j]`, `g[i]` and `a` (for `true`), or with parentheses,
+e.g., `a†(ij)`, `g(i)` and `a()` (for `false`, the default in v1.x). If `set_preference` is `true`, the
+choice is stored with `Preferences.jl` for future sessions.
+"""
+function use_bracket_display(t::Bool=true; set_preference=false)
+    _bracket_display[] = t
+    set_preference && @set_preferences!("bracket_display" => t)
+    nothing
+end
+"""
+    using_bracket_display()
+
+Return whether operators are printed in the syntax with brackets (see [`use_bracket_display`](@ref)).
+"""
+using_bracket_display() = _bracket_display[]
+
 const IndexInt = Int32
 
 @concrete struct QuIndex
