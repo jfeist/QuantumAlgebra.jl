@@ -615,4 +615,5 @@ end
     include("test_matrix_representation.jl")
     include("test_qudits.jl")
     include("test_spins.jl")
+    include("test_so.jl")
 end

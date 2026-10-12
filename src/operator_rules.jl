@@ -1,6 +1,6 @@
 # Algebraic rules for the different kinds of operators.
 #
-# Every operator kind (BaseOpType) belongs to a family (bosons, fermions, two-level systems).
+# Every operator kind (BaseOpType) belongs to a family (bosons, fermions, two-level systems, ...).
 # Operators from different families always commute. Within a family, the rules are given by
 # the methods (for a family F, with operators A ≤ B in the normal order)
 #
@@ -32,12 +32,12 @@
 #   opsymbol(::Val{F}, A, style)
 #       the symbol appended to the operator name when printing (style is :text, :expr or :latex)
 
-@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily SpinFamily
+@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily SpinFamily SOFamily
 
 const ComplexInt = Complex{Int}
 
-#                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_   TLSx_      TLSy_      TLSz_      SpinMinus_  SpinZ_      QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, SpinFamily, TLSFamily, TLSFamily, TLSFamily, SpinFamily, SpinFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
+#                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_   TLSx_      TLSy_      TLSz_      SpinMinus_  SpinZ_      SOGen_    QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, SpinFamily, TLSFamily, TLSFamily, TLSFamily, SpinFamily, SpinFamily, SOFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
 
 opfamily(t::BaseOpType) = @inbounds BaseOpType_family[Int(t)]
 opfamily(A::BaseOperator) = opfamily(optype(A))
@@ -54,6 +54,8 @@ opfamily(A::BaseOperator) = opfamily(optype(A))
         f(Val(QuditFamily), args...)
     elseif fam == SpinFamily
         f(Val(SpinFamily), args...)
+    elseif fam == SOFamily
+        f(Val(SOFamily), args...)
     else
         error("unknown operator family $fam")
     end
@@ -402,3 +404,66 @@ function _spin_vacuum_eigenvalue(A::BaseOperator)
 end
 vacuum_eigenvalue_right(::Val{SpinFamily}, A::BaseOperator) = (t = optype(A); t == SpinMinus_ ? 0 : t == SpinZ_ ? _spin_vacuum_eigenvalue(A) : nothing)
 vacuum_eigenvalue_left(::Val{SpinFamily}, A::BaseOperator) = (t = optype(A); t == SpinPlus_ ? 0 : t == SpinZ_ ? _spin_vacuum_eigenvalue(A) : nothing)
+
+#################################################################
+## so(n): generators of rotations in n dimensions               ##
+#################################################################
+# Hermitian generators L_ab = -L_ba (a,b = 1…n) with
+#   [L_ab, L_cd] = i (δ_ac L_bd - δ_ad L_bc - δ_bc L_ad + δ_bd L_ac).
+# Only the commutation relations are used (the algebra is not tied to a representation), so the
+# normal-ordered products on one site are the products of generators sorted by (a,b), which form a
+# basis (Poincaré-Birkhoff-Witt theorem). Each generator is stored as L_ab with a < b, with the
+# extra information n:8 | a:8 | b:8.
+
+_so_extra(n::Integer, a::Integer, b::Integer) = (n << 16) | (a << 8) | b
+"`so_generator(A)`: (n,a,b) for the generator A = L_ab (with a < b) of so(n)"
+function so_generator(A::BaseOperator)
+    x = opextra(A)
+    (Int(x >> 16), Int((x >> 8) & 0xff), Int(x & 0xff))
+end
+
+"`so_op(name, n, a, b, inds)`: the generator L_ab of so(n), with a < b"
+function so_op(name::QuOpName, n::Integer, a::Integer, b::Integer, inds::AbstractVector{QuIndex})
+    2 ≤ n ≤ 255 || throw(ArgumentError("so(n) is only supported for 2 ≤ n ≤ 255, got n = $n"))
+    1 ≤ a < b ≤ n || throw(ArgumentError("so($n) generators are stored as L_ab with 1 ≤ a < b ≤ $n, got ($a,$b)"))
+    BaseOperator(SOGen_, name, inds, _so_extra(n,a,b))
+end
+
+# emit c L_xy (with L_xy = -L_yx) on the same site as A
+function _emit_so(emit, c::ComplexInt, dd, A::BaseOperator, n, x, y)
+    x < y ? emit(c, dd, so_op(opname(A), n, x, y, inds(A))) : emit(-c, dd, so_op(opname(A), n, y, x, inds(A)))
+end
+
+function exchange!(::Val{SOFamily}, emit, B, A)
+    opextra(A) == opextra(B) && return 1
+    maybe_same_site(A,B) || return 1
+    n, c, d = so_generator(A)
+    nB, a, b = so_generator(B)
+    n == nB || throw(ArgumentError("so(n) generators $(opname(A)) are used with different values of n"))
+    # B A = A B + [L_ab, L_cd], where a<b and c<d, and (a,b) ≠ (c,d) share at most one index
+    dd = site_deltas(A,B)
+    a == c && _emit_so(emit, ComplexInt(0, 1), dd, A, n, b, d)
+    a == d && _emit_so(emit, ComplexInt(0,-1), dd, A, n, b, c)
+    b == c && _emit_so(emit, ComplexInt(0,-1), dd, A, n, a, d)
+    b == d && _emit_so(emit, ComplexInt(0, 1), dd, A, n, a, c)
+    return 1
+end
+
+# products of generators do not simplify (without fixing a representation)
+contract!(::Val{SOFamily}, emit, A, B) = nothing
+
+function commutes(::Val{SOFamily}, A, B)
+    (opextra(A) == opextra(B) || !maybe_same_site(A,B)) && return true
+    n, c, d = so_generator(A)
+    nB, a, b = so_generator(B)
+    # (with different n, exchange! throws an error)
+    n == nB && a != c && a != d && b != c && b != d
+end
+
+opsymbol(::Val{SOFamily}, A::BaseOperator, style::Symbol) = ((_, a, b) = so_generator(A); _qudit_symbol(a, b, style))
+
+function _so_no_vacuum(A::BaseOperator)
+    throw(ArgumentError("vacuum expectation values are not defined for so(n) generators, got $A"))
+end
+vacuum_eigenvalue_right(::Val{SOFamily}, A::BaseOperator) = _so_no_vacuum(A)
+vacuum_eigenvalue_left(::Val{SOFamily}, A::BaseOperator) = _so_no_vacuum(A)

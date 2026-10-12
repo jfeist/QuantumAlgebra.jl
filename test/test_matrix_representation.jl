@@ -1,4 +1,4 @@
-# Check the algebraic rules of finite-dimensional operators (two-level systems, qudits, fermions)
+# Check the algebraic rules of finite-dimensional operators (two-level systems, qudits, fermions, spins, so(n))
 # by representing expressions as explicit matrices on the tensor product space of all modes
 # appearing in them, and comparing the matrices of random operator products before and after
 # normal ordering.
@@ -17,7 +17,8 @@ _spinj(O::QA.BaseOperator) = something(QA.spin_j(O), _ABSTRACT_SPIN_J[])
 function _modedim(O::QA.BaseOperator)
     fam = QA.opfamily(O)
     fam == QA.QuditFamily ? QA.qudit_levels(O)[1] : fam in (QA.TLSFamily, QA.FermionFamily) ? 2 :
-    fam == QA.SpinFamily ? Int(2*_spinj(O)+1) : error("no matrix representation for $O")
+    fam == QA.SpinFamily ? Int(2*_spinj(O)+1) : fam == QA.SOFamily ? QA.so_generator(O)[1] :
+    error("no matrix representation for $O")
 end
 # local matrix of the operator (level 1 is the ground state / vacuum)
 function _localmat(O::QA.BaseOperator)
@@ -33,6 +34,10 @@ function _localmat(O::QA.BaseOperator)
         t == QA.SpinZ_ ? diagm(ComplexF64.(ms)) :
         t == QA.SpinPlus_ ? sum(sqrt(j*(j+1)-m*(m+1))*_E(length(ms),k+1,k) for (k,m) in enumerate(ms[1:end-1])) :
                             sum(sqrt(j*(j+1)-m*(m+1))*_E(length(ms),k,k+1) for (k,m) in enumerate(ms[1:end-1]))
+    elseif fam == QA.SOFamily
+        # defining representation, L_ab = -i(|a⟩⟨b| - |b⟩⟨a|)
+        n, a, b = QA.so_generator(O)
+        -im*(_E(n,a,b) - _E(n,b,a))
     elseif fam == QA.FermionFamily
         t == QA.FermionCreate_ ? _E(2,2,1) : _E(2,1,2)
     else
@@ -192,6 +197,28 @@ end
                 @test samematrix(normal_form(fsub(Xn)), fsub(X))
             end
             A, B = (prod(rand([spinpool(:i); spinpool(:j)], rand(1:2))) for _=1:2)
+            @test normal_form(normal_form(A*B)*X) == normal_form(A*normal_form(B*X))
+        end
+    end
+
+    # so(n) only uses the commutation relations, so it can be checked in any representation
+    @testset "so(n) (in the defining representation)" begin
+        L = so_ops(:L, 3)
+        M = so_ops(:M, 4)
+        sopool(s) = QuExpr[[L(a,b,s) for a=1:3 for b=a+1:3]; [M(a,b,s) for a=1:4 for b=a+1:4]; f(s)]
+        for _ = 1:200
+            X = prod(rand(sopool(1), rand(1:5)))
+            @test samematrix(normal_form(X), X)
+        end
+        substs = [(:i=>1, :j=>2), (:i=>1, :j=>1)]
+        for _ = 1:200
+            X = prod(rand([sopool(:i); sopool(:j)], rand(2:4)))
+            Xn = normal_form(X)
+            for sub in substs
+                fsub = QA.replace_inds((QA.QuIndex(k) => QA.QuIndex(v) for (k,v) in sub)...)
+                @test samematrix(normal_form(fsub(Xn)), fsub(X))
+            end
+            A, B = (prod(rand([sopool(:i); sopool(:j)], rand(1:2))) for _=1:2)
             @test normal_form(normal_form(A*B)*X) == normal_form(A*normal_form(B*X))
         end
     end

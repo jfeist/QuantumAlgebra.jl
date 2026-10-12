@@ -153,6 +153,22 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   3//4 + Sᶻ() - Sᶻ()²
   ```
 
+- `so_ops(name, n)` returns a constructor for the generators ``L_{ab} = -L_{ba}``
+  of the Lie algebra so(n) of rotations in ``n`` dimensions, called as
+  `L(a,b,inds...)`. The generators are Hermitian, with commutation relations
+  ``[L_{ab}, L_{cd}] = i(δ_{ac} L_{bd} - δ_{ad} L_{bc} - δ_{bc} L_{ad} + δ_{bd} L_{ac})``
+  (e.g., ``L_{ab} = x_a p_b - x_b p_a``). As for spins without fixed `j`, only
+  these relations are used, so that results hold in any representation.
+  ```jldoctest
+  julia> L = so_ops(:L, 4);
+
+  julia> L(2,1,:i)
+  -L¹²(i)
+
+  julia> normal_form(comm(L(1,2), L(2,3)))
+  -1i L¹³()
+  ```
+
 - `param(name::Symbol,state='n',inds...)` to create a named parameter. `state` must be
   one of `'r'`, `'n'`, or `'c'` for purely real, non-conjugated complex, and
   conjugated complex parameters. More conveniently, parameters can be entered

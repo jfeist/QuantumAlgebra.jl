@@ -4,7 +4,7 @@ using OrderedCollections
 export QuExpr
 export boson_ops, fermion_ops
 export @boson_ops, @fermion_ops, @anticommuting_fermion_group
-export tlspm_ops, tlsxyz_ops, qudit_ops, gellmann_ops, spin_ops
+export tlspm_ops, tlsxyz_ops, qudit_ops, gellmann_ops, spin_ops, so_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
@@ -216,12 +216,12 @@ const NoName = QuOpName(Symbol())
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
 # start the counting at 1 so we can index into the tuples defined below with Int(BaseOpType)
-# (for qudits, the symbols are determined from the levels of the transition operators |i⟩⟨1| and |1⟩⟨i|)
-@enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_ TLSx_  TLSy_  TLSz_  SpinMinus_ SpinZ_ QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_, TLSx_, TLSy_, TLSz_, SpinPlus_, SpinZ_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
-const BaseOpType_sym   = ("†", "†", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "⁻", "", "")
-const BaseOpType_expr  = ("ᴴ", "ᴴ", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "⁻", "", "")
-const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "^{z}", "", "^{-}", "", "")
+# (for qudits and so(n) generators, the symbols are determined from the levels or the indices a,b of L_ab)
+@enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_ TLSx_  TLSy_  TLSz_  SpinMinus_ SpinZ_ SOGen_ QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_, TLSx_, TLSy_, TLSz_, SpinPlus_, SpinZ_, SOGen_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
+const BaseOpType_sym   = ("†", "†", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "", "⁻", "", "")
+const BaseOpType_expr  = ("ᴴ", "ᴴ", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "", "⁻", "", "")
+const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "^{z}", "", "", "^{-}", "", "")
 
 # a struct representing a delta function with unequal indices
 @concrete struct δ
@@ -701,6 +701,50 @@ function spin_ops(name::Symbol, j=nothing)
     Jp = QuExprConstructor(string(name,"⁺"), cstr(SpinPlus_), string(name,"⁻"), cstr(SpinMinus_))
     (Jp, Jp', QuExprConstructor(string(name,"ᶻ"), cstr(SpinZ_)))
 end
+
+"""
+    SOOps
+
+Constructor for the generators of so(n) (see [`so_ops`](@ref)).
+"""
+struct SOOps
+    name::QuOpName
+    n::Int
+end
+
+"""
+    so_ops(name::Symbol, n::Integer)
+
+Return a constructor `L` for the generators ``L_{ab} = -L_{ba}`` (``a,b = 1,…,n``) of the Lie algebra
+so(n) of rotations in `n` dimensions, called as `L(a, b, inds...)`. The generators are Hermitian, with
+```math
+[L_{ab}, L_{cd}] = i (δ_{ac} L_{bd} - δ_{ad} L_{bc} - δ_{bc} L_{ad} + δ_{bd} L_{ac}),
+```
+as, e.g., for the angular momenta ``L_{ab} = x_a p_b - x_b p_a`` of a particle in `n` dimensions (for
+`n = 3`, ``(L_x, L_y, L_z) = (L_{23}, L_{31}, L_{12})``). Only these commutation relations are used,
+so that results hold in any representation. Operators are stored and printed as ``L_{ab}`` with
+``a < b``.
+
+# Examples
+```julia
+L = so_ops(:L, 4)
+L(2,1,:i)                          # -L¹²(i)
+normal_form(comm(L(1,2), L(2,3)))  # -i L¹³()
+```
+"""
+function so_ops(name::Symbol, n::Integer)
+    2 ≤ n ≤ 255 || throw(ArgumentError("so(n) is only supported for 2 ≤ n ≤ 255, got n = $n"))
+    SOOps(QuOpName(name), n)
+end
+function (L::SOOps)(a::Integer, b::Integer, inds...)
+    (1 ≤ a ≤ L.n && 1 ≤ b ≤ L.n) || throw(ArgumentError("the indices of so($(L.n)) generators have to be between 1 and $(L.n), got ($a,$b)"))
+    # L_aa = 0, and L_ba = -L_ab
+    a == b && return QuExpr()
+    A = QuExpr(so_op(L.name, L.n, min(a,b), max(a,b), make_indices(inds...)))
+    a < b ? A : -A
+end
+Base.print(io::IO, L::SOOps) = print(io, L.name, " (constructor for so(", L.n, ") generators)")
+Base.show(io::IO, L::SOOps) = print(io, L)
 
 ## functions for constructing `param`s with string macros,
 # Pc"ω_i,j" = param(:ω,'n',:i,:j) (complex parameter)
