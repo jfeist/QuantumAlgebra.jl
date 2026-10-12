@@ -80,6 +80,19 @@
     @spin j=jval S3
     @test normal_form(S3p*S3m) == normal_form(15//4 - S3z^2 + S3z)
 
+    # modes in vacuum are given by the operator variables (also for operators with indices)
+    @boson va vb[:,:]
+    @qudit 3 vq[:]
+    @tls vσ
+    X = va'*va*vb[1,2]*vb'[1,2]*vq(1,2)[3]
+    @test Avac(X, vb) == Avac(X, (vb,)) == normal_form(va'*va*vq(1,2)[3])
+    @test iszero(Avac(X, (vb, vq)))
+    @test iszero(Avac(X, va))
+    @test vacExpVal(X*vσ, 1, (va, vb, vq, vσ)) == QuExpr()
+    @test vacA(vσ*vb'[1,1], vσ) == normal_form(vacA(vσ, vσ)*vb'[1,1])
+    @test_throws ArgumentError Avac(X, vb[1,2])
+    @test_throws ArgumentError Avac(X, qparam(:g; ndims=1))
+
     # printing in the syntax of the new interface (opt-in)
     @test string(c[:i,2]) == "c(i2)"
     QuantumAlgebra.use_bracket_display(true)

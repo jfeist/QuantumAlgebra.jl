@@ -314,12 +314,13 @@ not been used yet; the default operators can be disabled with the preference
   Both functions can also be called with an optional second argument,
   `Avac(A,modes_in_vacuum)` or `vacA(A,modes_in_vacuum)`, which is an iterable
   over operators (or a single operator) that will be assumed to be in the vacuum
-  state, while all others are not. Note that the operators in `modes_in_vacuum`
-  do not distinguish by index, i.e., if the modes have indices, all modes with
-  the same name are assumed to be in the vacuum state. To avoid confusion, the
-  `modes_in_vacuum` argument thus does not accept operators with indices.
+  state, while all others are not. The operators in `modes_in_vacuum` are given
+  without indices, i.e., as the variables defined by the macros: for an operator
+  with indices, e.g., `b` after `@boson b[:]`, all of its modes are assumed to be
+  in the vacuum state (operators with given indices, e.g., `b[1]`, are not
+  accepted).
   ```julia
-  julia> @boson a; @boson b; @fermion f;
+  julia> @boson a; @boson b[:]; @fermion f;
 
   julia> Avac(a,a)
   0
@@ -330,8 +331,8 @@ not been used yet; the default operators can be disabled with the preference
   julia> Avac(a'*a*f*f',f)
   a†() a()
 
-  julia> Avac(a'*a*b*b'^2*f*f',(f,b))
-  2 a†() b†() a()
+  julia> Avac(a'*a*b[1]*b'[1]^2*f*f',(f,b))
+  2 a†() b†(1) a()
   ```
 
 - `vacExpVal(A,S=1)` calculates the vacuum expectation value $⟨0|S^{†}AS|0⟩$,

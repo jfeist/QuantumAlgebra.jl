@@ -18,6 +18,11 @@ version is now 1.10 (the current LTS).
   given as symbols, e.g., `a[:i,:j_2]`).
 - Each macro has a function with the same name to create operators
   programmatically, e.g., `boson(:a; ndims=2)` or `qparam(:α, Complex)`.
+  Several operators can be defined at once, e.g., `@boson a b[:]` or
+  `@qudit 3 s p[:]`.
+- The modes that are assumed to be in the vacuum state in `Avac`, `vacA` and
+  `vacExpVal` are given by the operator variables, where, e.g., `a` after
+  `@boson a[:]` stands for all modes of `a`.
 - `QuantumAlgebra.use_bracket_display(true)` (or the preference
   `"bracket_display"`) prints expressions in the syntax of the new interface,
   e.g., `a†[i,j]` and `a` instead of `a†(ij)` and `a()`. This will become the

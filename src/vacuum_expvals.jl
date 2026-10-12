@@ -1,16 +1,32 @@
 export Avac, vacA, vacExpVal
 
-function _get_mode_name(ex::QuExpr)
-    opprod = to_opprod(ex)
-    op = unalias(only(opprod))
-    isempty(assignedinds(inds(op))) || throw(ArgumentError("Modes in vacuum should be given without indices"))
-    opname(op)
+# The modes that are assumed to be in the vacuum state are given by operators without indices (e.g., `a`
+# for `@boson a`, or the variables of operators with indices, e.g., `a` for `@boson a[:]`, which stand for
+# all modes of the operator), and are identified by their names.
+function _mode_names(ex::QuExpr, allowinds::Bool=false)
+    names = Set{QuOpName}()
+    for t in keys(ex.terms), O in bares(t)
+        O = unalias(O)
+        allowinds || isempty(assignedinds(inds(O))) ||
+            throw(ArgumentError("modes in vacuum have to be given without indices (e.g., `a` for an operator defined with `@boson a[:]`), got $ex"))
+        push!(names, opname(O))
+    end
+    isempty(names) && throw(ArgumentError("modes in vacuum have to be given as operators, got $ex"))
+    names
 end
+function _mode_names(q::QuExprCstrctArrAlias)
+    # (the operator with arbitrary indices gives its name)
+    ex = q.constructor(ntuple(_ -> 1, q.numdims)...)
+    ex isa QuExpr || throw(ArgumentError("modes in vacuum have to be given as operators, got $q"))
+    _mode_names(ex, true)
+end
+_mode_names(v::_PairVariable) = Set([v.ops.name])
+_mode_names(x) = throw(ArgumentError("modes in vacuum have to be given as operators, got $x"))
 
 _parse_modes_in_vacuum(modes::Nothing) = nothing
 _parse_modes_in_vacuum(modes::Set{QuOpName}) = modes
-_parse_modes_in_vacuum(modes::QuExpr) = _parse_modes_in_vacuum((modes,))
-_parse_modes_in_vacuum(modes) = Set{QuOpName}(_get_mode_name.(modes))
+_parse_modes_in_vacuum(modes::Union{QuExpr,QuExprCstrctArrAlias,_PairVariable}) = _mode_names(modes)
+_parse_modes_in_vacuum(modes) = mapreduce(_mode_names, union, modes; init=Set{QuOpName}())
 
 # helper function that is only called on normal-ordered terms that only contain
 # operators that are in the vacuum state: act with the operators on the vacuum
@@ -80,14 +96,16 @@ function _apply_on_vacuum_modes(func,A::QuTerm,fac,modes_in_vacuum::Set{QuOpName
 end
 
 """
-    Avac(A; modes_in_vacuum=nothing)
-    vacA(A; modes_in_vacuum=nothing)
+    Avac(A, modes_in_vacuum=nothing)
+    vacA(A, modes_in_vacuum=nothing)
 
 Simplify an operator expression by acting on the vacuum from the right (`Avac`)
 or from the left (`vacA`). Returns a new `QuExpr` with terms that annihilate the
 vacuum removed and with any TLS `σz` eigenvalue simplifications applied. Set
-`modes_in_vacuum` to a set or iterable of modes to restrict the vacuum
-assumption; defaults to all modes.
+`modes_in_vacuum` to an operator or an iterable of operators to restrict the
+vacuum assumption to these modes; defaults to all modes. The operators are given
+without indices, i.e., as the variables defined by the macros (e.g., `a` after
+`@boson a` or `@boson a[:]`), and stand for all modes of an operator with indices.
 """
 Avac(A::QuTerm,fac,modes_in_vacuum) = _apply_on_vacuum_modes(_Avac, A, fac, modes_in_vacuum)
 vacA(A::QuTerm,fac,modes_in_vacuum) = _apply_on_vacuum_modes(_vacA, A, fac, modes_in_vacuum)
@@ -136,11 +154,11 @@ function _TLS_to_pm_normal(A::QuExpr,shortcut_vacA_zero)
 end
 
 """
-    vacExpVal(A::QuExpr, S::QuExpr=1; modes_in_vacuum=nothing)
+    vacExpVal(A::QuExpr, S::QuExpr=1, modes_in_vacuum=nothing)
 
 Calculate the vacuum expectation value ``⟨0|S^\\\\dagger A S|0⟩``, i.e. the
 expectation value ``⟨ψ|A|ψ⟩`` for the state ``|ψ⟩ = S|0⟩``. Optionally restrict
-the vacuum assumption to specific modes via `modes_in_vacuum`.
+the vacuum assumption to specific modes via `modes_in_vacuum` (see [`Avac`](@ref)).
 """
 function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()),modes_in_vacuum=nothing)
     # simplify down as much as possible by applying vacuum from left and right
