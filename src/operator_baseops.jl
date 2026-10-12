@@ -50,7 +50,6 @@ function recursive_cmp(A, B)
     return cmp(length(A), length(B))
 end
 
-@inline recursive_cmp(A::BaseOperator,B::BaseOperator) = cmp(A,B)
 @inline recursive_cmp(A::Param,B::Param) = cmp(A,B)
 @inline recursive_cmp(A::δ,B::δ) = cmp(A,B)
 # operator products are ordered first by their length

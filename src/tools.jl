@@ -50,8 +50,6 @@ struct _COWDict{K,V}
 end
 _COWDict{K,V}(d::Dict{K,V}=Dict{K,V}()) where {K,V} = _COWDict{K,V}(_AtomicRef(d), ReentrantLock())
 Base.get(c::_COWDict, k, default) = get(c.d[], k, default)
-Base.haskey(c::_COWDict, k) = haskey(c.d[], k)
-Base.getindex(c::_COWDict, k) = c.d[][k]
 Base.setindex!(c::_COWDict, v, k) = @lock c.lock (c.d[] = setindex!(copy(c.d[]), v, k); v)
 function Base.get!(f::Base.Callable, c::_COWDict{K,V}, k) where {K,V}
     v = get(c.d[], k, _NOTFOUND)
@@ -65,4 +63,3 @@ function Base.get!(f::Base.Callable, c::_COWDict{K,V}, k) where {K,V}
         v
     end
 end
-Base.empty!(c::_COWDict{K,V}) where {K,V} = (@lock c.lock (c.d[] = Dict{K,V}()); c)
