@@ -118,8 +118,10 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   and level 1 is the ground state (the vacuum). Internally, all operators are
   expressed through ``|i⟩⟨1|`` and ``|1⟩⟨i|`` (with ``i ≥ 2``), which for `d = 2`
   are equivalent to ``σ^{+}`` and ``σ^{-}``. `gellmann_ops(q)` returns
-  constructors for the generalized Gell-Mann matrices of the qudit (with
-  unnormalized diagonal matrices, so that all coefficients are exact).
+  constructors for the generalized Gell-Mann matrices of the qudit, normalized
+  as ``\mathrm{Tr}(λ_a λ_b) = 2δ_{ab}`` (where the normalization of the diagonal
+  matrices uses `Float64` square roots by default, see the docstring for how to keep
+  them exact).
   ```jldoctest
   julia> q = qudit_ops(:q, 3)
   q (constructor for 3-level qudit)

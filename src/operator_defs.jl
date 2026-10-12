@@ -612,35 +612,48 @@ Base.print(io::IO, q::QuditOps) = print(io, q.name, " (constructor for ", q.d, "
 Base.show(io::IO, q::QuditOps) = print(io, q)
 
 """
-    gellmann_ops(q::QuditOps)
+    gellmann_ops(q::QuditOps; sqrt=Base.sqrt)
 
-Return constructors for the `d²-1` generalized Gell-Mann matrices of the `d`-level qudit `q`
-(see [`qudit_ops`](@ref)), with diagonal matrices that are not normalized (so that all matrix
-elements are integers). For `k = 2, …, d`, these are (in this order) the pairs
-``X_{jk} = |j⟩⟨k| + |k⟩⟨j|`` and ``Y_{jk} = -i|j⟩⟨k| + i|k⟩⟨j|`` for ``j = 1, …, k-1``, followed by
-``D_{k-1}``, where ``D_l = \\sum_{m≤l} |m⟩⟨m| - l |l+1⟩⟨l+1|``. The standard (normalized)
-Gell-Mann matrices are obtained as ``\\sqrt{2/(l(l+1))} D_l``, i.e., for `d = 3` the returned
-matrices are ``λ_1, …, λ_7`` and ``\\sqrt{3} λ_8``. Note that since level 1 is the ground state,
-for `d = 2` they correspond to ``(σ^x, -σ^y, -σ^z)``.
+Return constructors for the `d²-1` generalized Gell-Mann matrices ``λ_1, …, λ_{d²-1}`` of the
+`d`-level qudit `q` (see [`qudit_ops`](@ref)), with the standard normalization
+``\\mathrm{Tr}(λ_a λ_b) = 2δ_{ab}``. For `k = 2, …, d`, these are (in this order) the pairs
+``|j⟩⟨k| + |k⟩⟨j|`` and ``-i|j⟩⟨k| + i|k⟩⟨j|`` for ``j = 1, …, k-1``, followed by the diagonal matrix
+``\\sqrt{2/(l(l+1))} (\\sum_{m≤l} |m⟩⟨m| - l |l+1⟩⟨l+1|)`` with ``l = k-1``. For `d = 3`, these are
+the Gell-Mann matrices ``λ_1, …, λ_8`` in their usual order. Note that since level 1 is the ground
+state, for `d = 2` they correspond to ``(σ^x, -σ^y, -σ^z)``.
+
+The normalization factors ``\\sqrt{2/(l(l+1))}`` of the diagonal matrices are computed by calling
+`sqrt` with the rational number `2//(l*(l+1))` (unless the result is rational, e.g., for `l = 1`).
+By default, this gives `Float64` numbers. To keep them exact, pass a function that computes the
+square root symbolically, e.g., `sqrt = x -> sqrt(SymPyPythonCall.Sym(x))`.
 
 # Examples
 ```julia
 q = qudit_ops(:q, 3)
 λ = gellmann_ops(q)
 normal_form(comm(λ[1](:i), λ[2](:i)))  # 2i λ₃(i)
+λ[8](:i)                               # 0.57735 - 1.73205 q³³(i)
 ```
 """
-function gellmann_ops(q::QuditOps)
+function gellmann_ops(q::QuditOps; sqrt=Base.sqrt)
     cstrs = QuExprConstructor[]
+    λname() = "λ$(subscript(length(cstrs)+1))"
     for k = 2:q.d
         for j = 1:k-1
-            push!(cstrs, QuExprConstructor("X$(subscript(j))$(subscript(k))", (inds...) -> q(j,k,inds...) + q(k,j,inds...)))
-            push!(cstrs, QuExprConstructor("Y$(subscript(j))$(subscript(k))", (inds...) -> -1im*q(j,k,inds...) + 1im*q(k,j,inds...)))
+            push!(cstrs, QuExprConstructor(λname(), (inds...) -> q(j,k,inds...) + q(k,j,inds...)))
+            push!(cstrs, QuExprConstructor(λname(), (inds...) -> -1im*q(j,k,inds...) + 1im*q(k,j,inds...)))
         end
         l = k-1
-        push!(cstrs, QuExprConstructor("D$(subscript(l))", (inds...) -> sum(q(m,m,inds...) for m=1:l) - l*q(l+1,l+1,inds...)))
+        c = _sqrt_rational(2//(l*(l+1)), sqrt)
+        push!(cstrs, QuExprConstructor(λname(), (inds...) -> c*(sum(q(m,m,inds...) for m=1:l) - l*q(l+1,l+1,inds...))))
     end
     cstrs
+end
+# the square root of the rational number x: exact if x is the square of a rational number, and sqrt(x) otherwise
+function _sqrt_rational(x::Rational, sqrt)
+    n, d = isqrt(numerator(x)), isqrt(denominator(x))
+    (n^2 == numerator(x) && d^2 == denominator(x)) || return sqrt(x)
+    d == 1 ? n : n//d
 end
 
 "`@boson_ops name`: define function `\$name` for creating bosonic annihilation operators with name `name` (also defines deprecated `\$(name)dag`, use `\$(name)'` instead) "

@@ -54,20 +54,28 @@
     end
     QuantumAlgebra.use_σpm(false)
 
-    # generalized Gell-Mann matrices (with unnormalized diagonal ones)
+    # generalized Gell-Mann matrices, normalized as Tr(λ_a λ_b) = 2δ_ab
     λ = gellmann_ops(q)
     @test length(λ) == 8
+    @test string(λ[8]) == "λ₈ (QuExpr constructor)"
     λmats = (ComplexF64[0 1 0; 1 0 0; 0 0 0], ComplexF64[0 -im 0; im 0 0; 0 0 0], ComplexF64[1 0 0; 0 -1 0; 0 0 0],
              ComplexF64[0 0 1; 0 0 0; 1 0 0], ComplexF64[0 0 -im; 0 0 0; im 0 0], ComplexF64[0 0 0; 0 0 1; 0 1 0],
-             ComplexF64[0 0 0; 0 0 -im; 0 im 0], ComplexF64[1 0 0; 0 1 0; 0 0 -2])
+             ComplexF64[0 0 0; 0 0 -im; 0 im 0], ComplexF64[1 0 0; 0 1 0; 0 0 -2]/sqrt(3))
     modes = [((:q,(QuIndex(1),)), 3)]
     for a = 1:8
-        @test matrep(λ[a](1), modes) == λmats[a]
+        @test matrep(λ[a](1), modes) ≈ λmats[a]
         @test λ[a](1)' == λ[a](1)
     end
     @test normal_form(comm(λ[1](:i), λ[2](:i))) == normal_form(2im*λ[3](:i))
-    # SU(3) structure constant f_458 = √3/2, i.e., [λ₄,λ₅] = 2i (λ₃/2 + √3/2 λ₈) = i (λ₃ + D₂)
-    @test normal_form(comm(λ[4](:i), λ[5](:i))) == normal_form(1im*(λ[3](:i) + λ[8](:i)))
+    # with an exact square root: SU(3) structure constant f_458 = √3/2, i.e., [λ₄,λ₅] = 2i (λ₃/2 + √3/2 λ₈)
+    Sym = SymPyPythonCall.Sym
+    λs = gellmann_ops(q; sqrt = x -> sqrt(Sym(x)))
+    @test iszero(normal_form(comm(λs[4](:i), λs[5](:i)) - 1im*(λs[3](:i) + sqrt(Sym(3))*λs[8](:i))))
+    # normalization factors that are rational are exact, e.g., for d = 2: (σˣ, -σʸ, -σᶻ)
+    p2 = qudit_ops(:p, 2)
+    λ2 = gellmann_ops(p2)
+    @test λ2[3](:i) == p2(1,1,:i) - p2(2,2,:i)
+    @test matrep(λ2[2](1), [((:p,(QuIndex(1),)), 2)]) == ComplexF64[0 -im; im 0]
     @test normal_form(λ[1](:i)^2) == normal_form(q(1,1,:i) + q(2,2,:i))
 
     # Heisenberg equations of motion for a driven three-level system
