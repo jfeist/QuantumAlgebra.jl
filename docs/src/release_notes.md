@@ -1,7 +1,86 @@
 # Release notes
 
 ## v1.7.0 (unreleased)
-- The minimum supported Julia version is now 1.10 (the current LTS).
+This is a minor release with a new interface for defining operators, new kinds
+of operators, and large performance improvements. The minimum supported Julia
+version is now 1.10 (the current LTS).
+
+### New interface for defining operators
+- Operators are now variables that are defined with macros, e.g., `@boson a`
+  (used as `a` and `a'`) or `@boson a[:,:]` (used as `a[i,j]` and `a'[i,j]`),
+  instead of constructor functions (`@boson_ops a`, used as `a()` and
+  `a(:i,:j)`). The number of indices is fixed when an operator is defined. The
+  macros are `@boson`, `@fermion`, `@anticommuting_fermions`, `@tls` (for
+  ``σ^{-}``, with ``σ^{+}`` given by `σ'`), `@tlsxyz`, and `@qudit`, `@spin`,
+  `@so` for the new kinds of operators (see below). Parameters are defined with
+  `@qparam`, e.g., `@qparam ω g[:] α::Complex`, and index variables with
+  `@qindex`, e.g., `@qindex i j[:]` for `a[i,j[2]]` (indices can also still be
+  given as symbols, e.g., `a[:i,:j_2]`).
+- Each macro has a function with the same name to create operators
+  programmatically, e.g., `boson(:a; ndims=2)` or `qparam(:α, Complex)`.
+- `QuantumAlgebra.use_bracket_display(true)` (or the preference
+  `"bracket_display"`) prints expressions in the syntax of the new interface,
+  e.g., `a†[i,j]` and `a` instead of `a†(ij)` and `a()`. This will become the
+  default in version 2.0.
+- The previous interface (constructor functions, `@boson_ops` etc., the default
+  operators `a`, `f`, `σx`, …, and parameters created with `param`, `Pr"…"` and
+  `Pc"…"`) still works and can be mixed with the new one, but it is deprecated
+  and will be removed in version 2.0. The documentation describes how to update
+  existing code, and the script `tools/migration/migrate.jl` in the repository
+  converts Julia files and Jupyter notebooks automatically.
+
+### New kinds of operators
+- Qudits (d-level systems): `@qudit d q` defines the transition operators
+  `q(i,j)` = ``|i⟩⟨j|`` (or `q(i,j)[k]` for qudits with indices), which are
+  expressed through ``|i⟩⟨1|`` and ``|1⟩⟨i|`` to obtain a unique normal form
+  (products ``|i⟩⟨1|1⟩⟨j|`` are printed as ``|i⟩⟨j|``, e.g., `q²³(k)`).
+  `gellmann(q)` returns the generalized Gell-Mann matrices, normalized as
+  ``\mathrm{Tr}(λ_a λ_b) = 2δ_{ab}`` (the normalization factors of the diagonal
+  matrices are `Float64` by default, and can be kept exact by passing a symbolic
+  square root, e.g., `gellmann(q; sqrt = x -> sqrt(SymPyPythonCall.Sym(x)))`).
+- Spins: `@spin J` defines `Jp`, `Jm`, `Jz` with the commutation relations of
+  su(2), which hold in any representation (e.g., for collective spins). With a
+  fixed spin `j` (`@spin j J`, where `j` can also be symbolic), products
+  ``J_+ J_-`` are simplified with the Casimir operator, and the vacuum is the
+  lowest-weight state.
+- so(n): `@so n L` defines the generators `L(a,b)` = ``L_{ab} = -L_{ba}`` of
+  so(n), using only their commutation relations.
+- Pauli matrices and jump operators (``σ^{±}``) can now be mixed in one
+  expression if they act on different two-level systems.
+
+### Changes that affect results
+Results are mathematically unchanged, but can look different:
+- Summation indices are numbered canonically, so that terms that only differ in
+  the naming of summation indices are combined, and sums that vanish by
+  symmetry are recognized (e.g., ``∑_{ij} f_i f_j = 0``). This can reduce the
+  number of terms considerably, e.g., by a factor 16 for nested commutators
+  with sums in a benchmark.
+- `comm(A,B)` now returns the commutator in normal form (previously, it returned
+  `A*B - B*A` without simplification). It is computed directly from the
+  commutators of pairs of operators, so that the terms of ``AB`` and ``BA`` that
+  cancel are never generated. `heisenberg_eom` computes the Lindblad terms as
+  ``L^† [A,L] + \frac{1}{2} [L^† L, A]`` for the same reason.
+- Terms are printed without trailing spaces, and with single spaces between
+  terms (e.g., `δ(ij) + a†(j) a(i)` instead of `δ(ij)  + a†(j) a(i)`).
+
+### Performance and other improvements
+- Terms are now stored compactly as a flat vector of 64-bit words, which
+  reduces run time and memory allocations considerably. Together with the
+  changes above, compared to v1.6.1, normal ordering of large expressions is
+  1.2–1.4 times faster, cumulant expansions (`expval_as_corrs`) 2–4 times,
+  commutators 3 times, equations of motion with Lindblad terms 3–4.4 times,
+  correlator equations (`corrheis`) 3 times, and nested commutators with sums up
+  to 15 times faster in the benchmarks in `bench/runbench.jl`.
+- Operators can have an arbitrary number of indices (up to 255) without any
+  performance penalty, so the `"quindices_type"` preference introduced in v1.6.0
+  has no effect anymore, and `set_quindices_type` is deprecated.
+- QuantumAlgebra can be used from several threads at the same time (for
+  different expressions).
+- New exported names: the macros listed above, and the functions `boson`,
+  `fermion`, `anticommuting_fermions`, `tls`, `tlsxyz`, `qudit`, `gellmann`,
+  `spin`, `so`, `qparam` and `qindex`. If these clash with names in your code,
+  the variables in your code take precedence (as long as the names have not
+  been used before they are defined).
 
 ## v1.6.1 (2026-10-11)
 This is a patch release with bug fixes:
