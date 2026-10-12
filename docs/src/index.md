@@ -6,12 +6,6 @@ DocTestSetup = quote
     using QuantumAlgebra
     QuantumAlgebra.auto_normal_form(false)
     QuantumAlgebra.use_σxyz()
-    @static if !QuantumAlgebra._DEFINE_DEFAULT_OPS
-        @boson_ops a
-        @fermion_ops f
-        @tlsxyz_ops σ
-        @tlspm_ops σ
-    end
 end
 ```
 
@@ -19,8 +13,8 @@ end
 
 This package does quantum operator algebra (i.e., algebra with non-commuting
 operators) in Julia, supporting bosonic, fermionic, and two-level system
-operators, with arbitrary names and indices, as well as sums over any of the
-indices. It defines an opinionated canonical form (normal ordering plus some
+operators, qudits (d-level systems), spins and so(n) generators, with arbitrary
+names and indices, as well as sums over any of the indices. It defines an opinionated canonical form (normal ordering plus some
 additional rules) to automatically simplify expressions. It is recommended to
 use an interface that can display LaTeX formulas (e.g., Jupyter notebooks) for
 convenient output formatting. 
@@ -47,71 +41,101 @@ Please see the [release notes](release_notes.md) for a summary of changes in eac
 
 ## Overview
 
-The basic functions to create QuantumAlgebra expressions (which are of type
-`QuExpr`) are
-- `a(inds...)` and `a'(inds...)` for ``a`` and ``a^{†}``, the annihilation
-  and creation operators for a bosonic mode.
-- `f(inds...)` and `f'(inds...)` for ``f`` and ``f^{†}``, the annihilation
-  and creation operators for a fermionic mode.
-- `σx(inds...)`, `σy(inds...)`, `σz(inds...)` for the Pauli matrices
-  ``σ^{x,y,z}`` for a two-level system (TLS).
-- `σp(inds...)`, `σm(inds...)` for excitation and deexcitation operators
-  ``σ^{±}`` for a two-level system (TLS).
+!!! note "New interface in v1.7"
+    Version 1.7 introduced a new interface, where operators are variables
+    defined with macros (e.g., `@boson a[:]`, used as `a[:i]`) instead of
+    constructor functions (e.g., `@boson_ops a`, used as `a(:i)`). The previous
+    interface still works, but is deprecated and will be removed in version 2.0.
+    See [Legacy interface and migration](@ref) for how to update existing code.
 
-- **Indices**: All of these functions take an arbitrary number of indices as
-  arguments, which can be either integers (1,2,...) or symbolic, where symbolic
-  indices must be a single unicode character, with possibly an integer subindex:
-  ```jldoctest
-  julia> using QuantumAlgebra
+### Defining operators
 
-  julia> a()
-  a()
+Operators are defined with macros, which create variables for them:
 
-  julia> a'(:i)
-  a†(i)
+- `@boson a` defines the annihilation operator `a` of a bosonic mode, with the
+  creation operator `a'`. With `@boson a[:]` (or `a[:,:]`, with any number of
+  `:`), the operator has indices, given as `a[i]` (or `a[i,j]`). The number of
+  indices is fixed by the declaration.
+- `@fermion f` defines the annihilation operator `f` of a fermionic mode
+  (with `f'` for the creation operator), and `@anticommuting_fermions c d`
+  defines several fermionic operators that mutually anticommute.
+- `@tlsxyz σ` defines the Pauli matrices `σx`, `σy`, `σz` of a two-level
+  system (TLS), and `@tls σ` defines `σ` as the deexcitation operator ``σ^{-}``
+  of a TLS, with `σ'` the excitation operator ``σ^{+}``.
+- `@qudit d q`, `@spin J`/`@spin j J` and `@so n L` define qudits (``d``-level
+  systems), spins, and generators of so(n), see below.
+- `@param g` defines a real parameter `g`, and `@param α::Complex` a complex
+  parameter `α` (with `α'` its complex conjugate). Several parameters can be
+  defined at once, e.g., `@param ω g[:] α::Complex`.
 
-  julia> f'(1,2,:i_9)
-  f†(12i₉)
+**Indices** can be integers (1,2,...) or symbolic, where symbolic indices must
+be a single unicode character, with possibly an integer subindex. They can be
+given as symbols (`:i`, `:j_2`) or with index variables defined by `@qindex`,
+where `@qindex j[:]` defines an index `j` with a subindex, written `j[2]`:
+```jldoctest
+julia> @boson a
+a()
 
-  julia> σx(:i_1, 1, :j, :k_2, :μ_2, :◔_1, :😄_121)
-  σˣ(i₁1jk₂μ₂◔₁😄₁₂₁)
-  ```
+julia> a'*a
+a†() a()
 
-- You can define your own bosonic/fermionic/two-level system operators with a
-  set of macros:
-  - `@boson_ops name` defines new functions `$name()` and `$(name)dag()` for
-    bosonic species `name`.
-  - `@fermion_ops name` defines new functions `$name()` and `$(name)dag()` for
-    fermionic species `name`.
-  - `@tlsxyz_ops name` defines new functions `$(name)x()`, `$(name)y()` and
-    `$(name)z()` for the Pauli matrices for two-level system species `name`.
-  - `@tlspm_ops name` defines new functions `$(name)p()` and `$(name)m()` for
-    the two-level system excitation and deexcitation operators for species
-    `name`.
+julia> @fermion f[:,:,:]
+f[:,:,:]
 
-  Note that for `@boson_ops` and `@fermion_ops`, deprecated `$(name)dag()`
-  functions are defined for backward compatibility. These will be removed in a
-  future version, as `$(name)'()` is now the preferred syntax for creating an
-  adjoint.
-  ```jldoctest
-  julia> @boson_ops b
-  (b (QuExpr constructor), b† (QuExpr constructor))
+julia> f'[1,2,:i_9]
+f†(12i₉)
 
-  julia> b'(:k)*b(:i)
-  b†(k) b(i)
-  ```
-  Operators with different names are assumed to belong to different "species"
-  and always commute. For fermions, this is not always desired, since you might
-  want to use different named operators to refer to different kinds of states
-  for the same species (e.g., localized and itinerant electrons). This can be
-  achieved with the macro `@anticommuting_fermion_group`, which creates several
-  fermionic operators that mutually anticommute:
-  ```jldoctest
-  julia> @anticommuting_fermion_group c d
+julia> @qindex i j[:];
 
-  julia> normal_form(c()*d() + d()*c())
-  0
-  ```
+julia> f[i,j[2],:μ_2]
+f(ij₂μ₂)
+
+julia> @tlsxyz σ[:]
+(σx[:], σy[:], σz[:])
+
+julia> σx[:◔_1]*σy[:😄_121]
+σˣ(◔₁) σʸ(😄₁₂₁)
+
+julia> @param g[:,:] α::Complex;
+
+julia> g[i,1]*α'
+g(i1) α*
+```
+
+Operators with different names are assumed to belong to different "species"
+and always commute. For fermions, this is not always desired, since you might
+want to use different named operators to refer to different kinds of states for
+the same species (e.g., localized and itinerant electrons). This can be
+achieved with `@anticommuting_fermions`:
+```jldoctest
+julia> @anticommuting_fermions c d
+(c(), d())
+
+julia> normal_form(c*d + d*c)
+0
+```
+
+Every macro has a function with the same name that returns the operators instead
+of assigning them to variables, e.g., `a = boson(:a; ndims=2)` is equivalent to
+`@boson a[:,:]` (see [`boson`](@ref), [`fermion`](@ref),
+[`anticommuting_fermions`](@ref), [`tls`](@ref), [`tlsxyz`](@ref),
+[`qudit`](@ref), [`spin`](@ref), [`so`](@ref) and [`qindex`](@ref)). This is
+useful to create operators programmatically, e.g., with names that are generated
+in code.
+
+Expressions are currently printed with parentheses for the indices (e.g.,
+`f(ij₂μ₂)` and `a()` above). Calling `QuantumAlgebra.use_bracket_display(true)`
+prints them in the same syntax as they are entered (e.g., `f[i,j₂,μ₂]` and `a`),
+which will become the default in version 2.0 (see [Preferences](@ref)).
+
+For backward compatibility, QuantumAlgebra currently also defines the default
+operators `a`, `f`, `σx`, `σy`, `σz`, `σp`, `σm` of the legacy interface when it
+is loaded. Defining operators with the same names (as above) replaces them. On
+Julia versions before 1.12, this is only possible if the default operator has
+not been used yet; the default operators can be disabled with the preference
+`"define_default_ops"` (see [Preferences](@ref)).
+
+### Qudits, spins and so(n)
 
 - `@qudit d q` (or `q = qudit(:q, d)`) defines the operators of a `d`-level
   system (qudit), where `q(i,j)` is the transition operator ``|i⟩⟨j|``
@@ -176,33 +200,21 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   -1i L¹³()
   ```
 
-- `param(name::Symbol,state='n',inds...)` to create a named parameter. `state` must be
-  one of `'r'`, `'n'`, or `'c'` for purely real, non-conjugated complex, and
-  conjugated complex parameters. More conveniently, parameters can be entered
-  with string macros `Pr"name_inds..."` and `Pc"name_inds..."` for real and
-  complex parameters:
-  ```jldoctest
-  julia> Pr"g_i,j_2,k"
-  g(ij₂k)
-
-  julia> Pr"g_i,j_2,k" == param(:g,'r',:i,:j_2,:k)
-  true
-
-  julia> Pc"α_3" == param(:α,3)
-  true
-  ```
+### Working with expressions
 
 - Arithmetic operations (`*`, `+`, `-`, `^`, `adjoint`=`'`) are supported
   (exponents must be nonnegative integers), with any `Number` types integrating
   automatically. Division by numbers is also supported.
   ```jldoctest
-  julia> 5*a'(:k)*f(3)*σx(3)
+  julia> @boson a[:]; @fermion f[:]; @tlsxyz σ[:];
+
+  julia> 5*a'[:k]*f[3]*σx[3]
   5 a†(k) f(3) σˣ(3)
 
-  julia> (5//3+4im) * a'(:k)*f(3)*σx(3) + 9.4
+  julia> (5//3+4im) * a'[:k]*f[3]*σx[3] + 9.4
   9.4 + (5//3+4i) a†(k) f(3) σˣ(3)
 
-  julia> (a(:i)*f(:k))'
+  julia> (a[:i]*f[:k])'
   f†(k) a†(i)
   ```
   If you need a bare number as a QuantumAlgebra expression, you can use
@@ -212,7 +224,9 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   indices have no semantic meaning, the index within the expression gets
   replaced by a special numbered sum index `#ᵢ`, with `i=1,2,...`.
   ```jldoctest
-  julia> ∑(:i,a(:i))
+  julia> @boson a[:]; @qindex i;
+
+  julia> ∑(i,a[i])
   ∑₁ a(#₁)
   ```
 
@@ -223,7 +237,7 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   operators, with σˣʸᶻ in the middle), with some additional conventions to make
   the normal form (hopefully) unique. In particular, sum indices are numbered
   canonically, so that terms that only differ in the naming of summed indices
-  are identified (e.g., `normal_form(∑(:i,∑(:j,a(:i)*a'(:j))) - ∑(:j,∑(:i,a(:j)*a'(:i))))`
+  are identified (e.g., `normal_form(∑(:i,∑(:j,a[:i]*a'[:j])) - ∑(:j,∑(:i,a[:j]*a'[:i])))`
   is zero). In some contexts (e.g., interactive work),
   it can be convenient to automatically transform all expressions to normal
   form. This can be enabled by calling `QuantumAlgebra.auto_normal_form(true)`.
@@ -231,20 +245,27 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   or alternatively use [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl) directly,
   i.e., call `Preferences.set_preferences!(QuantumAlgebra,"auto_normal_form"=>true/false)`.
   ```jldoctest
-  julia> normal_form(a(:i)*a'(:j))
+  julia> @boson a[:]
+  a[:]
+
+  julia> normal_form(a[:i]*a'[:j])
   δ(ij)  + a†(j) a(i)
   ```
 
 - `expval(A::QuExpr)` to represent an expectation value.
   ```jldoctest
-  julia> expval(a'(:j)*a(:i))
+  julia> @boson a[:];
+
+  julia> expval(a'[:j]*a[:i])
   ⟨a†(j) a(i)⟩
   ```
 
 - `expval_as_corrs(A::QuExpr)` to represent an expectation value through its
   correlators, i.e., a cumulant expansion.
   ```jldoctest
-  julia> expval_as_corrs(a'(:j)*a(:i))
+  julia> @boson a[:];
+
+  julia> expval_as_corrs(a'[:j]*a[:i])
   ⟨a†(j)⟩c ⟨a(i)⟩c  + ⟨a†(j) a(i)⟩c
   ```
 
@@ -253,11 +274,13 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   pairs of operators, so that terms that would cancel in ``AB - BA`` are never
   generated.
   ```jldoctest
-  julia> comm(a(),a'())
+  julia> @boson a; @boson b[:];
+
+  julia> comm(a,a')
   1
 
-  julia> comm(a'(:i)*a(:j), a'(:k)*a(:k))
-  -δ(ik) a†(i) a(j) + δ(jk) a†(i) a(j)
+  julia> comm(b'[:i]*b[:j], b'[:k]*b[:k])
+  -δ(ik) b†(i) b(j) + δ(jk) b†(i) b(j)
   ```
 
 - `Avac(A)` and `vacA(A)` simplify operators by assuming they are applied to the
@@ -267,22 +290,24 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   are simplified as much as possible. Note that "vacuum" for two-level systems
   is interpreted as the lower state, ``σ^{z}|0⟩ = -|0⟩``.
   ```jldoctest
-  julia> Avac(a())
+  julia> @boson a; @boson b[:]; @tlsxyz σ;
+
+  julia> Avac(a)
   0
 
-  julia> Avac(a(:i)*a'(:j))
+  julia> Avac(b[:i]*b'[:j])
   δ(ij)
 
-  julia> Avac(a()*a'()*a'())
+  julia> Avac(a*a'*a')
   2 a†()
 
-  julia> vacA(a()*a'()*a'())
+  julia> vacA(a*a'*a')
   0
 
-  julia> Avac(σx())
+  julia> Avac(σx)
   σˣ()
 
-  julia> Avac(σz())
+  julia> Avac(σz)
   -1
   ```
   Both functions can also be called with an optional second argument,
@@ -292,22 +317,19 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   do not distinguish by index, i.e., if the modes have indices, all modes with
   the same name are assumed to be in the vacuum state. To avoid confusion, the
   `modes_in_vacuum` argument thus does not accept operators with indices.
-    ```jldoctest
-  julia> Avac(a(),a())
+  ```jldoctest
+  julia> @boson a; @boson b; @fermion f;
+
+  julia> Avac(a,a)
   0
 
-  julia> Avac(a(),f())
+  julia> Avac(a,f)
   a()
 
-  julia> Avac(a(:i)*a'(:j),f())
-  δ(ij)  + a†(j) a(i)
-
-  julia> Avac(a'()*a()*f()*f'(),f())
+  julia> Avac(a'*a*f*f',f)
   a†() a()
 
-  julia> @boson_ops b;
-
-  julia> Avac(a'()*a()*b()*b'()^2*f()*f'(),(f(),b()))
+  julia> Avac(a'*a*b*b'^2*f*f',(f,b))
   2 a†() b†() a()
   ```
 
@@ -315,26 +337,28 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   i.e., the expectation value ``⟨ψ|A|ψ⟩`` for the state defined by ``|ψ⟩=S|0⟩``.
   The result is guaranteed to not contain any operators.
   ```jldoctest
-  julia> vacExpVal(a'()*a())
+  julia> @boson a; @tlsxyz σ;
+
+  julia> vacExpVal(a'*a)
   0
 
-  julia> vacExpVal(a'()*a(), a'()^4/sqrt(factorial(4)))
+  julia> vacExpVal(a'*a, a'^4/sqrt(factorial(4)))
   4
 
-  julia> vacExpVal(a'()*a(), a'()^4/sqrt(factorial(big(4))))
+  julia> vacExpVal(a'*a, a'^4/sqrt(factorial(big(4))))
   4
 
-  julia> vacExpVal(σx())
+  julia> vacExpVal(σx)
   0
   ```
   Like `vacA` and `Avac`, `vacExpVal` also takes an optional `modes_in_vacuum`
   argument, `vacExpVal(A,S,modes_in_vacuum)` (since all arguments are
   positional, `S` has to be given explicitly in this case even if it is just the
-  identity operator, i.e., `vacExpVal(A,1,a())`):
+  identity operator, i.e., `vacExpVal(A,1,a)`):
   ```jldoctest
-  julia> @boson_ops b;
+  julia> @boson a; @boson b; @fermion f;
 
-  julia> vacExpVal(a'()*a()*b()^2*b'()^2*f()*f'(), 1, (f(),b()))
+  julia> vacExpVal(a'*a*b^2*b'^2*f*f', 1, (f,b))
   2 a†() a()
   ```
 
@@ -351,29 +375,31 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   operator or a tuple of two operators `L=(X,Y)` to represent off-diagonal
   Lindblad terms ``L_{X,Y}[ρ] = X ρ Y^† - \frac{1}{2} \{Y^† X,ρ\}``.
   ```jldoctest
-  julia> H = Pr"ω"*a'()a();
+  julia> @boson a; @boson b[:]; @param ω γ;
 
-  julia> Ls = ((Pr"γ",a()),);
+  julia> H = ω*a'*a;
 
-  julia> normal_form(heisenberg_eom(a(),H,Ls))
+  julia> Ls = ((γ,a),);
+
+  julia> normal_form(heisenberg_eom(a,H,Ls))
   -1//2 γ a() - 1i ω a()
 
   julia> H = QuExpr();
 
-  julia> Ls = ((:i,a(:i)),);
+  julia> Ls = ((:i,b[:i]),);
 
-  julia> normal_form(heisenberg_eom(a(:i),H,Ls))
-  -1//2 a(i)
+  julia> normal_form(heisenberg_eom(b[:i],H,Ls))
+  -1//2 b(i)
 
-  julia> Ls = ((∑(:i,a(:i)),),);
+  julia> Ls = ((∑(:i,b[:i]),),);
 
-  julia> normal_form(heisenberg_eom(a(:i),H,Ls))
-  -1//2 ∑₁ a(#₁)
+  julia> normal_form(heisenberg_eom(b[:i],H,Ls))
+  -1//2 ∑₁ b(#₁)
 
-  julia> Ls = (((:i,:j),(a(:i),a(:j))),);
+  julia> Ls = (((:i,:j),(b[:i],b[:j])),);
 
-  julia> normal_form(heisenberg_eom(a(:i),H,Ls))
-  -1//2 ∑₁ a(#₁)
+  julia> normal_form(heisenberg_eom(b[:i],H,Ls))
+  -1//2 ∑₁ b(#₁)
   ```
 
 - `heisenberg_eom_system(H,rhsfilt,Ls=(),ops=nothing)` calculates the system of
@@ -398,11 +424,13 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   be used to "seed" the system of equations, otherwise all operators appearing
   in `H` are used.
   ```jldoctest
-  julia> H = Pr"ω"*a'()*a() + Pr"χ"*a'()*(a'()+a())*a();
+  julia> @boson a; @param ω χ γ;
 
-  julia> Ls = ((Pr"γ",a()),);
+  julia> H = ω*a'*a + χ*a'*(a'+a)*a;
 
-  julia> heisenberg_eom_system(H,2,Ls,a())
+  julia> Ls = ((γ,a),);
+
+  julia> heisenberg_eom_system(H,2,Ls,a)
   dₜ⟨a()⟩ = -1//2 γ ⟨a()⟩  - 1i ω ⟨a()⟩  - 2i χ ⟨a†() a()⟩  - 1i χ ⟨a()²⟩ 
   dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩ 
   dₜ⟨a()²⟩ = -2i χ ⟨a()⟩  - γ ⟨a()²⟩  - 2i ω ⟨a()²⟩  
@@ -411,12 +439,14 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   `Corr` as a first argument, which will give the equations of motion of the
   expectation values (the default) or correlators (corresponding to a cumulant
   expansion) of the operators.
-    ```jldoctest
-  julia> H = Pr"ω"*a'()*a() + Pr"χ"*a'()*(a'()+a())*a();
+  ```jldoctest
+  julia> @boson a; @param ω χ γ;
 
-  julia> Ls = ((Pr"γ",a()),);
+  julia> H = ω*a'*a + χ*a'*(a'+a)*a;
 
-  julia> heisenberg_eom_system(Corr,H,1,Ls,a())
+  julia> Ls = ((γ,a),);
+
+  julia> heisenberg_eom_system(Corr,H,1,Ls,a)
   dₜ⟨a()⟩c = -1//2 γ ⟨a()⟩c  - 1i ω ⟨a()⟩c  - 2i χ ⟨a†()⟩c ⟨a()⟩c  - 1i χ ⟨a()⟩c² 
   ```
 
@@ -427,7 +457,9 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   array names. Note that expectation values and correlators are not
   distinguished, so it is best to have all expressions use the same kind.
   ```jldoctest
-  julia> julia_expression(expval_as_corrs(a'(:j)*a(:i)))
+  julia> @boson a[:];
+
+  julia> julia_expression(expval_as_corrs(a'[:j]*a[:i]))
   :(aᴴ[j] * a[i] + aᴴa[j, i])
   ```
   Also note that expressions are always treated as arrays, even if they have no
@@ -435,35 +467,42 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   quantities exclusively, it might be useful to clean up the resulting
   expression (e.g., use `MacroTools` to remove the `[]`).
   ```jldoctest
-  julia> julia_expression(expval(a'()*a()*σx()))
+  julia> @boson a; @tlsxyz σ;
+
+  julia> julia_expression(expval(a'*a*σx))
   :(aᴴaσˣ[])
   ```
 
 - By default, two-level system operators are represented by the Pauli
-  matrices ``σ^{xyz}``, and calling `σp()` and `σm()` will give results expressed through them:
+  matrices ``σ^{xyz}``, and the excitation and deexcitation operators defined
+  by `@tls` are expressed through them:
   ```jldoctest
-  julia> σp()
-  1//2 σˣ() + 1//2i σʸ()
-
-  julia> σm()
+  julia> @tls σ
   1//2 σˣ() - 1//2i σʸ()
+
+  julia> σ'
+  1//2 σˣ() + 1//2i σʸ()
   ```
   This can be changed by calling `QuantumAlgebra.use_σpm(true; set_preference=true/false)`
   (where the value of `set_preference` determines whether this is stored
   permanently using Preferences.jl). In this mode, ``σ^{+}`` and ``σ^{-}`` are the
   "fundamental" operators, and all expressions are written in terms of them.
   Note that mixing conventions within the same expression is not supported, so
-  it is suggested to set this flag once at the beginning of any calculation.
+  it is suggested to set this flag once at the beginning of any calculation,
+  before defining the operators (operators without indices are created when they
+  are defined).
   ```jldoctest
   julia> QuantumAlgebra.use_σpm(true)
 
-  julia> σp()
+  julia> @tls σ; @tlsxyz σ;
+
+  julia> σ'
   σ⁺()
 
-  julia> σx()
+  julia> σx
   σ⁺() + σ⁻()
 
-  julia> σz()
+  julia> σz
   -1 + 2 σ⁺() σ⁻()
   ```
 
@@ -471,8 +510,9 @@ The basic functions to create QuantumAlgebra expressions (which are of type
 Several preferences changing the behavior of QuantumAlgebra can be set
 permanently (this uses [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl)):
   - `"define_default_ops"`: if this is set to `false` (default is `true`), the
-    "default" operators `a, adag, f, fdag, σx, σy, σz, σp, σm` are not defined
-    upon import. Note that changing this value requires restarting the Julia
+    "default" operators `a, adag, f, fdag, σx, σy, σz, σp, σm` of the [legacy
+    interface](@ref "Legacy interface and migration") are not defined upon
+    import (they will be removed in version 2.0). Note that changing this value requires restarting the Julia
     session to take effect. The setting can be changed with
     `QuantumAlgebra.set_define_default_ops(true/false)` (which will inform you
     whether a restart is required) or with

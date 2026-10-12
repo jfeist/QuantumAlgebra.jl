@@ -15,6 +15,7 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Legacy interface and migration" => "legacy.md",
         "Interface" => "interface.md",
         "Release notes" => "release_notes.md",
     ],
