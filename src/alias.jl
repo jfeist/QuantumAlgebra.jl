@@ -1,10 +1,10 @@
-const _GROUPALIASES = Dict{QuOpName,Vector{QuOpName}}()
+const _GROUPALIASES = _COWDict{QuOpName,Vector{QuOpName}}()
 
 add_groupaliases(groupname,names) = (_GROUPALIASES[QuOpName(groupname)] = QuOpName.(collect(names)))
 
 function unalias(A::BaseOperator)::BaseOperator
-    if opname(A) ∈ keys(_GROUPALIASES)
-        names = _GROUPALIASES[opname(A)]
+    names = get(_GROUPALIASES, opname(A), nothing)
+    if names !== nothing
         ind = first(inds(A))
         @assert isintindex(ind)
         BaseOperator(optype(A),names[ind.num],Base.tail(inds(A)),opextra(A))

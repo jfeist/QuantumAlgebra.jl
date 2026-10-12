@@ -20,36 +20,47 @@ function corrheis(ops::OpProduct,H::QuExpr,Ls=())::QuExpr
     replace_inds(f.replacements)(rhs)
 end
 
-const _CORRHEISDICT = Dict()
+# cache of the equations of motion of correlators (the lock is only held while accessing the cache,
+# not during the calculation, so that the same equation might be calculated twice by different threads)
+# the keys store their hash, since hashing H can be expensive and the cache is accessed twice
+struct _HashedKey{T}
+    key::T
+    hash::UInt
+end
+_HashedKey(key) = _HashedKey(key, hash(key))
+Base.hash(k::_HashedKey, h::UInt) = hash(k.hash, h)
+Base.isequal(a::_HashedKey, b::_HashedKey) = a.hash == b.hash && isequal(a.key, b.key)
+const _CORRHEISDICT = Dict{_HashedKey,QuExpr}()
+const _CORRHEISLOCK = ReentrantLock()
 function _corrheis_cached(ops::BaseOpProduct,H::QuExpr,Ls)::QuExpr
-    # if haskey(_CORRHEISDICT,(ops,H,Ls))
-    #     println("found operator '$ops' in _CORRHEISDICT")
-    # else
-    #     println("did not find operator '$ops' in _CORRHEISDICT")
-    # end
-    get!(_CORRHEISDICT,(ops,H,Ls)) do
-        # original right-hand side
-        A = QuExpr(QuTerm(ops))
-        dA = normal_form(heisenberg_eom(A,H,Ls))
-        cdA = expval_as_corrs(dA)
+    key = _HashedKey((ops,H,Ls))
+    cdA = @lock _CORRHEISLOCK get(_CORRHEISDICT,key,nothing)
+    cdA === nothing || return cdA
+    cdA = _corrheis_calc(ops,H,Ls)
+    @lock _CORRHEISLOCK get!(_CORRHEISDICT,key,cdA)
+end
+function _corrheis_calc(ops::BaseOpProduct,H::QuExpr,Ls)
+    # original right-hand side
+    A = QuExpr(QuTerm(ops))
+    dA = normal_form(heisenberg_eom(A,H,Ls))
+    cdA = expval_as_corrs(dA)
 
-        # terms from left-hand side, i.e., -d_t δ<A>
-        δcA = corr(A) - expval_as_corrs(A)
-        for (t,s) in δcA.terms
-            # there should be no more "bare" operators in these expressions
-            @assert isempty(bares(t)) && isempty(expvals(t))
-            tcorrs = collect(corrs(t))
-            for ii in eachindex(tcorrs)
-                O = tcorrs[ii]
-                tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),tcorrs[eachindex(tcorrs) .!= ii],bares(t))
-                tt = normal_form(QuExpr((tn=>s,))*corrheis(O,H,Ls))
-                for (t2,s2) in tt.terms
-                    _add_sum_term!(cdA,t2,s2)
-                end
+    # terms from left-hand side, i.e., -d_t δ<A>
+    δcA = corr(A) - expval_as_corrs(A)
+    for (t,s) in δcA.terms
+        # there should be no more "bare" operators in these expressions
+        @assert isempty(bares(t)) && isempty(expvals(t))
+        tcorrs = collect(corrs(t))
+        for ii in eachindex(tcorrs)
+            O = tcorrs[ii]
+            tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),tcorrs[eachindex(tcorrs) .!= ii],bares(t))
+            tt = normal_form(QuExpr((tn=>s,))*corrheis(O,H,Ls))
+            for (t2,s2) in tt.terms
+                _add_sum_term!(cdA,t2,s2)
             end
         end
-        cdA
     end
+    cdA
 end
 
 """

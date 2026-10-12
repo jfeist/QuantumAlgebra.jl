@@ -35,6 +35,8 @@ jobs:
           # test/runtests.jl pins the python version before loading SymPyPythonCall, which fails to
           # precompile without the pin (and on Julia 1.12, Pkg.test aborts if precompiling it fails)
           JULIA_PKG_PRECOMPILE_AUTO: 0
+          # run the tests with several threads (to test concurrent use)
+          JULIA_NUM_THREADS: auto
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:

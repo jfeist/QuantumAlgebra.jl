@@ -152,7 +152,7 @@ function expval2corrs_inds(N::Int)
     end
 end
 # preload the cache for N=0 and N=1 so we do not have to special-case those above
-const _EXPVAL2CORRS_CACHE = Dict{Int,Vector{OpPartition}}(0 => [_partition(((),))], 1 => [_partition(((1,),))])
+const _EXPVAL2CORRS_CACHE = _COWDict{Int,Vector{OpPartition}}(Dict(0 => [_partition(((),))], 1 => [_partition(((1,),))]))
 
 function ncomb_inds(n,inds,used_combs=Set())
     terms = []
@@ -179,7 +179,7 @@ term2expvals(A::QuTerm,barevec::Vector{BaseOperator},C::OpPartition) =
 
 _canon_op_to_num(A::BaseOperator) = _canon_ind_to_num(only(assignedinds(inds(A))))
 _expval2tuple(A::ExpVal) = Tuple(_canon_op_to_num(O) for O in ops(A))
-const _CORR2EXPVALS_CACHE = Dict{Int,Vector{Pair{OpPartition,Number}}}()
+const _CORR2EXPVALS_CACHE = _COWDict{Int,Vector{Pair{OpPartition,Number}}}()
 function corr2expvals_inds(N)
     get!(_CORR2EXPVALS_CACHE,N) do
         A = QuExpr(QuTerm(BaseOpProduct(BosonDestroy.(:a,_canon_ind.(1:N)))))

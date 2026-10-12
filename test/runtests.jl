@@ -617,4 +617,5 @@ end
     include("test_spins.jl")
     include("test_so.jl")
     include("test_comm.jl")
+    include("test_threads.jl")
 end

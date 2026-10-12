@@ -180,38 +180,55 @@ make_indices(inds::AbstractVector{QuIndex}) = inds
 # all indices are "assigned" (i.e., not NoIndex) since they are stored with variable length
 assignedinds(inds) = inds
 
-const _NameTable = Dict{Symbol,IndexInt}()
-const _NameTableInv = Symbol[]
-# hashes of the names that only depend on their content (FNV-1a), used to number sum indices canonically
-const _NameStableHash = UInt64[]
+# Operator names are stored as integer ids into a table of names. The table is never modified, but
+# replaced (under a lock) when a name is added, so that it can be read from several threads at once.
+# (This is a mutable struct with constant fields so that it is stored as a reference, which can be
+# loaded atomically by the hardware, while larger immutable structs would need a lock.)
+mutable struct _NameTableData
+    const ids::Dict{Symbol,IndexInt}
+    const syms::Vector{Symbol}
+    # hashes of the names that only depend on their content (FNV-1a), used to number sum indices canonically
+    const stablehash::Vector{UInt64}
+    # names are ordered alphabetically, rank[i] is the position of the name with id i in that order
+    const rank::Vector{IndexInt}
+end
+const _NameTable = _AtomicRef(_NameTableData(Dict{Symbol,IndexInt}(), Symbol[], UInt64[], IndexInt[]))
+const _NameTableLock = ReentrantLock()
 _fnv1a(s::AbstractString) = foldl((h,b) -> (h ⊻ b) * 0x00000100000001b3, codeunits(s); init=0xcbf29ce484222325)
-# names are ordered alphabetically, _NameRank[][i] is the position of the name with id i in that order
-const _NameRank = Ref(IndexInt[])
+
+function _name_id(name::Symbol)
+    i = get(_NameTable[].ids, name, zero(IndexInt))
+    iszero(i) || return i
+    @lock _NameTableLock begin
+        old = _NameTable[]
+        i = get(old.ids, name, zero(IndexInt))
+        iszero(i) || return i
+        n = length(old.syms) + 1
+        n < 2^24 || error("too many operator names")
+        syms = push!(copy(old.syms), name)
+        ranks = similar(old.rank, n)
+        ranks[sortperm(syms)] .= 1:n
+        ids = copy(old.ids)
+        ids[name] = n
+        _NameTable[] = _NameTableData(ids, syms, push!(copy(old.stablehash), _fnv1a(string(name))), ranks)
+        IndexInt(n)
+    end
+end
 
 @concrete struct QuOpName
     i::IndexInt
-    function QuOpName(name::Symbol)
-        i = get!(_NameTable,name) do
-            push!(_NameTableInv,name)
-            push!(_NameStableHash,_fnv1a(string(name)))
-            length(_NameTableInv) < 2^24 || error("too many operator names")
-            # replace (instead of modifying) the rank vector so that it is always valid
-            ranks = similar(_NameRank[], length(_NameTableInv))
-            ranks[sortperm(_NameTableInv)] .= 1:length(_NameTableInv)
-            _NameRank[] = ranks
-            length(_NameTableInv)
-        end
-        new(i)
-    end
+    QuOpName(name::Symbol) = new(_name_id(name))
     QuOpName(name::QuOpName) = name
     # create from the id of an existing name
     QuOpName(i::IndexInt, ::Val{:id}) = new(i)
 end
-sym(ind::QuOpName) = _NameTableInv[ind.i]
+sym(ind::QuOpName) = _NameTable[].syms[ind.i]
 Base.print(io::IO, ind::QuOpName) = print(io, sym(ind))
-_namerank(ind::QuOpName) = @inbounds _NameRank[][ind.i]
-Base.isless(i1::QuOpName,i2::QuOpName) = _namerank(i1) < _namerank(i2)
-Base.cmp(i1::QuOpName,i2::QuOpName) = cmp(_namerank(i1),_namerank(i2))
+_namestablehash(ind::QuOpName) = @inbounds _NameTable[].stablehash[ind.i]
+# (read the table only once, since another thread can replace it in between. Adding names does not
+# change the relative order of existing names, so it does not matter which version is used.)
+Base.cmp(i1::QuOpName,i2::QuOpName) = (rank = _NameTable[].rank; @inbounds cmp(rank[i1.i],rank[i2.i]))
+Base.isless(i1::QuOpName,i2::QuOpName) = cmp(i1,i2) < 0
 const NoName = QuOpName(Symbol())
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it

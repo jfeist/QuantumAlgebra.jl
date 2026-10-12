@@ -21,7 +21,7 @@ const _KindStableHash = Tuple(_fnv1a(string(t)) for t in instances(BaseOpType))
 @inline function _stable_head(h::UInt64)
     k = Int(h >> 56)
     kh = k == 0 ? zero(UInt64) : @inbounds(_KindStableHash[k])
-    (h & ~(UInt64(0xffffffff) << 32)) ⊻ kh ⊻ @inbounds(_NameStableHash[_headname(h).i])
+    (h & ~(UInt64(0xffffffff) << 32)) ⊻ kh ⊻ _namestablehash(_headname(h))
 end
 
 # add the contributions of the occurrences of sum indices in the item with index words w[off+1:off+nind] and

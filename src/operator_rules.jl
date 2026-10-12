@@ -345,12 +345,24 @@ end
 # The normal order is J₊ < J₋ < J_z, so that J₊ and J₋ on the same site can always be brought
 # next to each other (by moving them past operators of the same kind).
 # The extra information stored with each operator is the index of j in _SPIN_J (0 if j is not fixed).
+# (The table of values of j is replaced instead of modified, so that it can be read from several threads.)
 
-const _SPIN_J = Any[]
+const _SPIN_J = _AtomicRef(Any[])
+const _SPIN_J_LOCK = ReentrantLock()
 _spin_extra(j::Nothing) = 0
-_spin_extra(j) = something(findfirst(isequal(j), _SPIN_J), (push!(_SPIN_J, j); length(_SPIN_J)))
+function _spin_extra(j)
+    k = findfirst(isequal(j), _SPIN_J[])
+    k === nothing || return k
+    @lock _SPIN_J_LOCK begin
+        js = _SPIN_J[]
+        k = findfirst(isequal(j), js)
+        k === nothing || return k
+        _SPIN_J[] = push!(copy(js), j)
+        length(js) + 1
+    end
+end
 "`spin_j(A)`: the spin j of the spin operator A, or `nothing` if it is not fixed"
-spin_j(A::BaseOperator) = (x = opextra(A); x == 0 ? nothing : _SPIN_J[x])
+spin_j(A::BaseOperator) = (x = opextra(A); x == 0 ? nothing : _SPIN_J[][x])
 
 _spin_like(A::BaseOperator, t::BaseOpType) = BaseOperator(t, opname(A), inds(A), opextra(A))
 
