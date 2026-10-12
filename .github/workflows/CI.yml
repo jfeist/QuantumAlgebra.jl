@@ -42,6 +42,23 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
+  migrated-tests:
+    # the tests after migrating them to the new interface with tools/migration/migrate.jl (a check of the tool)
+    name: Tests migrated to the new interface
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Run the migrated tests
+        run: julia --color=yes --project -e 'using Pkg; Pkg.test(test_args=["migrated"])'
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
+          JULIA_NUM_THREADS: auto
   docs:
     name: Documentation
     runs-on: ubuntu-latest

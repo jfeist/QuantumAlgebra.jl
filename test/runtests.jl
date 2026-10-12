@@ -1,3 +1,6 @@
+# with `Pkg.test(test_args=["migrated"])`, the tests are run after migrating them to the new interface
+"migrated" in ARGS && (include("run_migrated.jl"); exit())
+
 using QuantumAlgebra
 using QuantumAlgebra: δ, QuExpr, QuTerm, BaseOpProduct, BaseOperator, Param, QuIndex, _map_quexpr_ops, TLSx, TLSCreate, is_normal_form
 using QuantumAlgebra: expheis, corrheis, _lindbladterm, ExpVal, Corr, to_opprod

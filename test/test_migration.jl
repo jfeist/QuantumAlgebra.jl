@@ -1,5 +1,5 @@
 # the tool for migrating code from the legacy interface (tools/migration/migrate.jl)
-include(joinpath(@__DIR__, "..", "tools", "migration", "migrate.jl"))
+isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools", "migration", "migrate.jl"))
 
 @testset "migration tool" begin
     QuantumAlgebra.use_σxyz()

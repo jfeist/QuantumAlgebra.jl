@@ -37,3 +37,6 @@ giving them different names, e.g., `@boson a b[:]` instead of using `a()` and `a
 Note that operators without indices are now created when they are defined. For two-level systems,
 whose representation depends on `QuantumAlgebra.use_σpm`, this setting therefore has to be chosen
 before the operators are defined (the tool warns about this when necessary).
+
+The test suite of QuantumAlgebra is also run after migrating it with this tool (with
+`Pkg.test(test_args=["migrated"])`), as a check that the migrated code gives the same results.
