@@ -1,6 +1,6 @@
 # Release notes
 
-## v1.7.0 (unreleased)
+## v1.7.0 (2026-10-12)
 This is a minor release because it has no breaking changes (existing code keeps
 working, although some results are presented differently, see below), but it
 contains many new features and prepares the transition to version 2.0. Its main
