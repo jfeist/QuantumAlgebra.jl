@@ -9,6 +9,7 @@ export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
 export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @param
+export qindex, boson, fermion, anticommuting_fermions, tls, tlsxyz
 export map_scalar_function
 
 # compile-time options
@@ -786,6 +787,11 @@ function Base.getindex(q::QuExprCstrctArrAlias,is...)
     q.constructor(is...)
 end
 Base.adjoint(q::QuExprCstrctArrAlias) = QuExprCstrctArrAlias(q.constructor',q.numdims)
+_aliasname(c::QuExprConstructor) = c.name
+_aliasname(c::Base.Fix1{Type{QuIndex}}) = string(c.x)
+_aliasname(c) = string(c)
+Base.print(io::IO, q::QuExprCstrctArrAlias) = print(io, _aliasname(q.constructor), "[", join(fill(":",q.numdims),","), "]")
+Base.show(io::IO, q::QuExprCstrctArrAlias) = print(io, q)
 
 function parse_name_array(expr)
     if expr isa Symbol
@@ -800,65 +806,152 @@ function parse_name_array(expr)
     end
 end
 
-# use as `@qindex i j[:] k[:]` to define indices i,j,k, where j and k have a numeric subindex
+"""
+    qindex(name::Symbol; ndims=0)
+
+Return the index `name` (the function version of [`@qindex`](@ref)): with `ndims=0`, the index
+itself, and with `ndims=1`, an object `j` such that `j[n]` is the index with name `j` and numeric
+subindex `n` (printed as `jₙ`).
+"""
+function qindex(name::Symbol; ndims::Integer=0)
+    0 ≤ ndims ≤ 1 || throw(ArgumentError("indices can have at most one subscript, got ndims = $ndims"))
+    ind = QuIndex(name)
+    iszero(ndims) ? ind : QuExprCstrctArrAlias(Base.Fix1(QuIndex,ind.sym), 1)
+end
+
+"""
+    @qindex i j[:] ...
+
+Define the indices `i`, `j`, … (see [`qindex`](@ref)), where an index declared as `j[:]` has a
+numeric subindex, `j[2]` (printed as `j₂`). Indices can then be used directly, e.g., `a[i,j[2]]`
+(instead of `a[:i,:j_2]`).
+"""
 macro qindex(exprs...)
-    code = Expr(:block)
-    names = []
-    for expr in exprs
-        name, ndims = parse_name_array(expr)
-        ndims < 2 || error("indices can have at most one subscript")
-        refind = QuIndex(name)
-        sym = refind.sym
-        rhs = iszero(ndims) ? refind : :( QuExprCstrctArrAlias(Base.Fix1(QuIndex,$sym),$ndims) )
-        push!(names, esc(name))
-        push!(code.args, :( $(esc(name)) = $rhs ))
-    end
-    push!(code.args, :( ($(names...),) ))
-    code
+    names = [first(parse_name_array(expr)) for expr in exprs]
+    calls = [:( qindex($(QuoteNode(name)); ndims=$(last(parse_name_array(expr)))) ) for (name,expr) in zip(names,exprs)]
+    :( ($(esc.(names)...),) = ($(calls...),) )
 end
 
-function quexpr_variable_code(expr, opfunc, postfixes=(Symbol(),))
+# the variable for the operators created by the constructor c: the operator itself (for ndims = 0), or an
+# object that gives the operators when indexed with ndims indices, e.g., a[i,j]
+function _opvariable(c, ndims::Integer)
+    ndims ≥ 0 || throw(ArgumentError("the number of indices cannot be negative, got ndims = $ndims"))
+    iszero(ndims) ? c() : QuExprCstrctArrAlias(c, Int(ndims))
+end
+
+# code for a macro `@name x` or `@name x[:,:]` that calls `f(:x, args...; ndims)` and assigns the result to
+# `x` (or to `x\$p` for each p in postfixes, if f returns several variables)
+function _opvariable_macro(f, expr, args...; postfixes=nothing)
     name, ndims = parse_name_array(expr)
-    funs = ntuple(i->gensym(), length(postfixes))
-    vars = esc.(Symbol.(name,postfixes))
-    code = Expr(:block, :( ($(funs...),) = $(opfunc)($(Meta.quot(name))) ))
-    for (var,fun) in zip(vars,funs)
-        rhs = iszero(ndims) ? :( $fun() ) : :( QuExprCstrctArrAlias($fun,$ndims) )
-        push!(code.args, :( $var = $rhs ))
-    end
-    push!(code.args, :( ($(vars...),) ))
-    code
+    call = :( $f($(QuoteNode(name)), $(map(esc,args)...); ndims=$ndims) )
+    postfixes === nothing && return :( $(esc(name)) = $call )
+    vars = [esc(Symbol(name,p)) for p in postfixes]
+    :( ($(vars...),) = $call )
 end
 
-macro boson(name) quexpr_variable_code(name, boson_ops) end
-macro fermion(name) quexpr_variable_code(name, fermion_ops) end
-macro tls(name) quexpr_variable_code(name, tlspm_ops) end
-macro tlsxyz(name) quexpr_variable_code(name, tlsxyz_ops, (:x,:y,:z)) end
+"""
+    boson(name::Symbol; ndims=0)
 
+Return the bosonic annihilation operator `name` (the function version of [`@boson`](@ref)). With
+`ndims=0`, this is the operator itself, and otherwise an object `a` such that `a[i,j,…]` (with `ndims`
+indices) is the operator with these indices. The creation operator is obtained as `a'` (or `a'[i,j,…]`).
+"""
+boson(name::Symbol; ndims::Integer=0) = _opvariable(first(boson_ops(name)), ndims)
+
+"""
+    fermion(name::Symbol; ndims=0)
+
+Return the fermionic annihilation operator `name` (the function version of [`@fermion`](@ref)), see
+[`boson`](@ref). Fermions with different names commute, see [`anticommuting_fermions`](@ref) for
+fermions that anticommute.
+"""
+fermion(name::Symbol; ndims::Integer=0) = _opvariable(first(fermion_ops(name)), ndims)
+
+"""
+    tls(name::Symbol; ndims=0)
+
+Return the lowering operator ``σ^-`` of the two-level system `name` (the function version of
+[`@tls`](@ref)), see [`boson`](@ref). The raising operator ``σ^+`` is obtained as `σ'`. The operators are
+represented as jump operators or through Pauli matrices depending on [`use_σpm`](@ref) (at the time
+the operator is created).
+"""
+tls(name::Symbol; ndims::Integer=0) = _opvariable(first(tlspm_ops(name)), ndims)
+
+"""
+    tlsxyz(name::Symbol; ndims=0)
+
+Return the Pauli matrices ``(σ^x, σ^y, σ^z)`` of the two-level system `name` (the function version of
+[`@tlsxyz`](@ref)), see [`boson`](@ref) and [`tls`](@ref).
+"""
+tlsxyz(name::Symbol; ndims::Integer=0) = map(c -> _opvariable(c, ndims), tlsxyz_ops(name))
+
+"""
+    anticommuting_fermions(names::Symbol...; ndims=0)
+
+Return fermionic annihilation operators with the given names that mutually anticommute (the function
+version of [`@anticommuting_fermions`](@ref)), see [`fermion`](@ref).
+"""
+function anticommuting_fermions(names::Symbol...; ndims::Integer=0)
+    # start the groupname (which is the "internal" species name) by concatenating all names,
+    # to ensure reasonable sorting relative to other fermionic species
+    groupname = Symbol(names...,gensym())
+    add_groupaliases(groupname,names)
+    ann = first(fermion_ops(groupname))
+    map(Tuple(enumerate(names))) do (ii,name)
+        c = QuExprConstructor(string(name), (args...) -> ann(ii,args...), string(name,"†"), (args...) -> ann'(ii,args...))
+        _opvariable(c, ndims)
+    end
+end
+
+"""
+    @boson a
+    @boson a[:,:]
+
+Define the variable `a` for a bosonic annihilation operator (see [`boson`](@ref)). With `a[:,:]` (with
+any number of `:`), the operator has as many indices, given as `a[i,j]` (with indices declared by
+[`@qindex`](@ref), or with symbols and integers, e.g., `a[:i,2]`). The creation operator is `a'`
+(or `a'[i,j]`).
+"""
+macro boson(expr) _opvariable_macro(boson, expr) end
+
+"""
+    @fermion f
+    @fermion f[:,:]
+
+Define the variable `f` for a fermionic annihilation operator (see [`fermion`](@ref) and [`@boson`](@ref)).
+"""
+macro fermion(expr) _opvariable_macro(fermion, expr) end
+
+"""
+    @tls σ
+    @tls σ[:]
+
+Define the variable `σ` for the lowering operator ``σ^-`` of a two-level system, with ``σ^+`` = `σ'`
+(see [`tls`](@ref) and [`@boson`](@ref)).
+"""
+macro tls(expr) _opvariable_macro(tls, expr) end
+
+"""
+    @tlsxyz σ
+    @tlsxyz σ[:]
+
+Define the variables `σx`, `σy` and `σz` for the Pauli matrices of a two-level system (see
+[`tlsxyz`](@ref) and [`@boson`](@ref)).
+"""
+macro tlsxyz(expr) _opvariable_macro(tlsxyz, expr; postfixes=(:x,:y,:z)) end
+
+"""
+    @anticommuting_fermions c d[:] ...
+
+Define fermionic annihilation operators that mutually anticommute (see [`anticommuting_fermions`](@ref)
+and [`@boson`](@ref)). All of them must have the same number of indices.
+"""
 macro anticommuting_fermions(exprs...)
     namesndims = parse_name_array.(exprs)
     names = first.(namesndims)
-    # start the groupname (which is the "internal" species name) by concatenating all names,
-    # to ensure reasonable sorting relative to other fermionic species
-    code = quote
-        groupname = Symbol($names...,gensym())
-        add_groupaliases(groupname,$names)
-        ann, cre = fermion_ops(groupname)
-    end
-    ndims = -1
-    for (ii,(name,ndims_i)) in enumerate(namesndims)
-        ann_i = Symbol(:ann,ii)
-        ndims == -1 && (ndims = ndims_i)
-        ndims_i == ndims || throw(ArgumentError("All fermionic species in a group must have the same number of indices, got $(ndims_i) for $(name), expected $(ndims)."))
-        push!(code.args,:( $ann_i = QuExprConstructor($(string(name)), (args...) -> ann($ii,args...), $(string(name,"†")), (args...) -> ann'($ii,args... )) ))
-        if ndims==0
-            push!(code.args, :( $(esc(Symbol(name))) = $(ann_i)() ))
-        else
-            push!(code.args, :( $(esc(Symbol(name))) = QuExprCstrctArrAlias($(ann_i),$ndims) ))
-        end
-    end
-    push!(code.args, :( nothing ))
-    code
+    ndims = last(first(namesndims))
+    all(==(ndims), last.(namesndims)) || throw(ArgumentError("all fermionic species in a group must have the same number of indices, got $(join(exprs,", "))."))
+    :( ($(esc.(names)...),) = anticommuting_fermions($(QuoteNode.(names)...); ndims=$ndims) )
 end
 
 macro param(name)

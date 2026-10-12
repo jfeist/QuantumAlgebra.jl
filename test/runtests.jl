@@ -612,6 +612,7 @@ end
     end
 
     # the matrix representation helpers are used in the qudit tests as well
+    include("test_interface.jl")
     include("test_matrix_representation.jl")
     include("test_qudits.jl")
     include("test_spins.jl")
