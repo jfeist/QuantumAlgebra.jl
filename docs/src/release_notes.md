@@ -103,6 +103,11 @@ Results are mathematically unchanged, but can look different:
   the variables in your code take precedence (as long as the names have not
   been used before they are defined).
 
+### Bug fixes
+- `A ≈ B` threw an error instead of returning `false` when `A` contains a term
+  that is not in `B` and whose coefficient cannot be compared with numbers (e.g.,
+  a `Symbolics` variable).
+
 ## v1.6.1 (2026-10-11)
 This is a patch release with bug fixes:
 - Fix `expval_as_corrs` and `corr_as_expvals` (and thus `heisenberg_eom_system` for
