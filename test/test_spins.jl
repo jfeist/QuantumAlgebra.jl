@@ -37,6 +37,8 @@
     Symbolics.@variables jsym
     Sp, Sm, Sz = spin(:S, jsym)
     @test isequal(normal_form(Sp*Sm + Sz^2 - Sz), QuExpr(jsym*(jsym+1)))
+    @spin j=jsym T
+    @test isequal(normal_form(Tp*Tm + Tz^2 - Tz), QuExpr(jsym*(jsym+1)))
 
     # collective spin: one-axis twisting, d⟨J₋⟩/dt for H = χ J_z²
     H = Pr"χ"*Jz^2

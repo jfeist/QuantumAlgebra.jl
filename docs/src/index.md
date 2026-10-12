@@ -65,8 +65,11 @@ Operators are defined with macros, which create variables for them:
 - `@qudit d q`, `@spin J`/`@spin j J` and `@so n L` define qudits (``d``-level
   systems), spins, and generators of so(n), see below.
 - `@qparam g` defines a real parameter `g`, and `@qparam α::Complex` a complex
-  parameter `α` (with `α'` its complex conjugate). Several parameters can be
-  defined at once, e.g., `@qparam ω g[:] α::Complex`.
+  parameter `α` (with `α'` its complex conjugate).
+
+Several operators (or parameters) of the same kind can be defined at once, e.g.,
+`@boson a b[:]`, `@qudit 3 s p[:]` (where all qudits have 3 levels), or
+`@qparam ω g[:] α::Complex`.
 
 **Indices** can be integers (1,2,...) or symbolic, where symbolic indices must
 be a single unicode character, with possibly an integer subindex. They can be
@@ -168,10 +171,10 @@ not been used yet; the default operators can be disabled with the preference
   i.e., ``J_+``, ``J_-``, ``J_z``, of a spin (the Lie algebra su(2) ≅ so(3)), with
   commutation relations ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. Without
   fixed spin `j`, only these are used, so that results hold in any representation
-  (e.g., for collective spins). With fixed spin `j` (`@spin j J`, where `j` can
-  also be symbolic), products ``J_+ J_-`` on the same site are replaced using the
-  Casimir operator, ``J_+ J_- = j(j+1) - J_z^2 + J_z``, and the vacuum is the
-  lowest-weight state.
+  (e.g., for collective spins). With fixed spin `j` (e.g., `@spin 1//2 J`, or
+  `@spin j=jval J` for a value given by a variable, which can also be symbolic),
+  products ``J_+ J_-`` on the same site are replaced using the Casimir operator,
+  ``J_+ J_- = j(j+1) - J_z^2 + J_z``, and the vacuum is the lowest-weight state.
   ```jldoctest
   julia> @spin J;
 

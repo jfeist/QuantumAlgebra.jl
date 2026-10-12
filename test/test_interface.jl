@@ -36,8 +36,8 @@
 
     # two-level systems
     @tls s[:]
-    so, = tlspm_ops(:s)
-    @test s[1] == so(1) && s'[1] == so'(1)
+    sold, = tlspm_ops(:s)
+    @test s[1] == sold(1) && s'[1] == sold'(1)
     @tlsxyz t
     @test (tx, ty, tz) == map(C -> C(), tlsxyz_ops(:t))
     @test tlsxyz(:t; ndims=1)[3][:i] == tlsxyz_ops(:t)[3](:i)
@@ -55,6 +55,30 @@
     @test qparam(:χ; ndims=1)[:i] == Pr"χ_i"
     @test qparam(:γ, Complex; ndims=2)'[1,2] == (Pc"γ_1,2")'
     @test_throws ArgumentError qparam(:x, Float64)
+
+    # several operators at once
+    @boson b1 b2[:]
+    @test b1 == boson(:b1) && b2[1] == boson(:b2; ndims=1)[1]
+    @test (@boson b3 b4) == (boson(:b3), boson(:b4))
+    @fermion f1 f2[:,:]
+    @test f2[1,:i] == fermion(:f2; ndims=2)[1,:i]
+    @tls s1 s2[:]
+    @test (s1', s2'[1]) == (tls(:s1)', tls(:s2; ndims=1)'[1])
+    @tlsxyz t1 t2[:]
+    @test (t1x, t2z[1]) == (tlsxyz(:t1)[1], tlsxyz(:t2; ndims=1)[3][1])
+    @qudit 3 q1 q2[:]
+    @test string(q1) == "q1 (3-level qudit)" && string(q2) == "q2[:] (3-level qudit)"
+    @test q2(2,3)[:i] == qudit(:q2, 3; ndims=1)(2,3)[:i]
+    @so 4 L1 L2[:]
+    @test string(L1) == "L1 (so(4) generators)" && L2(1,2)[:i] == so(:L2, 4; ndims=1)(1,2)[:i]
+    @spin J1 J2[:]
+    @test (J1p, J2z[1]) == (spin(:J1)[1], spin(:J2; ndims=1)[3][1])
+    @spin 1//2 S1 S2[:]
+    @test normal_form(S1p*S1m) == normal_form(3//4 - S1z^2 + S1z)
+    @test normal_form(S2p[1]*S2m[1]) == normal_form(3//4 - S2z[1]^2 + S2z[1])
+    jval = 3//2
+    @spin j=jval S3
+    @test normal_form(S3p*S3m) == normal_form(15//4 - S3z^2 + S3z)
 
     # printing in the syntax of the new interface (opt-in)
     @test string(c[:i,2]) == "c(i2)"

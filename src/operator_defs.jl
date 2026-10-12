@@ -771,14 +771,27 @@ function _opvariable(c, ndims::Integer)
     iszero(ndims) ? c() : QuExprCstrctArrAlias(c, Int(ndims))
 end
 
-# code for a macro `@name x` or `@name x[:,:]` that calls `f(:x, args...; ndims)` and assigns the result to
-# `x` (or to `x\$p` for each p in postfixes, if f returns several variables)
-function _opvariable_macro(f, expr, args...; postfixes=nothing)
-    name, ndims = parse_name_array(expr)
-    call = :( $f($(QuoteNode(name)), $(map(esc,args)...); ndims=$ndims) )
-    postfixes === nothing && return :( $(esc(name)) = $call )
-    vars = [esc(Symbol(name,p)) for p in postfixes]
-    :( ($(vars...),) = $call )
+# code for a macro `@name x y[:,:] ...` that calls `f(:x, args...; ndims)` for each name and assigns the
+# result to `x` (or to `x\$p` for each p in postfixes, if f returns several variables). The macro returns
+# the variables (as a tuple for several names).
+function _opvariable_macro(f, exprs, args...; postfixes=nothing)
+    isempty(exprs) && throw(ArgumentError("no names given to define with $f"))
+    code = Expr(:block)
+    results = Any[]
+    for expr in exprs
+        name, ndims = parse_name_array(expr)
+        call = :( $f($(QuoteNode(name)), $(map(esc,args)...); ndims=$ndims) )
+        if postfixes === nothing
+            push!(code.args, :( $(esc(name)) = $call ))
+            push!(results, esc(name))
+        else
+            vars = [esc(Symbol(name,p)) for p in postfixes]
+            push!(code.args, :( ($(vars...),) = $call ))
+            push!(results, :( ($(vars...),) ))
+        end
+    end
+    push!(code.args, length(results) == 1 ? only(results) : :( ($(results...),) ))
+    code
 end
 
 """
@@ -838,39 +851,41 @@ end
 """
     @boson a
     @boson a[:,:]
+    @boson a b[:] ...
 
 Define the variable `a` for a bosonic annihilation operator (see [`boson`](@ref)). With `a[:,:]` (with
 any number of `:`), the operator has as many indices, given as `a[i,j]` (with indices declared by
 [`@qindex`](@ref), or with symbols and integers, e.g., `a[:i,2]`). The creation operator is `a'`
-(or `a'[i,j]`).
+(or `a'[i,j]`). Several operators can be defined at once (also for the other macros that define
+operators).
 """
-macro boson(expr) _opvariable_macro(boson, expr) end
+macro boson(exprs...) _opvariable_macro(boson, exprs) end
 
 """
     @fermion f
-    @fermion f[:,:]
+    @fermion f[:,:] g ...
 
 Define the variable `f` for a fermionic annihilation operator (see [`fermion`](@ref) and [`@boson`](@ref)).
 """
-macro fermion(expr) _opvariable_macro(fermion, expr) end
+macro fermion(exprs...) _opvariable_macro(fermion, exprs) end
 
 """
     @tls σ
-    @tls σ[:]
+    @tls σ[:] τ ...
 
 Define the variable `σ` for the lowering operator ``σ^-`` of a two-level system, with ``σ^+`` = `σ'`
 (see [`tls`](@ref) and [`@boson`](@ref)).
 """
-macro tls(expr) _opvariable_macro(tls, expr) end
+macro tls(exprs...) _opvariable_macro(tls, exprs) end
 
 """
     @tlsxyz σ
-    @tlsxyz σ[:]
+    @tlsxyz σ[:] τ ...
 
 Define the variables `σx`, `σy` and `σz` for the Pauli matrices of a two-level system (see
-[`tlsxyz`](@ref) and [`@boson`](@ref)).
+[`tlsxyz`](@ref) and [`@boson`](@ref)), and similarly for each further name.
 """
-macro tlsxyz(expr) _opvariable_macro(tlsxyz, expr; postfixes=(:x,:y,:z)) end
+macro tlsxyz(exprs...) _opvariable_macro(tlsxyz, exprs; postfixes=(:x,:y,:z)) end
 
 """
     @anticommuting_fermions c d[:] ...
@@ -1013,10 +1028,11 @@ so(name::Symbol, n::Integer; ndims::Integer=0) = SOVariable(_so_ops(name, n), _c
 """
     @qudit d q
     @qudit d q[:,:]
+    @qudit d q r[:] ...
 
 Define the variable `q` for a qudit with `d` levels (see [`qudit`](@ref)), such that `q(i,j)`
 is the transition operator ``|i⟩⟨j|``. With `q[:,:]` (with any number of `:`), the qudit has indices,
-which are given as `q(i,j)[k,l]`.
+which are given as `q(i,j)[k,l]`. With several names, all qudits have `d` levels.
 
 # Examples
 ```julia
@@ -1026,32 +1042,43 @@ q(2,1) * q(1,3)        # |2⟩⟨3|
 ∑(:k, m(2,1)[:k] * m(1,2)[:k])
 ```
 """
-macro qudit(d, expr) _opvariable_macro(qudit, expr, d) end
+macro qudit(d, exprs...) _opvariable_macro(qudit, exprs, d) end
 
 """
     @spin J
-    @spin j J
-    @spin j J[:,:]
+    @spin J K[:] ...
+    @spin 1//2 J K[:] ...
+    @spin j=jval J K[:] ...
 
 Define the variables `Jp`, `Jm` and `Jz` for the operators ``J_+``, ``J_-`` and ``J_z`` of a spin
-`J` (see [`spin`](@ref)), optionally with fixed spin `j`. With `J[:,:]` (with any number of `:`),
-the spin has indices, given as, e.g., `Jp[i,j]`.
+`J` (see [`spin`](@ref)), and similarly for each further name. With `J[:,:]` (with any number of
+`:`), the spin has indices, given as, e.g., `Jp[i,j]`. A fixed spin `j` (the same for all names)
+is given as the first argument if it is a number (e.g., `1//2` or `3`), and as `j=jval` otherwise
+(e.g., for a variable `jval` or a symbolic value), since a name as the first argument is
+interpreted as the name of a spin.
 """
 macro spin(args...)
-    length(args) ∈ (1,2) || throw(ArgumentError("usage: @spin J or @spin j J"))
-    length(args) == 1 ? _opvariable_macro(spin, args[1]; postfixes=(:p,:m,:z)) :
-                        _opvariable_macro(spin, args[2], args[1]; postfixes=(:p,:m,:z))
+    isempty(args) && throw(ArgumentError("usage: @spin J K[:] ..., @spin 1//2 J ..., or @spin j=jval J ..."))
+    a1 = first(args)
+    if a1 isa Expr && a1.head == :(=) && length(a1.args) == 2 && a1.args[1] == :j
+        _opvariable_macro(spin, args[2:end], a1.args[2]; postfixes=(:p,:m,:z))
+    elseif a1 isa Symbol || (a1 isa Expr && a1.head == :ref)
+        _opvariable_macro(spin, args; postfixes=(:p,:m,:z))
+    else
+        _opvariable_macro(spin, args[2:end], a1; postfixes=(:p,:m,:z))
+    end
 end
 
 """
     @so n L
     @so n L[:,:]
+    @so n L M[:] ...
 
 Define the variable `L` for the generators of so(n) (see [`so`](@ref)), such that `L(a,b)` is the
 generator ``L_{ab}``. With `L[:,:]` (with any number of `:`), the generators have indices, which are
-given as `L(a,b)[k,l]`.
+given as `L(a,b)[k,l]`. With several names, all of them are generators of so(n) for the same `n`.
 """
-macro so(n, expr) _opvariable_macro(so, expr, n) end
+macro so(n, exprs...) _opvariable_macro(so, exprs, n) end
 
 """
     qparam(name::Symbol, T=Real; ndims=0)
