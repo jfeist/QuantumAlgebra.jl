@@ -8,8 +8,8 @@ export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
-export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @qudit, @spin, @so, @param
-export qindex, boson, fermion, anticommuting_fermions, tls, tlsxyz, qudit, gellmann, spin, so
+export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @qudit, @spin, @so, @qparam
+export qindex, boson, fermion, anticommuting_fermions, tls, tlsxyz, qudit, gellmann, spin, so, qparam
 export map_scalar_function
 
 # compile-time options
@@ -1054,45 +1054,48 @@ given as `L(a,b)[k,l]`.
 macro so(n, expr) _opvariable_macro(so, expr, n) end
 
 """
-    @param g
-    @param g[:,:] α::Complex ...
+    qparam(name::Symbol, T=Real; ndims=0)
 
-Define the variable `g` for a real parameter, or several parameters at once. With `g[:,:]` (with any
-number of `:`), the parameter has indices, given as `g[i,j]`. Parameters declared as `α::Complex` (or
-`α[:]::Complex`) are complex, and `α'` (or `α'[i]`) is their complex conjugate.
+Return the parameter `name` (the function version of [`@qparam`](@ref)), which is real for `T = Real`
+and complex for `T = Complex`. With `ndims=0`, this is the parameter itself, and otherwise an object
+`g` such that `g[i,j,…]` (with `ndims` indices) is the parameter with these indices. For a complex
+parameter `α`, `α'` (or `α'[i]`) is its complex conjugate.
 """
-macro param(exprs...)
-    isempty(exprs) && throw(ArgumentError("usage: @param g or @param g[:,:] α::Complex ..."))
-    names = Symbol[]
-    code = Expr(:block)
-    for expr in exprs
-        name, rhs = _param_code(expr)
-        push!(names, name)
-        push!(code.args, :( $(esc(name)) = $rhs ))
-    end
-    push!(code.args, length(names) == 1 ? esc(only(names)) : :( ($(esc.(names)...),) ))
-    code
-end
-function _param_code(expr)
-    partype = :Real
-    if expr isa Expr && expr.head == :(::)
-        length(expr.args) == 2 || throw(ArgumentError("Expected `name::Complex` or `name::Real`, got `$expr`."))
-        expr, partype = expr.args
-        partype ∈ (:Real, :Complex) || throw(ArgumentError("Expected `::Complex` or `::Real`, got `::$(partype)`."))
-    end
-    name, ndims = parse_name_array(expr)
-    state = partype == :Complex ? 'n' : 'r'
-    if ndims == 0
-        rhs = :( param($(Meta.quot(name)),$state) )
+function qparam(name::Symbol, T::Type=Real; ndims::Integer=0)
+    T in (Real, Complex) || throw(ArgumentError("parameters are either Real or Complex, got $T"))
+    c = if T == Complex
+        QuExprConstructor(string(name), (inds...) -> param(name,'n',inds...), string(name,"*"), (inds...) -> param(name,'c',inds...))
     else
-        cstrctfun(state) = :( (args...) -> param($(Meta.quot(name)), $state,  args...) )
-        cstrctargs = (string(name), cstrctfun(state))
-        if state == 'n'
-            cstrctargs = (cstrctargs..., string(name,"*"), cstrctfun('c'))
-        end
-        rhs = :( QuExprCstrctArrAlias(QuExprConstructor($(cstrctargs...)),$ndims) )
+        QuExprConstructor(string(name), (inds...) -> param(name,'r',inds...))
     end
-    name, rhs
+    _opvariable(c, ndims)
+end
+
+"""
+    @qparam g
+    @qparam g[:,:] α::Complex ...
+
+Define the variable `g` for a real parameter, or several parameters at once (see [`qparam`](@ref)).
+With `g[:,:]` (with any number of `:`), the parameter has indices, given as `g[i,j]`. Parameters
+declared as `α::Complex` (or `α[:]::Complex`) are complex, and `α'` (or `α'[i]`) is their complex
+conjugate.
+"""
+macro qparam(exprs...)
+    isempty(exprs) && throw(ArgumentError("usage: @qparam g or @qparam g[:,:] α::Complex ..."))
+    names = Symbol[]
+    calls = Expr[]
+    for expr in exprs
+        T = :Real
+        if expr isa Expr && expr.head == :(::)
+            length(expr.args) == 2 || throw(ArgumentError("Expected `name::Complex` or `name::Real`, got `$expr`."))
+            expr, T = expr.args
+            T ∈ (:Real, :Complex) || throw(ArgumentError("Expected `::Complex` or `::Real`, got `::$T`."))
+        end
+        name, ndims = parse_name_array(expr)
+        push!(names, name)
+        push!(calls, :( qparam($(QuoteNode(name)), $(T == :Complex ? Complex : Real); ndims=$ndims) ))
+    end
+    length(names) == 1 ? :( $(esc(only(names))) = $(only(calls)) ) : :( ($(esc.(names)...),) = ($(calls...),) )
 end
 
 ## functions for constructing `param`s with string macros,

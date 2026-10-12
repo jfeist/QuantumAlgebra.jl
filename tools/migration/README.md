@@ -3,7 +3,7 @@
 `migrate.jl` converts code that uses the legacy interface of QuantumAlgebra (constructor functions,
 e.g., `@boson_ops a` with `a(:i)`, the default operators `a`, `f`, `σx`, ..., and parameters
 `Pr"g_i"`) to the interface with operator variables introduced in v1.7 (e.g., `@boson a[:]` with
-`a[:i]`, and `@param g[:]` with `g[:i]`). It works on Julia files and Jupyter notebooks:
+`a[:i]`, and `@qparam g[:]` with `g[:i]`). It works on Julia files and Jupyter notebooks:
 
 ```sh
 julia --project=tools/migration -e 'using Pkg; Pkg.instantiate()'

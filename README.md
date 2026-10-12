@@ -61,9 +61,9 @@ Operators are defined with macros, which create variables for them:
   of a TLS, with `σ'` the excitation operator $σ^{+}$.
 - `@qudit d q`, `@spin J`/`@spin j J` and `@so n L` define qudits ($d$-level
   systems), spins, and generators of so(n), see below.
-- `@param g` defines a real parameter `g`, and `@param α::Complex` a complex
+- `@qparam g` defines a real parameter `g`, and `@qparam α::Complex` a complex
   parameter `α` (with `α'` its complex conjugate). Several parameters can be
-  defined at once, e.g., `@param ω g[:] α::Complex`.
+  defined at once, e.g., `@qparam ω g[:] α::Complex`.
 
 **Indices** can be integers (1,2,...) or symbolic, where symbolic indices must
 be a single unicode character, with possibly an integer subindex. They can be
@@ -93,7 +93,7 @@ julia> @tlsxyz σ[:]
 julia> σx[:◔_1]*σy[:😄_121]
 σˣ(◔₁) σʸ(😄₁₂₁)
 
-julia> @param g[:,:] α::Complex;
+julia> @qparam g[:,:] α::Complex;
 
 julia> g[i,1]*α'
 g(i1) α*
@@ -116,7 +116,8 @@ Every macro has a function with the same name that returns the operators instead
 of assigning them to variables, e.g., `a = boson(:a; ndims=2)` is equivalent to
 `@boson a[:,:]` (see `boson`, `fermion`,
 `anticommuting_fermions`, `tls`, `tlsxyz`,
-`qudit`, `spin`, `so` and `qindex`). This is
+`qudit`, `spin`, `so`, `qparam` and
+`qindex`). This is
 useful to create operators programmatically, e.g., with names that are generated
 in code.
 
@@ -371,7 +372,7 @@ not been used yet; the default operators can be disabled with the preference
   operator or a tuple of two operators `L=(X,Y)` to represent off-diagonal
   Lindblad terms $L_{X,Y}[ρ] = X ρ Y^† - \frac{1}{2} \{Y^† X,ρ\}$.
   ```julia
-  julia> @boson a; @boson b[:]; @param ω γ;
+  julia> @boson a; @boson b[:]; @qparam ω γ;
 
   julia> H = ω*a'*a;
 
@@ -420,7 +421,7 @@ not been used yet; the default operators can be disabled with the preference
   be used to "seed" the system of equations, otherwise all operators appearing
   in `H` are used.
   ```julia
-  julia> @boson a; @param ω χ γ;
+  julia> @boson a; @qparam ω χ γ;
 
   julia> H = ω*a'*a + χ*a'*(a'+a)*a;
 
@@ -436,7 +437,7 @@ not been used yet; the default operators can be disabled with the preference
   expectation values (the default) or correlators (corresponding to a cumulant
   expansion) of the operators.
   ```julia
-  julia> @boson a; @param ω χ γ;
+  julia> @boson a; @qparam ω χ γ;
 
   julia> H = ω*a'*a + χ*a'*(a'+a)*a;
 

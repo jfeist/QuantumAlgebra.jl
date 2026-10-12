@@ -43,15 +43,18 @@
     @test tlsxyz(:t; ndims=1)[3][:i] == tlsxyz_ops(:t)[3](:i)
 
     # parameters
-    @param g[:]
+    @qparam g[:]
     @test g[:i] == Pr"g_i"
-    @param h::Complex
+    @qparam h::Complex
     @test h == Pc"h" && h' == (Pc"h")'
-    @param k[:,:]::Complex
+    @qparam k[:,:]::Complex
     @test k'[1,:j] == (Pc"k_1,j")'
     # several parameters at once
-    @param ω χ[:] γ::Complex
+    @qparam ω χ[:] γ::Complex
     @test (ω, χ[1], γ) == (Pr"ω", Pr"χ_1", Pc"γ")
+    @test qparam(:χ; ndims=1)[:i] == Pr"χ_i"
+    @test qparam(:γ, Complex; ndims=2)'[1,2] == (Pc"γ_1,2")'
+    @test_throws ArgumentError qparam(:x, Float64)
 
     # printing in the syntax of the new interface (opt-in)
     @test string(c[:i,2]) == "c(i2)"

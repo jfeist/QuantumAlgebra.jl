@@ -88,9 +88,10 @@ are treated as different modes) therefore need different names.
 | `b()`, `b'()`, `bdag()` | `b`, `b'`, `b'` |
 | `b(:i,2)`, `b'(:i,2)` | `b[:i,2]`, `b'[:i,2]` (or `b[i,2]` after `@qindex i`) |
 | `b(:j_2)` | `b[:j_2]` (or `b[j[2]]` after `@qindex j[:]`) |
-| `Pr"g_i"`, `param(:g,'r',:i)` | `g[:i]` after `@param g[:]` |
-| `Pc"α"`, `Pc"α"'` | `α`, `α'` after `@param α::Complex` |
+| `Pr"g_i"`, `param(:g,'r',:i)` | `g[:i]` after `@qparam g[:]` |
+| `Pc"α"`, `Pc"α"'` | `α`, `α'` after `@qparam α::Complex` |
 | `boson_ops(:b)` etc. | `boson(:b; ndims=2)` etc. |
+| `param(:g,'r',:i)`, `param(:α,'n')` (in code) | `qparam(:g; ndims=1)[:i]`, `qparam(:α, Complex)` |
 | default operators `a`, `f`, `σx`, ... | define them, e.g., `@boson a[:]` |
 
 The script [`tools/migration/migrate.jl`](https://github.com/jfeist/QuantumAlgebra.jl/tree/main/tools/migration)

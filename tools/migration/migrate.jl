@@ -370,7 +370,7 @@ function migrate_units!(units::Vector{Unit})
             continue
         end
         cplx, nd = only(p.complex), only(p.ndims)
-        push!(newdecls, "@param $(p.name)$(dimsstring(nd))$(cplx ? "::Complex" : "")")
+        push!(newdecls, "@qparam $(p.name)$(dimsstring(nd))$(cplx ? "::Complex" : "")")
         for (u, n, conj, inds) in p.uses
             v = string(p.name) * (conj ? "'" : "")
             push!(u.edits, Edit(JS.byte_range(n), isempty(inds) ? v : "$v[$(join(inds, ","))]"))

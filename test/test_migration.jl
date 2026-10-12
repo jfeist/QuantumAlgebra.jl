@@ -20,10 +20,10 @@ include(joinpath(@__DIR__, "..", "tools", "migration", "migrate.jl"))
     @boson a
     @fermion f[:,:]
     @tlsxyz σ[:]
-    @param ω
-    @param g[:]
-    @param η[:]::Complex
-    @param α[:]::Complex
+    @qparam ω
+    @qparam g[:]
+    @qparam η[:]::Complex
+    @qparam α[:]::Complex
     @boson b[:]
     @tls s[:]
     @anticommuting_fermions c[:] d[:]
@@ -74,7 +74,7 @@ include(joinpath(@__DIR__, "..", "tools", "migration", "migrate.jl"))
     """
     newnb, msgs = QAMigration.migrate_notebook(nb)
     cells = QAMigration.JSON.parse(newnb)["cells"]
-    @test join(cells[1]["source"]) == "using QuantumAlgebra\n# operators and parameters (migrated from the legacy QuantumAlgebra interface)\n@boson a[:]\n@tls σ[:]\n@param ω\nQuantumAlgebra.use_σpm(true)"
+    @test join(cells[1]["source"]) == "using QuantumAlgebra\n# operators and parameters (migrated from the legacy QuantumAlgebra interface)\n@boson a[:]\n@tls σ[:]\n@qparam ω\nQuantumAlgebra.use_σpm(true)"
     @test join(cells[3]["source"]) == "H = ω*a'[:i]*a[:i] + σ'[:i]\nnormal_form(H)"
     @test cells[2]["source"] == ["text"]
     QuantumAlgebra.use_σxyz()
