@@ -764,6 +764,20 @@ macro qindex(exprs...)
     :( ($(esc.(names)...),) = ($(calls...),) )
 end
 
+# the variable name, the name of the operators (as code) and the number of indices in a declaration `x`,
+# `x[:,:]`, or `x = name` (or `x[:,:] = name`), where `name` (a string or symbol) is the name that is printed
+function parse_decl(expr)
+    if expr isa Expr && expr.head == :(=) && length(expr.args) == 2
+        var, ndims = parse_name_array(expr.args[1])
+        var, esc(expr.args[2]), ndims
+    else
+        var, ndims = parse_name_array(expr)
+        var, QuoteNode(var), ndims
+    end
+end
+# whether an expression is a string literal (also raw"…" or with interpolation)
+_isstringliteral(x) = x isa String || (x isa Expr && (x.head == :string || (x.head == :macrocall && x.args[1] == Symbol("@raw_str"))))
+
 # the variable for the operators created by the constructor c: the operator itself (for ndims = 0), or an
 # object that gives the operators when indexed with ndims indices, e.g., a[i,j]
 function _opvariable(c, ndims::Integer)
@@ -771,21 +785,21 @@ function _opvariable(c, ndims::Integer)
     iszero(ndims) ? c() : QuExprCstrctArrAlias(c, Int(ndims))
 end
 
-# code for a macro `@name x y[:,:] ...` that calls `f(:x, args...; ndims)` for each name and assigns the
-# result to `x` (or to `x\$p` for each p in postfixes, if f returns several variables). The macro returns
-# the variables (as a tuple for several names).
+# code for a macro `@name x y[:,:] z = "name" ...` that calls `f(:x, args...; ndims)` for each declaration (with
+# the name that is given, if any) and assigns the result to `x` (or to `x\$p` for each p in postfixes, if f
+# returns several variables). The macro returns the variables (as a tuple for several declarations).
 function _opvariable_macro(f, exprs, args...; postfixes=nothing)
     isempty(exprs) && throw(ArgumentError("no names given to define with $f"))
     code = Expr(:block)
     results = Any[]
     for expr in exprs
-        name, ndims = parse_name_array(expr)
-        call = :( $f($(QuoteNode(name)), $(map(esc,args)...); ndims=$ndims) )
+        var, name, ndims = parse_decl(expr)
+        call = :( $f($name, $(map(esc,args)...); ndims=$ndims) )
         if postfixes === nothing
-            push!(code.args, :( $(esc(name)) = $call ))
-            push!(results, esc(name))
+            push!(code.args, :( $(esc(var)) = $call ))
+            push!(results, esc(var))
         else
-            vars = [esc(Symbol(name,p)) for p in postfixes]
+            vars = [esc(Symbol(var,p)) for p in postfixes]
             push!(code.args, :( ($(vars...),) = $call ))
             push!(results, :( ($(vars...),) ))
         end
@@ -794,49 +808,54 @@ function _opvariable_macro(f, exprs, args...; postfixes=nothing)
     code
 end
 
-"""
-    boson(name::Symbol; ndims=0)
-
-Return the bosonic annihilation operator `name` (the function version of [`@boson`](@ref)). With
-`ndims=0`, this is the operator itself, and otherwise an object `a` such that `a[i,j,…]` (with `ndims`
-indices) is the operator with these indices. The creation operator is obtained as `a'` (or `a'[i,j,…]`).
-"""
-boson(name::Symbol; ndims::Integer=0) = _opvariable(first(boson_ops(name)), ndims)
+# names of operators and parameters can be given as symbols or strings
+const _Name = Union{Symbol,AbstractString}
 
 """
-    fermion(name::Symbol; ndims=0)
+    boson(name; ndims=0)
+
+Return the bosonic annihilation operator `name` (the function version of [`@boson`](@ref)), where
+`name` is a `Symbol` or a string (which can be any name, e.g., `"c↑"`). With `ndims=0`, this is the
+operator itself, and otherwise an object `a` such that `a[i,j,…]` (with `ndims` indices) is the
+operator with these indices. The creation operator is obtained as `a'` (or `a'[i,j,…]`).
+"""
+boson(name::_Name; ndims::Integer=0) = _opvariable(first(boson_ops(Symbol(name))), ndims)
+
+"""
+    fermion(name; ndims=0)
 
 Return the fermionic annihilation operator `name` (the function version of [`@fermion`](@ref)), see
 [`boson`](@ref). Fermions with different names commute, see [`anticommuting_fermions`](@ref) for
 fermions that anticommute.
 """
-fermion(name::Symbol; ndims::Integer=0) = _opvariable(first(fermion_ops(name)), ndims)
+fermion(name::_Name; ndims::Integer=0) = _opvariable(first(fermion_ops(Symbol(name))), ndims)
 
 """
-    tls(name::Symbol; ndims=0)
+    tls(name; ndims=0)
 
 Return the lowering operator ``σ^-`` of the two-level system `name` (the function version of
 [`@tls`](@ref)), see [`boson`](@ref). The raising operator ``σ^+`` is obtained as `σ'`. The operators are
 represented as jump operators or through Pauli matrices depending on [`use_σpm`](@ref) (at the time
 the operator is created).
 """
-tls(name::Symbol; ndims::Integer=0) = _opvariable(first(tlspm_ops(name)), ndims)
+tls(name::_Name; ndims::Integer=0) = _opvariable(first(tlspm_ops(Symbol(name))), ndims)
 
 """
-    tlsxyz(name::Symbol; ndims=0)
+    tlsxyz(name; ndims=0)
 
 Return the Pauli matrices ``(σ^x, σ^y, σ^z)`` of the two-level system `name` (the function version of
 [`@tlsxyz`](@ref)), see [`boson`](@ref) and [`tls`](@ref).
 """
-tlsxyz(name::Symbol; ndims::Integer=0) = map(c -> _opvariable(c, ndims), tlsxyz_ops(name))
+tlsxyz(name::_Name; ndims::Integer=0) = map(c -> _opvariable(c, ndims), tlsxyz_ops(Symbol(name)))
 
 """
-    anticommuting_fermions(names::Symbol...; ndims=0)
+    anticommuting_fermions(names...; ndims=0)
 
 Return fermionic annihilation operators with the given names that mutually anticommute (the function
 version of [`@anticommuting_fermions`](@ref)), see [`fermion`](@ref).
 """
-function anticommuting_fermions(names::Symbol...; ndims::Integer=0)
+function anticommuting_fermions(names::_Name...; ndims::Integer=0)
+    names = Symbol.(names)
     # start the groupname (which is the "internal" species name) by concatenating all names,
     # to ensure reasonable sorting relative to other fermionic species
     groupname = Symbol(names...,gensym())
@@ -852,18 +871,22 @@ end
     @boson a
     @boson a[:,:]
     @boson a b[:] ...
+    @boson au="a↑" ad[:]="a↓" ...
 
 Define the variable `a` for a bosonic annihilation operator (see [`boson`](@ref)). With `a[:,:]` (with
 any number of `:`), the operator has as many indices, given as `a[i,j]` (with indices declared by
 [`@qindex`](@ref), or with symbols and integers, e.g., `a[:i,2]`). The creation operator is `a'`
-(or `a'[i,j]`). Several operators can be defined at once (also for the other macros that define
-operators).
+(or `a'[i,j]`). Several operators can be defined at once, and with `au = "a↑"`, the variable `au` is
+an operator with the name `a↑` (also for the other macros that define operators or parameters). This
+can be any name, e.g., one that is not a valid variable name. Note that unicode characters in names
+are converted to LaTeX for LaTeX output (e.g., `@boson b̄` gives ``\\bar{b}``), so a LaTeX name
+(which is also used for text output) is usually not needed.
 """
 macro boson(exprs...) _opvariable_macro(boson, exprs) end
 
 """
     @fermion f
-    @fermion f[:,:] g ...
+    @fermion f[:,:] g cu="c↑" ...
 
 Define the variable `f` for a fermionic annihilation operator (see [`fermion`](@ref) and [`@boson`](@ref)).
 """
@@ -889,16 +912,16 @@ macro tlsxyz(exprs...) _opvariable_macro(tlsxyz, exprs; postfixes=(:x,:y,:z)) en
 
 """
     @anticommuting_fermions c d[:] ...
+    @anticommuting_fermions cu="c↑" cd="c↓" ...
 
 Define fermionic annihilation operators that mutually anticommute (see [`anticommuting_fermions`](@ref)
 and [`@boson`](@ref)). All of them must have the same number of indices.
 """
 macro anticommuting_fermions(exprs...)
-    namesndims = parse_name_array.(exprs)
-    names = first.(namesndims)
-    ndims = last(first(namesndims))
-    all(==(ndims), last.(namesndims)) || throw(ArgumentError("all fermionic species in a group must have the same number of indices, got $(join(exprs,", "))."))
-    :( ($(esc.(names)...),) = anticommuting_fermions($(QuoteNode.(names)...); ndims=$ndims) )
+    decls = parse_decl.(exprs)
+    ndims = last(first(decls))
+    all(d -> last(d) == ndims, decls) || throw(ArgumentError("all fermionic species in a group must have the same number of indices, got $(join(exprs,", "))."))
+    :( ($(esc.(first.(decls))...),) = anticommuting_fermions($(getindex.(decls, 2)...); ndims=$ndims) )
 end
 
 """
@@ -935,7 +958,7 @@ Base.show(io::IO, v::_PairVariable) = print(io, v)
 _checkndims(ndims) = ndims ≥ 0 ? Int(ndims) : throw(ArgumentError("the number of indices cannot be negative, got ndims = $ndims"))
 
 """
-    qudit(name::Symbol, d::Integer; ndims=0)
+    qudit(name, d::Integer; ndims=0)
 
 Return the qudit (`d`-level system) `name` (the function version of [`@qudit`](@ref)), such that
 `q(i,j)` is the transition operator ``|i⟩⟨j|`` (with levels `1 ≤ i,j ≤ d`). With `ndims > 0`, the
@@ -956,7 +979,7 @@ r = qudit(:r, 3; ndims=1)
 r(2,3)[:i]                 # |2⟩⟨3| = |2⟩⟨1|1⟩⟨3| acting on qudit i
 ```
 """
-qudit(name::Symbol, d::Integer; ndims::Integer=0) = QuditVariable(_qudit_ops(name, d), _checkndims(ndims))
+qudit(name::_Name, d::Integer; ndims::Integer=0) = QuditVariable(_qudit_ops(Symbol(name), d), _checkndims(ndims))
 
 """
     gellmann(q::QuditVariable; sqrt=Base.sqrt)
@@ -988,7 +1011,7 @@ function gellmann(q::QuditVariable; sqrt=Base.sqrt)
 end
 
 """
-    spin(name::Symbol, j=nothing; ndims=0)
+    spin(name, j=nothing; ndims=0)
 
 Return the operators `(Jp, Jm, Jz)`, i.e., ``J_+``, ``J_-`` and ``J_z``, of the spin `name` (the function
 version of [`@spin`](@ref)), see [`boson`](@ref) for `ndims`. They generate the Lie algebra
@@ -999,10 +1022,10 @@ acting on the same spin are replaced by ``j(j+1) - J_z^2 + J_z``, and the vacuum
 lowest-weight state with ``J_-|0⟩ = 0`` and ``J_z|0⟩ = -j|0⟩``. Note that other relations that hold
 for a specific `j` (e.g., ``J_+^2 = 0`` for `j = 1//2`) are not used.
 """
-spin(name::Symbol, j=nothing; ndims::Integer=0) = map(c -> _opvariable(c, ndims), _spin_ops(name, j))
+spin(name::_Name, j=nothing; ndims::Integer=0) = map(c -> _opvariable(c, ndims), _spin_ops(Symbol(name), j))
 
 """
-    so(name::Symbol, n::Integer; ndims=0)
+    so(name, n::Integer; ndims=0)
 
 Return the generators `L` of the Lie algebra so(n) of rotations in `n` dimensions (the function
 version of [`@so`](@ref)), such that `L(a,b)` is the generator ``L_{ab} = -L_{ba}`` (``a,b = 1,…,n``).
@@ -1023,7 +1046,7 @@ L(2,1)                             # -L¹²()
 normal_form(comm(L(1,2), L(2,3)))  # -i L¹³()
 ```
 """
-so(name::Symbol, n::Integer; ndims::Integer=0) = SOVariable(_so_ops(name, n), _checkndims(ndims))
+so(name::_Name, n::Integer; ndims::Integer=0) = SOVariable(_so_ops(Symbol(name), n), _checkndims(ndims))
 
 """
     @qudit d q
@@ -1055,14 +1078,14 @@ Define the variables `Jp`, `Jm` and `Jz` for the operators ``J_+``, ``J_-`` and 
 `:`), the spin has indices, given as, e.g., `Jp[i,j]`. A fixed spin `j` (the same for all names)
 is given as the first argument if it is a number (e.g., `1//2` or `3`), and as `j=jval` otherwise
 (e.g., for a variable `jval` or a symbolic value), since a name as the first argument is
-interpreted as the name of a spin.
+interpreted as the name of a spin. (`j = "name"`, with a string, is the spin `j` with that name.)
 """
 macro spin(args...)
     isempty(args) && throw(ArgumentError("usage: @spin J K[:] ..., @spin 1//2 J ..., or @spin j=jval J ..."))
     a1 = first(args)
-    if a1 isa Expr && a1.head == :(=) && length(a1.args) == 2 && a1.args[1] == :j
+    if a1 isa Expr && a1.head == :(=) && length(a1.args) == 2 && a1.args[1] == :j && !_isstringliteral(a1.args[2])
         _opvariable_macro(spin, args[2:end], a1.args[2]; postfixes=(:p,:m,:z))
-    elseif a1 isa Symbol || (a1 isa Expr && a1.head == :ref)
+    elseif a1 isa Symbol || (a1 isa Expr && a1.head in (:ref, :(=)))
         _opvariable_macro(spin, args; postfixes=(:p,:m,:z))
     else
         _opvariable_macro(spin, args[2:end], a1; postfixes=(:p,:m,:z))
@@ -1081,14 +1104,17 @@ given as `L(a,b)[k,l]`. With several names, all of them are generators of so(n) 
 macro so(n, exprs...) _opvariable_macro(so, exprs, n) end
 
 """
-    qparam(name::Symbol, T=Real; ndims=0)
+    qparam(name, T=Real; ndims=0)
 
 Return the parameter `name` (the function version of [`@qparam`](@ref)), which is real for `T = Real`
-and complex for `T = Complex`. With `ndims=0`, this is the parameter itself, and otherwise an object
-`g` such that `g[i,j,…]` (with `ndims` indices) is the parameter with these indices. For a complex
-parameter `α`, `α'` (or `α'[i]`) is its complex conjugate.
+and complex for `T = Complex`. The name is a `Symbol` or a string, which can be any name, e.g.,
+`"f(t)"` (which is also how the parameter appears in [`julia_expression`](@ref)). With `ndims=0`, this
+is the parameter itself, and otherwise an object `g` such that `g[i,j,…]` (with `ndims` indices) is
+the parameter with these indices. For a complex parameter `α`, `α'` (or `α'[i]`) is its complex
+conjugate.
 """
-function qparam(name::Symbol, T::Type=Real; ndims::Integer=0)
+function qparam(name::_Name, T::Type=Real; ndims::Integer=0)
+    name = Symbol(name)
     T in (Real, Complex) || throw(ArgumentError("parameters are either Real or Complex, got $T"))
     c = if T == Complex
         QuExprConstructor(string(name), (inds...) -> param(name,'n',inds...), string(name,"*"), (inds...) -> param(name,'c',inds...))
@@ -1100,18 +1126,23 @@ end
 
 """
     @qparam g
-    @qparam g[:,:] α::Complex ...
+    @qparam g[:,:] α::Complex ft="f(t)" ...
 
 Define the variable `g` for a real parameter, or several parameters at once (see [`qparam`](@ref)).
 With `g[:,:]` (with any number of `:`), the parameter has indices, given as `g[i,j]`. Parameters
 declared as `α::Complex` (or `α[:]::Complex`) are complex, and `α'` (or `α'[i]`) is their complex
-conjugate.
+conjugate. With `ft = "f(t)"`, the variable `ft` is the parameter with the name `f(t)` (see
+[`@boson`](@ref)).
 """
 macro qparam(exprs...)
     isempty(exprs) && throw(ArgumentError("usage: @qparam g or @qparam g[:,:] α::Complex ..."))
     names = Symbol[]
     calls = Expr[]
     for expr in exprs
+        pname = nothing
+        if expr isa Expr && expr.head == :(=) && length(expr.args) == 2
+            expr, pname = expr.args
+        end
         T = :Real
         if expr isa Expr && expr.head == :(::)
             length(expr.args) == 2 || throw(ArgumentError("Expected `name::Complex` or `name::Real`, got `$expr`."))
@@ -1120,7 +1151,7 @@ macro qparam(exprs...)
         end
         name, ndims = parse_name_array(expr)
         push!(names, name)
-        push!(calls, :( qparam($(QuoteNode(name)), $(T == :Complex ? Complex : Real); ndims=$ndims) ))
+        push!(calls, :( qparam($(pname === nothing ? QuoteNode(name) : esc(pname)), $(T == :Complex ? Complex : Real); ndims=$ndims) ))
     end
     length(names) == 1 ? :( $(esc(only(names))) = $(only(calls)) ) : :( ($(esc.(names)...),) = ($(calls...),) )
 end

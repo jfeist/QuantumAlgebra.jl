@@ -71,6 +71,16 @@ Several operators (or parameters) of the same kind can be defined at once, e.g.,
 `@boson a b[:]`, `@qudit 3 s p[:]` (where all qudits have 3 levels), or
 `@qparam ω g[:] α::Complex`.
 
+The name of an operator or parameter can differ from the name of its variable,
+e.g., for names that are not valid variable names: `@fermion cu="c↑" cd="c↓"`
+defines the variables `cu` and `cd` for the operators `c↑` and `c↓`, and
+`@qparam ft="f(t)"` the variable `ft` for the parameter `f(t)` (e.g., a
+time-dependent parameter, which [`julia_expression`](@ref) writes as the function
+call `f(t)`). Names can contain unicode characters, which are converted to LaTeX
+in LaTeX output (e.g., `@qparam b̄` is shown as `b̄` in text and as ``\bar{b}``
+in LaTeX), so names written in LaTeX (e.g., `raw"\bar{b}"`, which is also shown
+like this in text) are usually not needed.
+
 **Indices** can be integers (1,2,...) or symbolic, where symbolic indices must
 be a single unicode character, with possibly an integer subindex. They can be
 given as symbols (`:i`, `:j_2`) or with index variables defined by `@qindex`,

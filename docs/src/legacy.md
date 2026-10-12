@@ -90,6 +90,8 @@ are treated as different modes) therefore need different names.
 | `b(:j_2)` | `b[:j_2]` (or `b[j[2]]` after `@qindex j[:]`) |
 | `Pr"g_i"`, `param(:g,'r',:i)` | `g[:i]` after `@qparam g[:]` |
 | `Pc"α"`, `Pc"α"'` | `α`, `α'` after `@qparam α::Complex` |
+| `Pr"f(t)"` (a name that is not a valid variable name) | `ft` after `@qparam ft="f(t)"` |
+| `Pc"\bar{b}"` (a name in LaTeX) | `b̄` after `@qparam b̄::Complex` (shown as ``\bar{b}`` in LaTeX) |
 | `boson_ops(:b)` etc. | `boson(:b; ndims=2)` etc. |
 | `param(:g,'r',:i)`, `param(:α,'n')` (in code) | `qparam(:g; ndims=1)[:i]`, `qparam(:α, Complex)` |
 | default operators `a`, `f`, `σx`, ... | define them, e.g., `@boson a[:]` |

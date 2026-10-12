@@ -113,3 +113,35 @@
         QuantumAlgebra.use_bracket_display(false)
     end
 end
+
+# declarations with a name that is different from the variable name (e.g., not a valid variable name)
+@testset "printed names" begin
+    @boson au="a↑" ad[:]="a↓"
+    @test string(au'*ad[:i]) == "a↑†() a↓(i)"
+    @test au == boson("a↑") == boson(Symbol("a↑"))
+    @fermion fu = "f↑"
+    @anticommuting_fermions cu="c↑" cd="c↓"
+    @test normal_form(cu*cd + cd*cu) == QuExpr()
+    @test string(cu) == "c↑()"
+    @tls t[:] = "τ̃"
+    @tlsxyz s = "s̃"
+    @test (t[1], sz) == (tls("τ̃"; ndims=1)[1], last(tlsxyz("s̃")))
+    @qudit 3 q = "q̃"
+    @test string(q(2,3)) == "q̃²³()"
+    @so 3 L[:] = "𝓛"
+    @test L(1,2)[:i] == so("𝓛", 3; ndims=1)(1,2)[:i]
+    # for @spin, `j = …` is the spin j, except with a string, which is the name of the spin `j`
+    @spin j = "𝒥"
+    @test string(jz) == "𝒥ᶻ()"
+    jval = 1//2
+    @spin j = jval K = "κ"
+    @test normal_form(Kp*Km) == normal_form(3//4 + Kz - Kz^2)
+    @test string(Kz) == "κᶻ()"
+    # parameters, also with names that are given by a variable
+    name = "x(t)"
+    @qparam ft="f(t)" β[:]::Complex=raw"\tilde{\beta}" xt=name
+    @test (ft, xt) == (Pr"f(t)", qparam("x(t)"))
+    @test julia_expression(ft) == :(f(t))
+    @test β'[:i] == param(Symbol("\\tilde{\\beta}"), 'c', :i)
+    @test qparam("α", Complex; ndims=1)[1] == Pc"α_1"
+end

@@ -25,6 +25,10 @@ Julia version is now 1.10 (the current LTS).
   programmatically, e.g., `boson(:a; ndims=2)` or `qparam(:α, Complex)`.
   Several operators can be defined at once, e.g., `@boson a b[:]` or
   `@qudit 3 s p[:]`.
+- The name of an operator or parameter can differ from the name of its
+  variable, e.g., `@fermion cu="c↑"` or `@qparam ft="f(t)"` (for names that are
+  not valid variable names), and the functions also accept names as strings,
+  e.g., `qparam("f(t)")`.
 - The modes that are assumed to be in the vacuum state in `Avac`, `vacA` and
   `vacExpVal` are given by the operator variables, where, e.g., `a` after
   `@boson a[:]` stands for all modes of `a`.
