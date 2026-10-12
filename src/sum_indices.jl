@@ -183,8 +183,8 @@ _numbering(colors::Vector{UInt64}) = (λ = zeros(IndexInt, length(colors)); λ[s
 
 # maximal number of numberings that are tried to find the canonical one. If there are more (for terms with many
 # equivalent sum indices), sum indices are only numbered in the order of their signatures (and terms that only differ
-# in the numbering of such sum indices might not be identified)
-const _MAX_CANONICAL_NUMBERINGS = 1000
+# in the numbering of such sum indices might not be identified). (A Ref so that it can be changed in tests.)
+const _MAX_CANONICAL_NUMBERINGS = Ref(1000)
 
 mutable struct _CanonicalSearch
     const t::QuTerm
@@ -236,7 +236,7 @@ function _canonical_search!(S::_CanonicalSearch, colors::Vector{UInt64})
     vs = findall(==(_first_tied_color(colors)), colors)
     firstleaf = _canonical_search!(S, _individualize(S.t, colors, vs[1]))
     for v in @view vs[2:end]
-        S.nleaves > _MAX_CANONICAL_NUMBERINGS && break
+        S.nleaves > _MAX_CANONICAL_NUMBERINGS[] && break
         c2 = _individualize(S.t, colors, v)
         # if the first leaf below v gives the same term as the first leaf below vs[1], there is a symmetry
         # (renumbering of sum indices) of the term that maps v to vs[1], and the subtrees are equivalent
@@ -256,7 +256,7 @@ function _canonical_search(t::QuTerm, sig::Vector{UInt64})
     _canonical_search!(S, sig)
     S
 end
-_search_exceeded(S::_CanonicalSearch) = S.nleaves > _MAX_CANONICAL_NUMBERINGS
+_search_exceeded(S::_CanonicalSearch) = S.nleaves > _MAX_CANONICAL_NUMBERINGS[]
 
 """
     _canonicalize_suminds(t::QuTerm)
