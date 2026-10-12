@@ -12,7 +12,6 @@ PackageExtensionCompat = "65ce6f38-6b18-4e1d-a461-8949797d7930"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [weakdeps]
 SymPy = "24249f21-da20-56a4-8eb1-6a02cf4ae2e6"

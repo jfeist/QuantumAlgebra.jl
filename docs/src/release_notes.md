@@ -74,6 +74,11 @@ Results are mathematically unchanged, but can look different:
   ``L^† [A,L] + \frac{1}{2} [L^† L, A]`` for the same reason.
 - Terms are printed without trailing spaces, and with single spaces between
   terms (e.g., `δ(ij) + a†(j) a(i)` instead of `δ(ij)  + a†(j) a(i)`).
+- Names with unicode characters are converted to LaTeX correctly, also with
+  combining accents (e.g., `b̄` gives `\bar{b}`), subscripts and superscripts
+  (`ω₁`, `α²`), and script or double-struck letters (`ℰ`, `ℝ`). Names that are
+  not a single character are enclosed in braces, so that names with subscripts
+  (e.g., `ω_c`) can have indices.
 
 ### Performance and other improvements
 - Terms are now stored compactly as a flat vector of 64-bit words, which

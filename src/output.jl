@@ -1,6 +1,5 @@
 export latex
 
-using REPL
 using Printf
 using Latexify
 using LaTeXStrings
@@ -166,9 +165,13 @@ Base.show(io::IO, m::MIME"text/latex", A::Vector{<:QuantumObject}) = Base.show(i
 Base.show(io::IO, m::MIME"text/latex", A::Matrix{<:QuantumObject}) = Base.show(io::IO, m, latexify(A))
 Base.show(io::IO, m::MIME"text/latex", A::NTuple{N,<:QuantumObject}) where N = Base.show(io::IO, m, latexify(A))
 
-const _unicode_to_latex = Dict(v[1]=>"{$k}" for (k,v) in REPL.REPLCompletions.latex_symbols if length(v)==1)
-unicode_to_latex(s::AbstractString) = join(map(c -> get(_unicode_to_latex,c,string(c)), collect(s)))
-unicode_to_latex(s::QuOpName) = unicode_to_latex(string(s))
+# a name in LaTeX: unicode characters are converted to LaTeX (e.g., ω → \omega, b̄ → \bar{b}, α² → \alpha^2), and
+# names that are not a single character are enclosed in braces (so that indices and exponents can be attached)
+function latexname(s::AbstractString)
+    l = Latexify.unicode2latex(s)
+    length(l) == 1 ? l : "{$l}"
+end
+latexname(s::QuOpName) = latexname(string(s))
 
 # this is just to serve as an easily overloaded function to deal with "strange" Number subtypes from, e.g., Symbolics or SymPy
 numlatex(x) = x
@@ -193,22 +196,22 @@ end
     isnoindex(ii) && return LaTeXString("")
     isintindex(ii) && return LaTeXString("$(ii.num)")
     issumindex(ii) && return LaTeXString("\\#_{$(ii.num)}")
-    s = unicode_to_latex(string(ii.sym))
+    s = latexname(string(ii.sym))
     return LaTeXString(ii.num == typemin(ii.num) ? s : "$(s)_{$(ii.num)}")
 end
 latexindstr(inds) = isempty(assignedinds(inds)) ? "" : "_{$(latexify.(inds)...)}"
 @latexrecipe function f(A::BaseOperator)
     B = unalias(A)
-    return LaTeXString("{$(unicode_to_latex(opname(B)))}$(latexindstr(inds(B)))$(opsymbol(B,:latex))")
+    return LaTeXString("{$(latexname(opname(B)))}$(latexindstr(inds(B)))$(opsymbol(B,:latex))")
 end
 @latexrecipe function f(A::Param)
-    return LaTeXString(string("$(unicode_to_latex(opname(A)))$(latexindstr(inds(A)))", parstate(A)=='c' ? "^{*}" : ""))
+    return LaTeXString(string("$(latexname(opname(A)))$(latexindstr(inds(A)))", parstate(A)=='c' ? "^{*}" : ""))
 end
 @latexrecipe function f(A::δ)
     return LaTeXString("\\delta$(latexindstr(make_indices(A.iA,A.iB)))")
 end
 @latexrecipe function f(T::_QuditTransition)
-    return LaTeXString("{$(unicode_to_latex(opname(T.create)))}$(latexindstr(inds(T.create)))$(_qudit_symbol(_levels(T)...,:latex))")
+    return LaTeXString("{$(latexname(opname(T.create)))}$(latexindstr(inds(T.create)))$(_qudit_symbol(_levels(T)...,:latex))")
 end
 @latexrecipe function f(A::OpProduct)
     mult_symbol --> ""

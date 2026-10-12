@@ -77,6 +77,12 @@ end
     @qparam ω
     eqs = heisenberg_eom_system(ω*a'*a, 1, (), a)
     @test occursin("\\frac{\\mathrm{d}}{\\mathrm{d}t}\\langle {a}\\rangle", latex(eqs))
+    # unicode names (with combining accents, subscripts, ...), which are enclosed in braces if they are not a
+    # single character
+    @qparam b̄[:] ω̄ₐ ω_c[:] κ²
+    @boson Ω̃[:]
+    @test nows(latex(b̄[:i]*ω̄ₐ*ω_c[:j]*κ²)) == "{\\bar{b}}_{i} {\\bar{\\omega}_a} {\\omega_c}_{j} {\\kappa^2}"
+    @test nows(latex(Ω̃'[1]*Ω̃[:μ])) == "{{\\tilde{\\Omega}}}_{1}^{\\dagger} {{\\tilde{\\Omega}}}_{{\\mu}}"
 end
 
 @testset "vacuum" begin
