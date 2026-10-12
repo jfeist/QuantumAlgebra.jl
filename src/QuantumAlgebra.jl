@@ -1,7 +1,5 @@
 module QuantumAlgebra
 
-using PackageExtensionCompat
-
 include("tools.jl")
 include("operator_defs.jl")
 include("index_handling.jl")
@@ -19,8 +17,6 @@ include("eqsys.jl")
 include("precompile.jl")
 
 function __init__()
-    @require_extensions
-
     auto_normal = @load_preference("auto_normal_form", false)
     if haskey(ENV,"QUANTUMALGEBRA_AUTO_NORMAL_FORM")
         val = parse(Bool,ENV["QUANTUMALGEBRA_AUTO_NORMAL_FORM"])

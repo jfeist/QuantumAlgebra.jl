@@ -97,6 +97,8 @@ Results are mathematically unchanged, but can look different:
   has no effect anymore, and `set_quindices_type` is deprecated.
 - QuantumAlgebra can be used from several threads at the same time (for
   different expressions).
+- PackageExtensionCompat is no longer a dependency (it was only needed for
+  Julia versions before 1.9).
 - New exported names: the macros listed above, and the functions `boson`,
   `fermion`, `anticommuting_fermions`, `tls`, `tlsxyz`, `qudit`, `gellmann`,
   `spin`, `so`, `qparam` and `qindex`. If these clash with names in your code,
