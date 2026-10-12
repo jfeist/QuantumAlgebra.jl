@@ -49,6 +49,9 @@
     @test h == Pc"h" && h' == (Pc"h")'
     @param k[:,:]::Complex
     @test k'[1,:j] == (Pc"k_1,j")'
+    # several parameters at once
+    @param ω χ[:] γ::Complex
+    @test (ω, χ[1], γ) == (Pr"ω", Pr"χ_1", Pc"γ")
 
     # printing in the syntax of the new interface (opt-in)
     @test string(c[:i,2]) == "c(i2)"

@@ -1053,25 +1053,46 @@ given as `L(a,b)[k,l]`.
 """
 macro so(n, expr) _opvariable_macro(so, expr, n) end
 
-macro param(name)
+"""
+    @param g
+    @param g[:,:] α::Complex ...
+
+Define the variable `g` for a real parameter, or several parameters at once. With `g[:,:]` (with any
+number of `:`), the parameter has indices, given as `g[i,j]`. Parameters declared as `α::Complex` (or
+`α[:]::Complex`) are complex, and `α'` (or `α'[i]`) is their complex conjugate.
+"""
+macro param(exprs...)
+    isempty(exprs) && throw(ArgumentError("usage: @param g or @param g[:,:] α::Complex ..."))
+    names = Symbol[]
+    code = Expr(:block)
+    for expr in exprs
+        name, rhs = _param_code(expr)
+        push!(names, name)
+        push!(code.args, :( $(esc(name)) = $rhs ))
+    end
+    push!(code.args, length(names) == 1 ? esc(only(names)) : :( ($(esc.(names)...),) ))
+    code
+end
+function _param_code(expr)
     partype = :Real
-    if name isa Expr && name.head == :(::)
-        @assert length(name.args) == 2
-        name, partype = name.args
+    if expr isa Expr && expr.head == :(::)
+        length(expr.args) == 2 || throw(ArgumentError("Expected `name::Complex` or `name::Real`, got `$expr`."))
+        expr, partype = expr.args
         partype ∈ (:Real, :Complex) || throw(ArgumentError("Expected `::Complex` or `::Real`, got `::$(partype)`."))
     end
-    name, ndims = parse_name_array(name)
+    name, ndims = parse_name_array(expr)
     state = partype == :Complex ? 'n' : 'r'
     if ndims == 0
-        :( $(esc(Symbol(name))) = param($(Meta.quot(name)),$state) )
+        rhs = :( param($(Meta.quot(name)),$state) )
     else
         cstrctfun(state) = :( (args...) -> param($(Meta.quot(name)), $state,  args...) )
         cstrctargs = (string(name), cstrctfun(state))
         if state == 'n'
             cstrctargs = (cstrctargs..., string(name,"*"), cstrctfun('c'))
         end
-        :( $(esc(Symbol(name))) = QuExprCstrctArrAlias(QuExprConstructor($(cstrctargs...)),$ndims) )
+        rhs = :( QuExprCstrctArrAlias(QuExprConstructor($(cstrctargs...)),$ndims) )
     end
+    name, rhs
 end
 
 ## functions for constructing `param`s with string macros,
