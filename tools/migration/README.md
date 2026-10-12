@@ -11,15 +11,25 @@ julia --project=tools/migration tools/migration/migrate.jl file.jl notebook.ipyn
 ```
 
 By default, the result is written to `file_migrated.jl` and `notebook_migrated.ipynb` (use
-`--inplace` to overwrite the files, or `--dry-run` to only see what would be done). The tool reports
-what it did, and the code that it could not migrate automatically, which is left unchanged:
+`--inplace` to overwrite the files, or `--dry-run` to only see what would be done). The outputs of
+notebook cells are not changed, so rerun migrated notebooks.
+
+Operators declared inside a function, `let` block, `@testset`, ... are only valid there and are
+migrated separately. The tool reports what it did, and the code that it could not migrate
+automatically, which is left unchanged:
 - operators that are used with different numbers of indices (which needs separate names in the new
   interface, since the number of indices is fixed when an operator is defined),
-- operators that are used as values (e.g., passed as functions to `map`), and
-- new variables (e.g., for parameters) whose names are already used for something else in the code.
+- parameters that are used with different numbers of indices, or both as real and complex
+  parameters,
+- operators that are used as values (e.g., passed as functions to `map`),
+- operators that are declared conditionally (e.g., inside `if`),
+- parameters whose names are not valid variable names (e.g., `Pr"f(t)"`), and
+- new variables (e.g., `σ` for `σp`/`σm`, or `g` for `Pr"g"`) whose names are already used for
+  something else in the code.
 
 Since both interfaces can be used together in QuantumAlgebra 1.x, the migrated code still works in
-these cases. The outputs of notebook cells are not changed, so rerun migrated notebooks.
+these cases. Operators that are used with different numbers of indices can be migrated by hand by
+giving them different names, e.g., `@boson a b[:]` instead of using `a()` and `a(:i)`.
 
 Note that operators without indices are now created when they are defined. For two-level systems,
 whose representation depends on `QuantumAlgebra.use_σpm`, this setting therefore has to be chosen

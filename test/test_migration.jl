@@ -61,9 +61,91 @@ include(joinpath(@__DIR__, "..", "tools", "migration", "migrate.jl"))
     g(x) = 2x
     z = Pr"g_i" + f'[2]
     """
-    @test any(m -> occursin("`b` is used with different numbers of indices (0, 1)", m), msgs)
-    @test any(m -> occursin("`a` is used as a value", m), msgs)
-    @test any(m -> occursin("`g` would clash", m), msgs)
+    @test any(m -> occursin("`b` (declared at code:2): used with different numbers of indices (0, 1)", m), msgs)
+    @test any(m -> occursin("`a` (default operator): used as a value", m), msgs)
+    @test any(m -> occursin("parameter `g`: the new variable `g` would clash", m), msgs)
+
+    # declarations in local scopes (e.g., in @testset, functions, let blocks) are only valid there
+    old = raw"""
+    using QuantumAlgebra, Test
+    @testset "local" begin
+        @boson_ops a
+        @fermion_ops g
+        global X = a(1)*a'(:i)*g(2) + Pr"h"*a(2)
+    end
+    function makeY()
+        @tlspm_ops s
+        sm(1)*sp(2)
+    end
+    Y = makeY()
+    Z = a()*a'()
+    """
+    new, msgs = QAMigration.migrate_source(old)
+    @test new == raw"""
+    using QuantumAlgebra, Test
+    # operators and parameters (migrated from the legacy QuantumAlgebra interface)
+    @boson a
+    @qparam h
+    @testset "local" begin
+        @boson a[:]
+        @fermion g[:]
+        global X = a[1]*a'[:i]*g[2] + h*a[2]
+    end
+    function makeY()
+        @tls s[:]
+        s[1]*s'[2]
+    end
+    Y = makeY()
+    Z = a*a'
+    """
+    mold, mnew = Module(), Module()
+    Base.include_string(mold, old)
+    Base.include_string(mnew, new)
+    @test (mold.X, mold.Y, mold.Z) == (mnew.X, mnew.Y, mnew.Z)
+
+    # conditional declarations, clashes with local operators, invalid names, and quoted code
+    old = raw"""
+    using QuantumAlgebra
+    if true
+        @boson_ops b
+    end
+    let
+        @fermion_ops d
+        global W = d(1)*Pc"d_2"
+    end
+    for x in 1:2
+        ex = Expr(:(=), :y, x)
+    end
+    V = b(1)*Pr"f(t)"*Pc"\bar{b}"*Pr"κ_k"
+    """
+    new, msgs = QAMigration.migrate_source(old)
+    @test new == raw"""
+    using QuantumAlgebra
+    # operators and parameters (migrated from the legacy QuantumAlgebra interface)
+    @qparam κ[:]
+    if true
+        @boson_ops b
+    end
+    let
+        @fermion d[:]
+        global W = d[1]*Pc"d_2"
+    end
+    for x in 1:2
+        ex = Expr(:(=), :y, x)
+    end
+    V = b(1)*Pr"f(t)"*Pc"\bar{b}"*κ[:k]
+    """
+    @test any(m -> occursin("`b` (declared at code:3): declared conditionally", m), msgs)
+    @test any(m -> occursin("parameter `d`: the new variable `d` would clash", m), msgs)
+    @test any(m -> occursin("parameter `f(t)`: `f(t)` is not a valid variable name", m), msgs)
+    @test any(m -> occursin("is not a valid variable name", m) && occursin("bar{b}", m), msgs)
+    mold, mnew = Module(), Module()
+    Base.include_string(mold, old)
+    Base.include_string(mnew, new)
+    @test (mold.V, mold.W) == (mnew.V, mnew.W)
+
+    # new variables must not shadow names exported by QuantumAlgebra
+    @test QAMigration.QA_EXPORTS == Set(filter(n -> !startswith(string(n), "@"), names(QuantumAlgebra)))
 
     # notebooks: the cells are treated as one program
     nb = """

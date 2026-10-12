@@ -80,14 +80,46 @@ isassignment(n, parent) = kind(n) == JS.K"=" &&
 # the value of a character literal, or nothing
 charval(n) = kind(n) == JS.K"Char" ? n.val :
     kind(n) == JS.K"char" && length(children(n)) == 1 && kind(only(children(n))) == JS.K"Char" ? only(children(n)).val : nothing
+# the value of a plain string literal, or nothing
+stringval(n) = kind(n) == JS.K"string" && length(children(n)) == 1 && kind(only(children(n))) == JS.K"String" ? only(children(n)).val : nothing
 nindices(n) = n == 1 ? "1 index" : "$n indices"
 islegacydecl(n) = (m = macroname(n); m in keys(LEGACYMACRO) || m == Symbol("@anticommuting_fermion_group"))
 
-function walk(f, n, parent=nothing)
-    f(n, parent) === :skip && return
+# walk the tree depth-first, calling f(n, stack) with the ancestors of n in stack (the parent is last);
+# the children of n are skipped if f returns :skip
+function walk(f, n, stack=JS.SyntaxNode[])
+    f(n, stack) === :skip && return
+    push!(stack, n)
     for c in children(n)
-        walk(f, c, n)
+        walk(f, c, stack)
     end
+    pop!(stack)
+end
+parentof(stack) = isempty(stack) ? nothing : last(stack)
+
+## scopes
+
+# constructs that introduce a local scope (short-form function definitions `f(x) = …` are also K"function")
+const SCOPEKINDS = (JS.K"function", JS.K"->", JS.K"let", JS.K"for", JS.K"while", JS.K"try", JS.K"do",
+                    JS.K"generator", JS.K"struct", JS.K"module", JS.K"macro")
+# macros that wrap their arguments in a local scope
+const SCOPEMACROS = (Symbol("@testset"), Symbol("@async"), Symbol("@spawn"))
+isscope(n) = kind(n) in SCOPEKINDS || macroname(n) in SCOPEMACROS
+# the innermost local scope that contains a node (nothing for global scope)
+scopeof(stack) = (i = findlast(isscope, stack); i === nothing ? nothing : stack[i])
+# whether a node is executed conditionally within its scope (e.g., inside `if`)
+function isconditional(stack)
+    i = something(findlast(isscope, stack), 0)
+    any(n -> kind(n) in (JS.K"if", JS.K"elseif", JS.K"&&", JS.K"||", JS.K"?"), @view stack[i+1:end])
+end
+# the iteration specifications (`x in xs`, `x = xs`) of a for loop or a generator
+function iterations(n)
+    its = JS.SyntaxNode[]
+    for c in children(n)
+        kind(c) == JS.K"iteration" && append!(its, children(c))
+        kind(c) == JS.K"filter" && foreach(i -> kind(i) == JS.K"iteration" && append!(its, children(i)), children(c))
+    end
+    filter(i -> kind(i) in (JS.K"in", JS.K"=") && !isempty(children(i)), its)
 end
 
 ## the operators of the legacy interface
@@ -95,13 +127,14 @@ end
 mutable struct Species
     family::Symbol          # :boson, :fermion, :tlspm, :tlsxyz
     name::Symbol            # species name, e.g., :b for `@boson_ops b`
-    decl::Any               # (unit, macrocall node) of the legacy declaration, or nothing for default operators
+    scope::Union{Nothing,JS.SyntaxNode}  # local scope of the declarations (nothing for global scope)
+    decls::Vector{Any}      # (unit, macrocall node) of the legacy declarations (none for default operators)
     group::Vector{Symbol}   # names of a group of anticommuting fermions (declared together)
     ndims::Set{Int}         # numbers of indices in the uses
-    uses::Vector{Any}       # (unit, call node, callee node, role) for each use
+    uses::Vector{Any}       # (unit, call node, callee node, adjoint, index arguments) for each use
     problems::Vector{String}
 end
-Species(family, name, decl=nothing; group=Symbol[]) = Species(family, name, decl, group, Set{Int}(), Any[], String[])
+Species(family, name, scope=nothing; group=Symbol[]) = Species(family, name, scope, Any[], group, Set{Int}(), Any[], String[])
 
 # functions created by the legacy interface for a species: name => (variable name in the new interface, role),
 # where role is :op (the operator), :dag (its adjoint) or :herm (a Hermitian operator, e.g., σx)
@@ -115,12 +148,49 @@ function legacy_functions(sp::Species)
         Dict(Symbol(N, c) => (Symbol(N, c), :herm) for c in (:x, :y, :z))
     end
 end
+newvars(sp::Species) = unique(var for (var, _) in values(legacy_functions(sp)))
+function describe(sp::Species)
+    N = sp.name
+    names = sp.family == :tlspm ? "`$(N)p`/`$(N)m`" : sp.family == :tlsxyz ? "`$(N)x`/`$(N)y`/`$(N)z`" : "`$N`"
+    where = isempty(sp.decls) ? "default operator" : "declared at $(location(first(sp.decls)...))"
+    "$names ($where)"
+end
+
 const NEWMACRO = Dict(:boson => "@boson", :fermion => "@fermion", :tlspm => "@tls", :tlsxyz => "@tlsxyz")
 const LEGACYMACRO = Dict(Symbol("@boson_ops") => :boson, Symbol("@fermion_ops") => :fermion,
                          Symbol("@tlspm_ops") => :tlspm, Symbol("@tlsxyz_ops") => :tlsxyz)
 const DEFAULT_SPECIES = ((:boson, :a), (:fermion, :f), (:tlsxyz, :σ), (:tlspm, :σ))
 
+# the names exported by QuantumAlgebra (except macros), Base and Core, which new variables must not shadow
+const QA_EXPORTS = Set{Symbol}([:Avac, :Corr, :ExpVal, :QuExpr, :QuantumAlgebra, :a, :adag, :anticommuting_fermions,
+    :boson, :boson_ops, :comm, :corr, :corr_as_expvals, :dropcorr, :droplen, :expval, :expval_as_corrs, :f, :fdag,
+    :fermion, :fermion_ops, :gellmann, :heisenberg_eom, :heisenberg_eom_system, :julia_expression, :latex,
+    :map_scalar_function, :normal_form, :param, :qindex, :qparam, :qudit, :so, :spin, :tls, :tlspm_ops, :tlsxyz,
+    :tlsxyz_ops, :vacA, :vacExpVal, :σm, :σp, :σx, :σy, :σz, :∑])
+const RESERVED = union(QA_EXPORTS, names(Base), names(Core))
+
 dimsstring(n) = n == 0 ? "" : "[" * join(fill(":", n), ",") * "]"
+
+# the index arguments of a legacy call (a single tuple argument contains the indices, as in the legacy
+# interface): (number of indices or nothing for a single splatted argument, nodes), or nothing if they
+# cannot be converted
+function indexargs(args)
+    length(args) == 1 && kind(only(args)) == JS.K"tuple" && (args = children(only(args)))
+    any(a -> kind(a) in (JS.K"parameters", JS.K"=", JS.K"..."), args) || return length(args), args
+    length(args) == 1 && kind(only(args)) == JS.K"..." && return nothing, args
+    nothing
+end
+# edits that replace the call `n` (with index arguments `args`) by `new[args]`, keeping the code of the arguments
+# (so that edits inside them do not overlap)
+function replace_call!(u::Unit, n, new, args)
+    r = JS.byte_range(n)
+    if isempty(args)
+        push!(u.edits, Edit(r, new))
+    else
+        push!(u.edits, Edit(first(r):first(JS.byte_range(first(args)))-1, "$new["))
+        push!(u.edits, Edit(last(JS.byte_range(last(args)))+1:last(r), "]"))
+    end
+end
 
 ## parameters
 
@@ -128,7 +198,7 @@ mutable struct Parameter
     name::Symbol
     complex::Set{Bool}
     ndims::Set{Int}
-    uses::Vector{Any}       # (unit, node, conjugated, index strings)
+    uses::Vector{Any}       # (unit, node, conjugated, index code)
     problems::Vector{String}
 end
 Parameter(name) = Parameter(name, Set{Bool}(), Set{Int}(), Any[], String[])
@@ -163,119 +233,155 @@ function migrate_units!(units::Vector{Unit})
     end
     parsed = filter(u -> u.tree !== nothing, units)
 
-    # legacy declarations
+    # names that are bound in the code (with the number of bindings), and the positions of all identifiers
+    bindings = Dict{Symbol,Int}()
+    idents = Dict{Symbol,Vector{Tuple{Int,Int}}}()
+    function addbound!(n)
+        if isident(n)
+            bindings[n.val] = get(bindings, n.val, 0) + 1
+        elseif kind(n) in (JS.K"=", JS.K"::", JS.K"where")
+            # `x = …` (e.g., in `global x = …` or a keyword argument), `x::T`, `f(x) where T`
+            isempty(children(n)) || addbound!(first(children(n)))
+        elseif kind(n) in (JS.K"tuple", JS.K"parameters", JS.K"...", JS.K"call")
+            # (a function signature for K"call")
+            foreach(addbound!, children(n))
+        end
+    end
+    for (k, u) in enumerate(parsed)
+        walk(u.tree) do n, stack
+            nk, parent = kind(n), parentof(stack)
+            (nk == JS.K"quote" || islegacydecl(n)) && return :skip
+            if isassignment(n, parent) || nk in (JS.K"function", JS.K"local", JS.K"global", JS.K"->", JS.K"do", JS.K"macro")
+                addbound!(first(children(n)))
+            elseif nk in (JS.K"for", JS.K"generator")
+                foreach(it -> addbound!(first(children(it))), iterations(n))
+            elseif nk == JS.K"let"
+                foreach(c -> kind(c) == JS.K"=" || addbound!(c), children(first(children(n))))
+            elseif nk == JS.K"catch" && isident(first(children(n)))
+                addbound!(first(children(n)))
+            end
+            if isident(n) && !(parent !== nothing && kind(parent) == JS.K"." && last(children(parent)) === n)
+                push!(get!(Vector{Tuple{Int,Int}}, idents, n.val), (k, first(JS.byte_range(n))))
+            end
+            nothing
+        end
+    end
+
+    # legacy declarations, in their scopes
     species = Species[]
+    function addspecies!(family, name, scope, decl; group=Symbol[])
+        i = findfirst(s -> (s.family, s.name, s.group) == (family, name, group) && s.scope === scope, species)
+        sp = i === nothing ? push!(species, Species(family, name, scope; group))[end] : species[i]
+        push!(sp.decls, decl)
+        sp
+    end
     for u in parsed
-        walk(u.tree) do n, _
+        walk(u.tree) do n, stack
+            kind(n) == JS.K"quote" && return :skip
             m = macroname(n)
             m === nothing && return nothing
             args = children(n)[2:end]
             if haskey(LEGACYMACRO, m) && length(args) == 1 && isident(only(args))
-                push!(species, Species(LEGACYMACRO[m], only(args).val, (u, n)))
-            elseif m == Symbol("@anticommuting_fermion_group") && all(isident, args)
+                new = [addspecies!(LEGACYMACRO[m], only(args).val, scopeof(stack), (u, n))]
+            elseif m == Symbol("@anticommuting_fermion_group") && !isempty(args) && all(isident, args)
                 names = Symbol[a.val for a in args]
-                append!(species, Species(:fermion, N, (u, n); group=names) for N in names)
+                new = [addspecies!(:fermion, N, scopeof(stack), (u, n); group=names) for N in names]
+            else
+                return nothing  # look inside other macro calls (e.g., @testset)
             end
+            isconditional(stack) && foreach(sp -> push!(sp.problems, "declared conditionally (e.g., inside `if`) at $(location(u, n))"), new)
             :skip
         end
     end
-
-    # names that are bound in the code (assigned, defined as functions, loop variables, arguments, ...)
-    bound = Set{Symbol}()
-    bare = Dict{Symbol,Any}()  # identifiers that are used as values (not called), first location
-    function addbound!(n)
-        if isident(n)
-            push!(bound, n.val)
-        elseif kind(n) in (JS.K"tuple", JS.K"parameters", JS.K"::", JS.K"=", JS.K"...")
-            foreach(addbound!, children(n))
-        elseif kind(n) == JS.K"call" && !isempty(children(n))
-            # function signature (or a parenthesized operator definition): the name and the arguments
-            foreach(addbound!, children(n))
-        end
+    declared = Dict{Symbol,Vector{Species}}()  # legacy function => species that declare it
+    for sp in species, f in keys(legacy_functions(sp))
+        push!(get!(Vector{Species}, declared, f), sp)
     end
-    markbare!(u, n) = haskey(bare, n.val) || (bare[n.val] = (u, n))
-    for u in parsed
-        walk(u.tree) do n, parent
-            k = kind(n)
-            (k == JS.K"quote" || islegacydecl(n)) && return :skip
-            if isassignment(n, parent) || k in (JS.K"function", JS.K"local", JS.K"global", JS.K"->")
-                addbound!(first(children(n)))
-            elseif k in (JS.K"for", JS.K"let", JS.K"generator")
-                # iteration specifications / let bindings: `x = …` or `x in …`
-                walk(n) do c, _
-                    kind(c) in (JS.K"=", JS.K"in") && addbound!(first(children(c)))
-                    nothing
-                end
-            end
-            if isadjoint(n) && isident(first(children(n)))
-                # X' that is not called is used as a value
-                called = parent !== nothing && isfuncall(parent) && first(children(parent)) === n
-                called || markbare!(u, first(children(n)))
-                return :skip
-            end
-            if isident(n) && parent !== nothing
-                called = isfuncall(parent) && first(children(parent)) === n
-                field = kind(parent) == JS.K"." && last(children(parent)) === n
-                called || field || markbare!(u, n)
-            end
-            nothing
-        end
+    for (f, sps) in declared, sp in sps
+        any(o -> o !== sp && o.scope === sp.scope, sps) && push!(sp.problems, "`$f` is declared as different operators in the same scope")
     end
 
-    # default operators: used (called) in the code, but not declared or bound
-    declared = Set(s.name for s in species)
-    allfuncs = Dict{Symbol,Tuple{Species,Symbol,Symbol}}()
+    # default operators: used (called) in the code, but not bound by it
+    defaults = Dict{Symbol,Species}()
     for (family, name) in DEFAULT_SPECIES
         sp = Species(family, name)
-        any(f -> f in declared || f in bound, keys(legacy_functions(sp))) && continue
+        any(f -> haskey(bindings, f), keys(legacy_functions(sp))) && continue
         push!(species, sp)
+        foreach(f -> defaults[f] = sp, keys(legacy_functions(sp)))
     end
-    for sp in species, (f, (var, role)) in legacy_functions(sp)
-        allfuncs[f] = (sp, var, role)
+
+    # the species that a legacy function refers to at a position in the code: the declaration in the innermost
+    # enclosing scope, or the default operator
+    function resolve(f::Symbol, stack)
+        sps = get(declared, f, Species[])
+        for s in Iterators.flatten((Iterators.reverse(filter(isscope, stack)), (nothing,)))
+            i = findfirst(sp -> sp.scope === s, sps)
+            i === nothing || return sps[i]
+        end
+        get(defaults, f, nothing)
+    end
+    function bareuse!(u, n, stack)
+        sp = resolve(n.val, stack)
+        (sp === nothing || any(p -> startswith(p, "used as a value") || startswith(p, "imported"), sp.problems)) && return
+        imported = any(s -> kind(s) in (JS.K"using", JS.K"import"), stack)
+        push!(sp.problems, imported ? "imported explicitly at $(location(u, n))" :
+                                      "used as a value (not called) at $(location(u, n)), e.g., passed as a function")
     end
 
     # uses of the legacy functions
     for u in parsed
-        walk(u.tree) do n, _
+        walk(u.tree) do n, stack
             (kind(n) == JS.K"quote" || islegacydecl(n)) && return :skip
-            isfuncall(n) || return nothing
-            callee = first(children(n))
-            adj = isadjoint(callee)
-            fnode = adj ? first(children(callee)) : callee
-            isident(fnode) && haskey(allfuncs, fnode.val) || return nothing
-            sp, _, _ = allfuncs[fnode.val]
-            args = children(n)[2:end]
-            if any(a -> kind(a) in (JS.K"...", JS.K"parameters", JS.K"="), args)
-                kind(last(args)) == JS.K"..." && length(args) == 1 || push!(sp.problems, "$(location(u, n)): `$(text(u, n))` cannot be converted automatically")
-            else
-                push!(sp.ndims, length(args))
+            parent = parentof(stack)
+            if isfuncall(n)
+                callee = first(children(n))
+                adj = isadjoint(callee)
+                fnode = adj ? first(children(callee)) : callee
+                isident(fnode) || return nothing
+                sp = resolve(fnode.val, stack)
+                sp === nothing && return nothing
+                inds = indexargs(children(n)[2:end])
+                if inds === nothing
+                    push!(sp.problems, "the call `$(text(u, n))` at $(location(u, n)) cannot be converted automatically")
+                else
+                    first(inds) === nothing || push!(sp.ndims, first(inds))
+                    push!(sp.uses, (u, n, fnode, adj, last(inds)))
+                end
+            elseif isadjoint(n) && isident(first(children(n)))
+                # X' that is not called is used as a value
+                called = parent !== nothing && isfuncall(parent) && first(children(parent)) === n
+                called || bareuse!(u, first(children(n)), stack)
+                return :skip
+            elseif isident(n) && parent !== nothing
+                called = isfuncall(parent) && first(children(parent)) === n
+                field = kind(parent) == JS.K"." && last(children(parent)) === n
+                called || field || bareuse!(u, n, stack)
             end
-            push!(sp.uses, (u, n, fnode, adj))
             nothing
         end
     end
-    for sp in species, f in keys(legacy_functions(sp))
-        if haskey(bare, f)
-            u, n = bare[f]
-            push!(sp.problems, "$(location(u, n)): `$f` is used as a value (not called), e.g., passed as a function")
-        end
-    end
 
-    # the variables of the new interface must not clash with other names in the code
-    newvars(sp) = unique(var for (var, _) in values(legacy_functions(sp)))
+    # the variables of the new interface must not clash with other names in the code: anywhere for variables in
+    # global scope, and in the scope of the declaration for local variables
+    unitindex = IdDict{Unit,Int}(u => k for (k, u) in enumerate(parsed))
+    function clashes(v, sp)
+        sp.scope === nothing && return haskey(idents, v) || v in RESERVED
+        k, r = unitindex[first(first(sp.decls))], JS.byte_range(sp.scope)
+        any(((kk, pos),) -> kk == k && pos in r, get(idents, v, ()))
+    end
     for sp in species
-        sp.decl === nothing && isempty(sp.uses) && continue
+        isempty(sp.decls) && isempty(sp.uses) && continue
         for v in newvars(sp)
-            v ∉ keys(legacy_functions(sp)) && (v in bound || haskey(bare, v)) &&
+            v ∉ keys(legacy_functions(sp)) && clashes(v, sp) &&
                 push!(sp.problems, "the new variable `$v` would clash with a name that is used in the code")
         end
-        length(sp.ndims) > 1 && push!(sp.problems, "`$(sp.name)` is used with different numbers of indices ($(join(sort!(collect(sp.ndims)), ", "))); use separate names for these operators")
-        isempty(sp.ndims) && !isempty(sp.uses) && push!(sp.problems, "the number of indices of `$(sp.name)` cannot be determined")
+        length(sp.ndims) > 1 && push!(sp.problems, "used with different numbers of indices ($(join(sort!(collect(sp.ndims)), ", "))); use separate names for these operators")
+        isempty(sp.ndims) && !isempty(sp.uses) && push!(sp.problems, "used with an unknown number of indices")
     end
     # a group of anticommuting fermions is migrated together
     for sp in species
         isempty(sp.group) && continue
-        grp = filter(s -> s.group == sp.group, species)
+        grp = filter(s -> s.group == sp.group && s.scope === sp.scope, species)
         dims = union((s.ndims for s in grp)...)
         if any(s -> !isempty(s.problems), grp) || length(dims) > 1
             isempty(sp.problems) && push!(sp.problems, "the group $(join(sp.group, ", ")) cannot be migrated together")
@@ -285,20 +391,19 @@ function migrate_units!(units::Vector{Unit})
     # parameters
     params = OrderedDict{Symbol,Parameter}()
     for u in parsed
-        walk(u.tree) do n, parent
+        walk(u.tree) do n, _
+            kind(n) == JS.K"quote" && return :skip
             m = macroname(n)
             if m in (Symbol("@Pr_str"), Symbol("@Pc_str"))
-                str = last(children(n))
-                s = kind(str) == JS.K"string" && length(children(str)) == 1 && kind(only(children(str))) == JS.K"String" ? only(children(str)).val : nothing
+                s = stringval(last(children(n)))
                 s === nothing && return :skip
                 name, inds = parse_paramstr(s)
                 p = get!(() -> Parameter(name), params, name)
                 if any(isnothing, inds)
-                    push!(p.problems, "$(location(u, n)): the indices of `$(text(u, n))` cannot be converted automatically")
+                    push!(p.problems, "the indices of `$(text(u, n))` at $(location(u, n)) cannot be converted automatically")
+                else
+                    addparamuse!(p, m == Symbol("@Pc_str"), false, length(inds), (u, n, false, join(inds, ",")))
                 end
-                push!(p.complex, m == Symbol("@Pc_str"))
-                push!(p.ndims, length(inds))
-                push!(p.uses, (u, n, false, inds))
                 return :skip
             end
             if isfuncall(n) && isident(first(children(n)), :param)
@@ -309,21 +414,25 @@ function migrate_units!(units::Vector{Unit})
                 state = length(args) ≥ 2 ? charval(args[2]) : nothing
                 inds = args[(state === nothing ? 2 : 3):end]
                 if any(a -> !(kind(a) == JS.K"Integer" || (kind(a) == JS.K"quote" && length(children(a)) == 1 && isident(only(children(a))))), inds)
-                    push!(p.problems, "$(location(u, n)): `$(text(u, n))` cannot be converted automatically")
+                    push!(p.problems, "`$(text(u, n))` at $(location(u, n)) cannot be converted automatically")
+                else
+                    st = state === nothing ? 'n' : state
+                    addparamuse!(p, st != 'r', st == 'c', length(inds), (u, n, st == 'c', join((text(u, a) for a in inds), ",")))
                 end
-                st = state === nothing ? 'n' : state
-                push!(p.complex, st != 'r')
-                push!(p.ndims, length(inds))
-                push!(p.uses, (u, n, st == 'c', [text(u, a) for a in inds]))
             end
             nothing
         end
     end
-    opnames = Set(v for sp in species for v in newvars(sp))
+    opnames = Set(v for sp in species if !(isempty(sp.decls) && isempty(sp.uses)) for v in newvars(sp))
     for p in values(params)
-        length(p.complex) > 1 && push!(p.problems, "parameter `$(p.name)` is used both as a real and a complex parameter")
-        length(p.ndims) > 1 && push!(p.problems, "parameter `$(p.name)` is used with different numbers of indices ($(join(sort!(collect(p.ndims)), ", ")))")
-        (p.name in bound || haskey(bare, p.name) || p.name in opnames) && push!(p.problems, "the new variable `$(p.name)` would clash with a name that is used in the code")
+        length(p.complex) > 1 && push!(p.problems, "used both as a real and a complex parameter")
+        length(p.ndims) > 1 && push!(p.problems, "used with different numbers of indices ($(join(sort!(collect(p.ndims)), ", ")))")
+        clash = p.name in opnames || p.name in RESERVED || haskey(idents, p.name) || haskey(bindings, p.name)
+        if !Base.isidentifier(p.name)
+            push!(p.problems, "`$(p.name)` is not a valid variable name")
+        elseif clash
+            push!(p.problems, "the new variable `$(p.name)` would clash with a name that is used in the code")
+        end
     end
 
     # edits for operators
@@ -331,51 +440,42 @@ function migrate_units!(units::Vector{Unit})
     tls_without_indices = false
     for sp in species
         if !isempty(sp.problems)
-            append!(msgs, "not migrated: " .* sp.problems)
+            push!(msgs, "not migrated: $(describe(sp)): " * join(unique(sp.problems), "; "))
             continue
         end
-        isempty(sp.uses) && sp.decl === nothing && continue
+        isempty(sp.uses) && isempty(sp.decls) && continue
         nd = isempty(sp.ndims) ? 0 : only(sp.ndims)
         sp.family in (:tlspm, :tlsxyz) && nd == 0 && (tls_without_indices = true)
-        if sp.decl === nothing
+        if isempty(sp.decls)
             push!(newdecls, "$(NEWMACRO[sp.family]) $(sp.name)$(dimsstring(nd))")
         elseif isempty(sp.group)
-            u, n = sp.decl
-            push!(u.edits, Edit(JS.byte_range(n), "$(NEWMACRO[sp.family]) $(sp.name)$(dimsstring(nd))"))
+            foreach(((u, n),) -> push!(u.edits, Edit(JS.byte_range(n), "$(NEWMACRO[sp.family]) $(sp.name)$(dimsstring(nd))")), sp.decls)
         elseif sp.name == first(sp.group)
-            u, n = sp.decl
-            push!(u.edits, Edit(JS.byte_range(n), "@anticommuting_fermions " * join(("$N$(dimsstring(nd))" for N in sp.group), " ")))
+            decl = "@anticommuting_fermions " * join(("$N$(dimsstring(nd))" for N in sp.group), " ")
+            foreach(((u, n),) -> push!(u.edits, Edit(JS.byte_range(n), decl)), sp.decls)
         end
-        for (u, n, fnode, adj) in sp.uses
+        for (u, n, fnode, adj, args) in sp.uses
             var, role = legacy_functions(sp)[fnode.val]
             dag = role == :dag
             adj && role != :herm && (dag = !dag)
-            newname = string(var) * (dag || (adj && role == :herm) ? "'" : "")
-            args = children(n)[2:end]
-            if isempty(args)
-                push!(u.edits, Edit(JS.byte_range(n), newname))
-            else
-                # keep the original text of the arguments
-                inner = text(u, first(JS.byte_range(first(args))):last(JS.byte_range(last(args))))
-                push!(u.edits, Edit(JS.byte_range(n), "$newname[$inner]"))
-            end
+            replace_call!(u, n, string(var) * (dag || (adj && role == :herm) ? "'" : ""), args)
         end
-        push!(msgs, "migrated `$(sp.name)` ($(sp.decl === nothing ? "default operator" : "declared"), $(nindices(nd)), $(length(sp.uses)) uses)")
+        push!(msgs, "migrated $(describe(sp)): $(nindices(nd)), $(length(sp.uses)) uses")
     end
 
     # edits for parameters
     for p in values(params)
         if !isempty(p.problems)
-            append!(msgs, "not migrated: " .* p.problems)
+            push!(msgs, "not migrated: parameter `$(p.name)`: " * join(unique(p.problems), "; "))
             continue
         end
         cplx, nd = only(p.complex), only(p.ndims)
         push!(newdecls, "@qparam $(p.name)$(dimsstring(nd))$(cplx ? "::Complex" : "")")
         for (u, n, conj, inds) in p.uses
             v = string(p.name) * (conj ? "'" : "")
-            push!(u.edits, Edit(JS.byte_range(n), isempty(inds) ? v : "$v[$(join(inds, ","))]"))
+            push!(u.edits, Edit(JS.byte_range(n), isempty(inds) ? v : "$v[$inds]"))
         end
-        push!(msgs, "migrated parameter `$(p.name)` ($(nindices(nd)), $(cplx ? "complex" : "real"), $(length(p.uses)) uses)")
+        push!(msgs, "migrated parameter `$(p.name)`: $(nindices(nd)), $(cplx ? "complex" : "real"), $(length(p.uses)) uses")
     end
 
     # declarations of default operators and parameters, inserted after `using QuantumAlgebra`
@@ -391,6 +491,13 @@ function migrate_units!(units::Vector{Unit})
                     "check that use_σpm/use_σxyz is called before that")
     end
     msgs
+end
+
+# record a use of a parameter
+function addparamuse!(p::Parameter, cplx, conj, nd, use)
+    push!(p.complex, cplx)
+    push!(p.ndims, nd)
+    push!(p.uses, use)
 end
 
 # where to insert new declarations: after the (first) statement `using QuantumAlgebra`, or at the beginning
@@ -463,10 +570,17 @@ function main(args)
     dryrun = "--dry-run" in args
     files = filter(a -> !startswith(a, "--"), args)
     isempty(files) && (println("usage: julia --project=tools/migration tools/migration/migrate.jl [--inplace | --dry-run] files..."); return)
+    failed = false
     for f in files
         println(f, ":")
-        foreach(m -> println("  ", m), migrate_file(f; inplace, dryrun))
+        try
+            foreach(m -> println("  ", m), migrate_file(f; inplace, dryrun))
+        catch e
+            println("  error: ", sprint(showerror, e))
+            failed = true
+        end
     end
+    failed && exit(1)
 end
 
 end # module
