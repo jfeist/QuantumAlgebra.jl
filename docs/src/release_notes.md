@@ -1,9 +1,14 @@
 # Release notes
 
 ## v1.7.0 (unreleased)
-This is a minor release with a new interface for defining operators, new kinds
-of operators, and large performance improvements. The minimum supported Julia
-version is now 1.10 (the current LTS).
+This is a minor release because it has no breaking changes (existing code keeps
+working, although some results are presented differently, see below), but it
+contains many new features and prepares the transition to version 2.0. Its main
+changes are a new interface for defining operators (the previous interface is
+deprecated and will be removed in version 2.0), new kinds of operators (qudits,
+spins and so(n) generators), large performance improvements, and support for
+using QuantumAlgebra from several threads at the same time. The minimum supported
+Julia version is now 1.10 (the current LTS).
 
 ### New interface for defining operators
 - Operators are now variables that are defined with macros, e.g., `@boson a`
