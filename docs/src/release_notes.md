@@ -37,7 +37,9 @@ Julia version is now 1.10 (the current LTS).
   `Pc"…"`) still works and can be mixed with the new one, but it is deprecated
   and will be removed in version 2.0. The documentation describes how to update
   existing code, and the script `tools/migration/migrate.jl` in the repository
-  converts Julia files and Jupyter notebooks automatically.
+  converts Julia files and Jupyter notebooks automatically where possible (it
+  reports the code that has to be converted by hand, e.g., operators that are
+  used with different numbers of indices).
 
 ### New kinds of operators
 - Qudits (d-level systems): `@qudit d q` defines the transition operators
