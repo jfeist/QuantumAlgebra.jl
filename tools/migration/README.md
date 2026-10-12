@@ -11,8 +11,10 @@ julia --project=tools/migration tools/migration/migrate.jl file.jl notebook.ipyn
 ```
 
 By default, the result is written to `file_migrated.jl` and `notebook_migrated.ipynb` (use
-`--inplace` to overwrite the files, or `--dry-run` to only see what would be done). The outputs of
-notebook cells are not changed, so rerun migrated notebooks.
+`--inplace` to overwrite the files, or `--dry-run` to only see what would be done). A file is
+migrated together with the files that it includes (with `include("other.jl")`), since operators
+are shared between them, and the includes in the migrated files point to the migrated versions.
+The outputs of notebook cells are not changed, so rerun migrated notebooks.
 
 Operators declared inside a function, `let` block, `@testset`, ... are only valid there and are
 migrated separately. The tool reports what it did, and the code that it could not migrate

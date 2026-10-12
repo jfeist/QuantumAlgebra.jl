@@ -3,11 +3,12 @@
 #
 # Usage: julia --project=tools/migration tools/migration/migrate.jl [--inplace | --dry-run] files...
 #
-# Julia files (.jl) and Jupyter notebooks (.ipynb) are supported. By default, the migrated code is
-# written to a new file `name_migrated.jl` (or `.ipynb`). Code that cannot be migrated automatically
-# (e.g., an operator that is used with different numbers of indices, or that is passed as a function)
-# is left unchanged and reported. Since both interfaces can be used together in QuantumAlgebra 1.x,
-# the migrated code still works in that case.
+# Julia files (.jl) and Jupyter notebooks (.ipynb) are supported. A file is migrated together with the
+# files that it includes (with `include("file.jl")`), since they form one program. By default, the
+# migrated code is written to new files `name_migrated.jl` (or `.ipynb`), and the includes are changed to
+# point to them. Code that cannot be migrated automatically (e.g., an operator that is used with
+# different numbers of indices, or that is passed as a function) is left unchanged and reported. Since
+# both interfaces can be used together in QuantumAlgebra 1.x, the migrated code still works in that case.
 
 module QAMigration
 
@@ -222,9 +223,9 @@ end
 """
     migrate_units!(units) -> messages
 
-Analyze the units (a file, or the cells of a notebook, which are treated as one program) and add the
-edits that migrate them to the new interface. Returns a vector of messages about what was done and
-what could not be migrated.
+Analyze the units (the code of a program: a file, or the cells of a notebook, together with the files
+they include) and add the edits that migrate them to the new interface. Returns a vector of messages
+about what was done and what could not be migrated.
 """
 function migrate_units!(units::Vector{Unit})
     msgs = String[]
@@ -512,6 +513,67 @@ function insertion_point(units)
     first(units), 1
 end
 
+## files and programs
+
+# a Julia file, or a notebook (whose code cells are the units)
+mutable struct SourceFile
+    path::String
+    units::Vector{Unit}
+    notebook::Any           # the parsed notebook, or nothing for Julia files
+    cells::Vector{Any}      # the code cells of a notebook
+    includes::Vector{Any}   # (unit, string node, included file) for each `include("file.jl")`
+end
+function SourceFile(src::String, path::String, label::String)
+    if endswith(path, ".ipynb")
+        nb = JSON.parse(src; dicttype=OrderedDict)
+        cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
+        csrc(c) = c["source"] isa AbstractVector ? join(c["source"]) : c["source"]
+        SourceFile(path, [Unit(String(csrc(c)), "$label, cell $k") for (k, c) in enumerate(cells)], nb, cells, Any[])
+    else
+        SourceFile(path, [Unit(src, label)], nothing, Any[], Any[])
+    end
+end
+changed(f::SourceFile) = any(u -> !isempty(u.edits), f.units)
+# the migrated source
+function render(f::SourceFile)
+    f.notebook === nothing && return apply_edits(only(f.units))
+    for (c, u) in zip(f.cells, f.units)
+        isempty(u.edits) && continue
+        new = apply_edits(u)
+        c["source"] = c["source"] isa AbstractVector ? [String(l) for l in eachline(IOBuffer(new); keep=true)] : new
+    end
+    io = IOBuffer()
+    JSON.print(io, f.notebook, 1)
+    String(take!(io)) * "\n"
+end
+
+# a file and the files that it includes (recursively), which form one program
+function load_program(path::AbstractString)
+    root = dirname(abspath(path))
+    files = OrderedDict{String,SourceFile}()
+    function load(p)
+        haskey(files, p) && return files[p]
+        f = files[p] = SourceFile(read(p, String), p, relpath(p, root))
+        for u in f.units
+            u.tree === nothing && continue
+            walk(u.tree) do n, _
+                kind(n) == JS.K"quote" && return :skip
+                if isfuncall(n) && isident(first(children(n)), :include) && length(children(n)) == 2
+                    s = children(n)[2]
+                    inc = stringval(s)
+                    if inc !== nothing && endswith(inc, ".jl") && isfile(joinpath(dirname(p), inc))
+                        push!(f.includes, (u, only(children(s)), load(normpath(joinpath(dirname(p), inc)))))
+                    end
+                end
+                nothing
+            end
+        end
+        f
+    end
+    load(normpath(abspath(path)))
+    collect(values(files))
+end
+
 ## entry points
 
 """
@@ -520,9 +582,9 @@ end
 Migrate Julia code from the legacy QuantumAlgebra interface to the new interface.
 """
 function migrate_source(src::String; label="code")
-    u = Unit(src, label)
-    msgs = migrate_units!([u])
-    apply_edits(u), msgs
+    f = SourceFile(src, "code.jl", label)
+    msgs = migrate_units!(f.units)
+    render(f), msgs
 end
 
 """
@@ -532,35 +594,51 @@ Migrate the code cells of a Jupyter notebook (which are treated as one program).
 cells are not changed (rerun the notebook to update them).
 """
 function migrate_notebook(json::String; label="notebook")
-    nb = JSON.parse(json; dicttype=OrderedDict)
-    cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
-    src(c) = c["source"] isa AbstractVector ? join(c["source"]) : c["source"]
-    units = [Unit(String(src(c)), "$label, cell $k") for (k, c) in enumerate(cells)]
-    msgs = migrate_units!(units)
-    for (c, u) in zip(cells, units)
-        isempty(u.edits) && continue
-        new = apply_edits(u)
-        c["source"] = c["source"] isa AbstractVector ? [String(l) for l in eachline(IOBuffer(new); keep=true)] : new
-    end
-    io = IOBuffer()
-    JSON.print(io, nb, 1)
-    String(take!(io)) * "\n", msgs
+    f = SourceFile(json, "notebook.ipynb", label)
+    msgs = migrate_units!(f.units)
+    render(f), msgs
 end
+
+"""
+    migrate_program(path) -> (files, messages)
+
+Migrate a Julia file or Jupyter notebook together with the files that it includes (with
+`include("file.jl")`, recursively), which are treated as one program. Returns the files (with
+`changed(f)` and the migrated source `render(f)`) and the messages, without writing anything.
+"""
+function migrate_program(path::AbstractString)
+    files = load_program(path)
+    files, migrate_units!(reduce(vcat, (f.units for f in files)))
+end
+
+migrated_path(p) = ((base, ext) = splitext(p); base * "_migrated" * ext)
 
 """
     migrate_file(path; inplace=false, dryrun=false)
 
-Migrate a Julia file or Jupyter notebook. The result is written to `name_migrated.ext` (or to the file
-itself with `inplace=true`, or not at all with `dryrun=true`). Returns the messages.
+Migrate a Julia file or Jupyter notebook together with the files that it includes. The results are
+written to `name_migrated.ext` (with the includes pointing to the migrated files), or to the files
+themselves with `inplace=true`, or not at all with `dryrun=true`. Returns the messages.
 """
 function migrate_file(path::AbstractString; inplace=false, dryrun=false)
-    src = read(path, String)
-    new, msgs = endswith(path, ".ipynb") ? migrate_notebook(src; label=basename(path)) : migrate_source(src; label=basename(path))
-    if !dryrun && new != src
-        base, ext = splitext(path)
-        out = inplace ? path : base * "_migrated" * ext
-        write(out, new)
-        push!(msgs, "wrote $out")
+    files, msgs = migrate_program(path)
+    length(files) > 1 && pushfirst!(msgs, "with the included files " * join((only(f.units).label for f in files[2:end] if f.notebook === nothing), ", "))
+    dryrun && return msgs
+    out = Set(filter(changed, files))
+    if !inplace
+        # files that include migrated files are also written, with the includes pointing to the migrated files
+        while (new = filter(f -> f ∉ out && any(i -> i[3] in out, f.includes), files); !isempty(new))
+            union!(out, new)
+        end
+        for f in out, (u, s, inc) in f.includes
+            inc in out && push!(u.edits, Edit(JS.byte_range(s), migrated_path(s.val)))
+        end
+    end
+    for f in files
+        f in out || continue
+        p = inplace ? f.path : migrated_path(f.path)
+        write(p, render(f))
+        push!(msgs, "wrote $p")
     end
     msgs
 end
@@ -568,13 +646,25 @@ end
 function main(args)
     inplace = "--inplace" in args
     dryrun = "--dry-run" in args
-    files = filter(a -> !startswith(a, "--"), args)
-    isempty(files) && (println("usage: julia --project=tools/migration tools/migration/migrate.jl [--inplace | --dry-run] files..."); return)
-    failed = false
-    for f in files
-        println(f, ":")
+    paths = filter(a -> !startswith(a, "--"), args)
+    isempty(paths) && (println("usage: julia --project=tools/migration tools/migration/migrate.jl [--inplace | --dry-run] files..."); return)
+    # files that are included by another given file are migrated together with it
+    included = Set{String}()
+    for p in paths
         try
-            foreach(m -> println("  ", m), migrate_file(f; inplace, dryrun))
+            union!(included, (f.path for f in load_program(p)[2:end]))
+        catch
+        end
+    end
+    failed = false
+    for p in paths
+        if normpath(abspath(p)) in included
+            println(p, ": migrated together with the file that includes it")
+            continue
+        end
+        println(p, ":")
+        try
+            foreach(m -> println("  ", m), migrate_file(p; inplace, dryrun))
         catch e
             println("  error: ", sprint(showerror, e))
             failed = true

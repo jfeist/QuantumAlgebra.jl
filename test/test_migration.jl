@@ -144,6 +144,23 @@ include(joinpath(@__DIR__, "..", "tools", "migration", "migrate.jl"))
     Base.include_string(mnew, new)
     @test (mold.V, mold.W) == (mnew.V, mnew.W)
 
+    # a file is migrated together with the files it includes (with the includes pointing to the migrated files)
+    mktempdir() do dir
+        write(joinpath(dir, "main.jl"), "using QuantumAlgebra\ninclude(\"part.jl\")\nY = X + a(:j)\n")
+        write(joinpath(dir, "part.jl"), "X = a(:i)*a'(:i)\n")
+        msgs = QAMigration.migrate_file(joinpath(dir, "main.jl"))
+        @test read(joinpath(dir, "main_migrated.jl"), String) ==
+            "using QuantumAlgebra\n# operators and parameters (migrated from the legacy QuantumAlgebra interface)\n@boson a[:]\ninclude(\"part_migrated.jl\")\nY = X + a[:j]\n"
+        @test read(joinpath(dir, "part_migrated.jl"), String) == "X = a[:i]*a'[:i]\n"
+        run(file) = (m = Module(); Core.eval(m, :(include(p) = Base.include($m, p))); Base.include(m, file))
+        @test run(joinpath(dir, "main.jl")) == run(joinpath(dir, "main_migrated.jl"))
+        # operators used with different numbers of indices in different files are not migrated
+        write(joinpath(dir, "part.jl"), "X = a()*a'(:i)\n")
+        msgs = QAMigration.migrate_file(joinpath(dir, "main.jl"); inplace=true)
+        @test any(m -> occursin("used with different numbers of indices (0, 1)", m), msgs)
+        @test read(joinpath(dir, "main.jl"), String) == "using QuantumAlgebra\ninclude(\"part.jl\")\nY = X + a(:j)\n"
+    end
+
     # new variables must not shadow names exported by QuantumAlgebra
     @test QAMigration.QA_EXPORTS == Set(filter(n -> !startswith(string(n), "@"), names(QuantumAlgebra)))
 

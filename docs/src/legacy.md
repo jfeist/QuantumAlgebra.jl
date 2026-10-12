@@ -96,8 +96,9 @@ are treated as different modes) therefore need different names.
 
 The script [`tools/migration/migrate.jl`](https://github.com/jfeist/QuantumAlgebra.jl/tree/main/tools/migration)
 in the QuantumAlgebra repository converts Julia files and Jupyter notebooks
-automatically (it reports the code that it cannot convert, e.g., operators that
-are used with different numbers of indices, and leaves it unchanged):
+automatically, together with the files that they include. It reports the code
+that it cannot convert (e.g., operators that are used with different numbers of
+indices) and leaves it unchanged, so the result still works:
 ```sh
 julia --project=tools/migration -e 'using Pkg; Pkg.instantiate()'
 julia --project=tools/migration tools/migration/migrate.jl file.jl notebook.ipynb
