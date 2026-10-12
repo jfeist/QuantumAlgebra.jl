@@ -140,8 +140,21 @@ end
 """
     comm(A, B)
 
-Compute the commutator ``[A,B] = A*B - B*A``.
+Compute the commutator ``[A,B] = A*B - B*A``, in normal form.
+
+The commutator is computed directly from the commutators of pairs of single operators (with the
+Leibniz rule), so that only the terms that do not cancel are generated.
 """
+function comm(A::QuExpr,B::QuExpr)
+    An, Bn = _normal_form_if_needed(A), _normal_form_if_needed(B)
+    C = QuExpr()
+    for (tA,sA) in An.terms, (tB,sB) in Bn.terms
+        _add_comm!(C,tA,tB,sA*sB)
+    end
+    C
+end
+comm(A::QuExpr,B::Number) = QuExpr()
+comm(A::Number,B::QuExpr) = QuExpr()
 comm(A,B) = A*B - B*A
 
 Base.adjoint(A::BaseOperator) = op_adjoint(A)
@@ -572,6 +585,106 @@ function normal_form(A::QuExpr,shortcut_vacA_zero=false)
     An
 end
 normal_form(A::Number) = QuExpr(A)
+
+_normal_form_if_needed(A::QuExpr) = all(is_normal_form, keys(A.terms)) ? A : normal_form(A)
+
+## commutators
+
+# The commutator of operator products X = A₁⋯Aₙ and Y = B₁⋯Bₘ is computed with the graded
+# Leibniz rule
+#   [X,Y}_ε = ∑_{i,j} ε(A_{>i},Y) ε(A_i,B_{<j}) A_{<i} B_{<j} [A_i,B_j}_ε B_{>j} A_{>i},
+# where [P,Q}_ε = PQ - ε(P,Q) QP, and ε(P,Q) = ±1 is the sign obtained when exchanging P and Q
+# (-1 for an odd number of exchanges of fermions with the same name). [A_i,B_j}_ε is thus the
+# anticommutator for such fermions, and the commutator otherwise. If ε(X,Y) = 1, [X,Y] = [X,Y}_ε,
+# and only the pairs A_i,B_j that do not (anti)commute contribute. Otherwise, XY - YX is computed.
+
+# ε(A,B) for single operators: -1 for fermions with the same name (which anticommute)
+_exchange_sign(A::BaseOperator,B::BaseOperator) =
+    (opfamily(A) == FermionFamily && opfamily(B) == FermionFamily && opname(A) == opname(B)) ? -1 : 1
+# whether [A,B}_ε = 0 (for fermions with the same name, whether they anticommute)
+_graded_commutes(A::BaseOperator,B::BaseOperator,ε::Int) =
+    ε == 1 ? commutes(A,B) : (optype(A) == optype(B) || !maybe_same_site(A,B))
+
+# add s [tA,tB] (in normal form) to C, where tA and tB are terms in normal form
+function _add_comm!(C::QuExpr,tA::QuTerm,tB::QuTerm,s)
+    X, Y = bares(tA), bares(tB)
+    (isempty(X) || isempty(Y)) && return C
+    # check whether any pair contributes, and get the total sign ε(X,Y)
+    # (sum indices are not renumbered yet, but this does not change whether operators (anti)commute)
+    εXY = 1
+    contributes = false
+    for A in X, B in Y
+        ε = _exchange_sign(A,B)
+        εXY *= ε
+        contributes || (contributes = !_graded_commutes(A,B,ε))
+    end
+    if εXY == -1
+        # (here, [X,Y] = [X,Y}_ε - 2YX does not vanish even if all pairs anticommute)
+        _add_with_normal_order!(C,tA*tB,s)
+        _add_with_normal_order!(C,tB*tA,-s)
+        return C
+    end
+    contributes || return C
+    # the product of the terms combines the c-number parts and numbers the sum indices consistently
+    t = tA*tB
+    ops = collect(bares(t))
+    n, m = length(X), length(Y)
+    # ε(A_{≥k},Y) for k = 1…n+1
+    εrest = ones(Int,n+1)
+    for k = n:-1:1
+        ε = 1
+        for j = n+1:n+m
+            ε *= _exchange_sign(ops[k],ops[j])
+        end
+        εrest[k] = ε*εrest[k+1]
+    end
+    for i = 1:n
+        sgn = εrest[i+1]
+        for j = n+1:n+m
+            ε = _exchange_sign(ops[i],ops[j])
+            _graded_commutes(ops[i],ops[j],ε) || _add_pair_comm!(C,t,ops,n,i,j,ε,s*sgn)
+            sgn *= ε
+        end
+    end
+    C
+end
+
+# add s A_{<i} B_{<j} [A_i,B_j}_ε B_{>j} A_{>i} to C, where ops = [A₁,…,Aₙ,B₁,…,Bₘ] are the operators of t
+# (and j is the position of B_j in ops)
+function _add_pair_comm!(C::QuExpr,t::QuTerm,ops::Vector{BaseOperator},n,i,j,ε,s)
+    A, B = ops[i], ops[j]
+    if A < B
+        # B A = x A B + R, so [A,B}_ε = (1 - εx) A B - ε R
+        x = exchange!(_CommEmitter(C,t,ops,n,i,j,-ε*s),B,A)
+        _CommEmitter(C,t,ops,n,i,j,s)(1-ε*x,_NO_DELTAS,A,B)
+    else
+        # A B = x B A + R, so [A,B}_ε = (x - ε) B A + R
+        emit = _CommEmitter(C,t,ops,n,i,j,s)
+        x = exchange!(emit,A,B)
+        emit(x-ε,_NO_DELTAS,B,A)
+    end
+    nothing
+end
+
+# emitter for the terms of [A_i,B_j}_ε: e(c, δs, newops...) adds c*e.s A_{<i} B_{<j} newops B_{>j} A_{>i}
+# with the additional deltas δs (and the c-number parts of t) to e.C
+struct _CommEmitter{T}
+    C::QuExpr
+    t::QuTerm
+    ops::Vector{BaseOperator}
+    n::Int
+    i::Int
+    j::Int
+    s::T
+end
+function (e::_CommEmitter)(c, δs::Vector{δ}, newops::BaseOperator...)
+    iszero(c) && return nothing
+    t, ops, n, i, j = e.t, e.ops, e.n, e.i, e.j
+    newbares = (view(ops,1:i-1), view(ops,n+1:j-1), newops, view(ops,j+1:length(ops)), view(ops,i+1:n))
+    nt = _encode_term(nsuminds(t), (deltas(t),δs), (params(t),), (expvals(t),), (corrs(t),), newbares, nothing, nothing)
+    _add_with_normal_order!(e.C,nt,c*e.s)
+    nothing
+end
 
 function *(A::QuTerm,B::QuTerm)
     nA, nB = nsuminds(A), nsuminds(B)

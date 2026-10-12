@@ -243,13 +243,16 @@ The basic functions to create QuantumAlgebra expressions (which are of type
   ⟨a†(j)⟩c ⟨a(i)⟩c  + ⟨a†(j) a(i)⟩c
   ```
 
-- `comm(A::QuExpr,B::QuExpr)` to calculate the commutator ``[A,B] = AB - BA``.
+- `comm(A::QuExpr,B::QuExpr)` to calculate the commutator ``[A,B] = AB - BA``
+  (in normal form). The commutator is computed directly from the commutators of
+  pairs of operators, so that terms that would cancel in ``AB - BA`` are never
+  generated.
   ```jldoctest
   julia> comm(a(),a'())
-  -a†() a() + a() a†()
-
-  julia> normal_form(comm(a(),a'()))
   1
+
+  julia> comm(a'(:i)*a(:j), a'(:k)*a(:k))
+  -δ(ik) a†(i) a(j) + δ(jk) a†(i) a(j)
   ```
 
 - `Avac(A)` and `vacA(A)` simplify operators by assuming they are applied to the
