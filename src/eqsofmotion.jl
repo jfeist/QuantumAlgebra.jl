@@ -14,12 +14,11 @@ struct SummedLindbladTerm{N,T} <: AbstractLindbladTerm where {N,T<:Union{SingleL
     inds::NTuple{N,QuIndex}
     L::T
 end
-function (LT::SingleLindbladTerm{T})(A::QuExpr) where T
-    L = LT.L
-    LdL = L'*L
-    LT.γ*(L'*A*L - 1//2*(LdL*A + A*LdL))
-end
-_apply_mixedlindblad(A,γ,L1,L2) = (L2dL1 = L2'*L1; γ*(L2'*A*L1 - 1//2*(L2dL1*A + A*L2dL1)))
+# L₂† A L₁ - ½{L₂†L₁, A} = L₂† [A,L₁] + ½[L₂†L₁, A], where the commutators are computed directly
+# (and the large terms of L₂† A L₁, L₂†L₁ A and A L₂†L₁ that cancel are never generated)
+_apply_lindblad(A,γ,L1,L2) = γ*(L2'*comm(A,L1) + 1//2*comm(L2'*L1,A))
+(LT::SingleLindbladTerm{T})(A::QuExpr) where T = _apply_lindblad(A,LT.γ,LT.L,LT.L)
+_apply_mixedlindblad(A,γ,L1,L2) = _apply_lindblad(A,γ,L1,L2)
 function (LT::MixedLindbladTerm{T})(A::QuExpr) where T
     L1, L2 = LT.Ls
     # to ensure that dynamical equations are Hermitian, use a symmetrized form
