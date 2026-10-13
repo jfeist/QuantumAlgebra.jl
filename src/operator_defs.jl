@@ -8,8 +8,8 @@ export tlspm_ops, tlsxyz_ops
 export @tlspm_ops, @tlsxyz_ops
 export @Pr_str, @Pc_str, ∑
 export param, expval, corr
-export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @qudit, @spin, @so, @qparam
-export qindex, boson, fermion, anticommuting_fermions, tls, tlsxyz, qudit, gellmann, spin, so, qparam
+export @qindex, @boson, @fermion, @anticommuting_fermions, @tls, @tlsxyz, @qudit, @spin, @so, @un, @qparam
+export qindex, boson, fermion, anticommuting_fermions, tls, tlsxyz, qudit, gellmann, spin, so, un, qparam
 export map_scalar_function
 
 # compile-time options
@@ -263,7 +263,7 @@ const NoName = QuOpName(Symbol())
 
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
 # start the counting at 1 so we can index into the tuples defined below with Int(BaseOpType)
-# (for qudits and so(n) generators, the symbols are determined from the levels or the indices a,b of L_ab)
+# (for qudits and the generators of so(n) and u(n), the symbols are determined from the levels or the indices a,b of L_ab and S_ab)
 """
     BaseOpType
 
@@ -272,11 +272,11 @@ type (in the order of the values of `BaseOpType`), then by name, additional data
 ordering brings products of operators into this order as far as their algebra allows, so that, e.g.,
 creation operators end up to the left of annihilation operators.
 """
-@enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_ TLSx_  TLSy_  TLSz_  SpinMinus_ SpinZ_ SOGen_ QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_, TLSx_, TLSy_, TLSz_, SpinPlus_, SpinZ_, SOGen_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
-const BaseOpType_sym   = ("†", "†", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "", "⁻", "", "")
-const BaseOpType_expr  = ("ᴴ", "ᴴ", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "", "⁻", "", "")
-const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "^{z}", "", "", "^{-}", "", "")
+@enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_ TLSx_  TLSy_  TLSz_  SpinMinus_ SpinZ_ SOGen_ UNGen_ QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_, TLSx_, TLSy_, TLSz_, SpinPlus_, SpinZ_, SOGen_, UNGen_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
+const BaseOpType_sym   = ("†", "†", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "", "", "⁻", "", "")
+const BaseOpType_expr  = ("ᴴ", "ᴴ", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "", "", "⁻", "", "")
+const BaseOpType_latex = ("^{\\dagger}", "^{\\dagger}", "^{+}", "", "^{+}", "^{x}", "^{y}", "^{z}", "^{-}", "^{z}", "", "", "", "^{-}", "", "")
 
 # a struct representing a delta function with unequal indices
 @concrete struct δ
@@ -689,6 +689,20 @@ function (L::SOOps)(a::Integer, b::Integer, inds...)
     a < b ? A : -A
 end
 
+# constructor for the generators of u(n), S(a, b, inds...) = S_ab (see `un`)
+struct UNOps
+    name::QuOpName
+    n::Int
+end
+function _un_ops(name::Symbol, n::Integer)
+    2 ≤ n ≤ 255 || throw(ArgumentError("u(n) is only supported for 2 ≤ n ≤ 255, got n = $n"))
+    UNOps(QuOpName(name), n)
+end
+function (S::UNOps)(a::Integer, b::Integer, inds...)
+    (1 ≤ a ≤ S.n && 1 ≤ b ≤ S.n) || throw(ArgumentError("the indices of u($(S.n)) generators have to be between 1 and $(S.n), got ($a,$b)"))
+    QuExpr(un_op(S.name, a, b, make_indices(inds...)))
+end
+
 """
     QuExprCstrctArrAlias
 
@@ -934,7 +948,17 @@ struct SOVariable
     ops::SOOps
     ndims::Int
 end
-const _PairVariable = Union{QuditVariable,SOVariable}
+"""
+    UNVariable
+
+The generators of u(n) created by [`un`](@ref) or [`@un`](@ref): `S(a,b)` is the generator ``S_{ab}``
+(for generators with indices, an object that is indexed with the indices, `S(a,b)[k]`).
+"""
+struct UNVariable
+    ops::UNOps
+    ndims::Int
+end
+const _PairVariable = Union{QuditVariable,SOVariable,UNVariable}
 (v::_PairVariable)(a::Integer, b::Integer) = _pairvariable_op(v, "$(v.ops.name)($a,$b)", a, b)
 (q::QuditVariable)(M::AbstractMatrix) = _pairvariable_op(q, "$(q.ops.name)(M)", M)
 # the operator v.ops(args...), or for variables with indices, an object that is indexed with the indices
@@ -946,6 +970,7 @@ end
 _dimsstring(v::_PairVariable) = iszero(v.ndims) ? "" : "[$(join(fill(":",v.ndims),","))]"
 Base.print(io::IO, q::QuditVariable) = print(io, q.ops.name, _dimsstring(q), " (", q.ops.d, "-level qudit)")
 Base.print(io::IO, L::SOVariable) = print(io, L.ops.name, _dimsstring(L), " (so(", L.ops.n, ") generators)")
+Base.print(io::IO, S::UNVariable) = print(io, S.ops.name, _dimsstring(S), " (u(", S.ops.n, ") generators)")
 Base.show(io::IO, v::_PairVariable) = print(io, v)
 _checkndims(ndims) = ndims ≥ 0 ? Int(ndims) : throw(ArgumentError("the number of indices cannot be negative, got ndims = $ndims"))
 
@@ -1052,6 +1077,38 @@ normal_form(comm(L(1,2), L(2,3)))  # -i L¹³()
 so(name::_Name, n::Integer; ndims::Integer=0) = SOVariable(_so_ops(Symbol(name), n), _checkndims(ndims))
 
 """
+    un(name, n::Integer; ndims=0)
+
+Return the generators `S` of the Lie algebra u(n) (the function version of [`@un`](@ref)), such that
+`S(a,b)` is the generator ``S_{ab}`` (``a,b = 1,…,n``), with ``S_{ab}^† = S_{ba}``. With `ndims > 0`, the
+generators have `ndims` indices, given as `S(a,b)[k,…]`. The commutation relations are
+```math
+[S_{ab}, S_{cd}] = δ_{bc} S_{ad} - δ_{ad} S_{cb},
+```
+as, e.g., for the collective operators ``S_{ab} = \\sum_k |a⟩_k⟨b|_k`` of an ensemble of `n`-level
+systems (or ``S_{ab} = b_a^† b_b`` for bosons ``b_a``). Only these commutation relations are used, so
+that results hold in any representation (e.g., for any number of `n`-level systems), in the same
+way as for spins without fixed `j` (see [`spin`](@ref)), which are the case `n = 2` (with
+``J_+ = S_{21}``, ``J_- = S_{12}`` and ``J_z = (S_{22} - S_{11})/2``). For a single `n`-level system, use
+a qudit instead (see [`qudit`](@ref)), whose transition operators satisfy the same commutation
+relations, but also all relations of the `n`-dimensional representation. The sum ``\\sum_a S_{aa}``
+commutes with all generators (e.g., it is the number of `n`-level systems), and the traceless
+combinations of the generators span su(n).
+
+Products of generators are ordered as the "raising" generators ``S_{ab}`` with ``a > b``, then the
+"lowering" generators with ``a < b``, and then the diagonal generators ``S_{aa}`` (each sorted by
+``(a,b)``). Vacuum expectation values are not defined.
+
+# Examples
+```julia
+S = un(:S, 3)
+normal_form(comm(S(1,2), S(2,3)))  # S¹³()
+normal_form(S(1,2)*S(2,1))          # S²¹() S¹²() + S¹¹() - S²²()
+```
+"""
+un(name::_Name, n::Integer; ndims::Integer=0) = UNVariable(_un_ops(Symbol(name), n), _checkndims(ndims))
+
+"""
     @qudit d q
     @qudit d q[:,:]
     @qudit d q r[:] ...
@@ -1105,6 +1162,25 @@ generator ``L_{ab}``. With `L[:,:]` (with any number of `:`), the generators hav
 given as `L(a,b)[k,l]`. With several names, all of them are generators of so(n) for the same `n`.
 """
 macro so(n, exprs...) _opvariable_macro(so, exprs, n) end
+
+"""
+    @un n S
+    @un n S[:,:]
+    @un n S T[:] ...
+
+Define the variable `S` for the generators of u(n) (see [`un`](@ref)), such that `S(a,b)` is the
+generator ``S_{ab}``. With `S[:,:]` (with any number of `:`), the generators have indices, which are
+given as `S(a,b)[k,l]`. With several names, all of them are generators of u(n) for the same `n`.
+
+# Examples
+```julia
+@un 3 S
+normal_form(comm(S(1,2), S(2,3)))  # S¹³()
+@un 3 T[:]
+∑(:k, T(2,1)[:k] * T(1,2)[:k])
+```
+"""
+macro un(n, exprs...) _opvariable_macro(un, exprs, n) end
 
 """
     qparam(name, T=Real; ndims=0)

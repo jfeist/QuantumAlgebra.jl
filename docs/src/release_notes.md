@@ -1,6 +1,11 @@
 # Release notes
 
 ## (unreleased)
+- u(n): `@un n S` defines the generators `S(a,b)` = ``S_{ab}`` of the Lie algebra
+  u(n), with ``[S_{ab}, S_{cd}] = δ_{bc} S_{ad} - δ_{ad} S_{cb}``, e.g., the
+  collective operators ``S_{ab} = \sum_k |a⟩_k⟨b|_k`` of an ensemble of
+  ``n``-level systems. As for spins without fixed `j`, only the commutation
+  relations are used, so that results hold for any number of ``n``-level systems.
 - Operators of qudits with a given matrix: `q(M)` is ``\sum_{ij} M_{ij} |i⟩⟨j|``
   for a ``d×d`` matrix `M` (with numbers or parameters as entries), e.g., for a
   Hamiltonian or for the generators of any Lie algebra in a ``d``-dimensional

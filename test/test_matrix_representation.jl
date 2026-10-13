@@ -1,4 +1,4 @@
-# Check the algebraic rules of finite-dimensional operators (two-level systems, qudits, fermions, spins, so(n))
+# Check the algebraic rules of finite-dimensional operators (two-level systems, qudits, fermions, spins, so(n), u(n))
 # by representing expressions as explicit matrices on the tensor product space of all modes
 # appearing in them, and comparing the matrices of random operator products before and after
 # normal ordering.
@@ -14,10 +14,12 @@ _modekey(O::QA.BaseOperator) = (QA.sym(QA.opname(O)), Tuple(QA.inds(O)))
 # spins without fixed j are represented with spin _ABSTRACT_SPIN_J[] (their algebra holds in any representation)
 const _ABSTRACT_SPIN_J = Ref{Rational{Int}}(1)
 _spinj(O::QA.BaseOperator) = something(QA.spin_j(O), _ABSTRACT_SPIN_J[])
+# u(n) generators (which do not store n) are represented on two n-level systems with n = _UN_N
+const _UN_N = 3
 function _modedim(O::QA.BaseOperator)
     fam = QA.opfamily(O)
     fam == QA.QuditFamily ? QA.qudit_levels(O)[1] : fam in (QA.TLSFamily, QA.FermionFamily) ? 2 :
-    fam == QA.SpinFamily ? Int(2*_spinj(O)+1) : fam == QA.SOFamily ? QA.so_generator(O)[1] :
+    fam == QA.SpinFamily ? Int(2*_spinj(O)+1) : fam == QA.SOFamily ? QA.so_generator(O)[1] : fam == QA.UNFamily ? _UN_N^2 :
     error("no matrix representation for $O")
 end
 # local matrix of the operator (level 1 is the ground state / vacuum)
@@ -38,6 +40,11 @@ function _localmat(O::QA.BaseOperator)
         # defining representation, L_ab = -i(|a⟩⟨b| - |b⟩⟨a|)
         n, a, b = QA.so_generator(O)
         -im*(_E(n,a,b) - _E(n,b,a))
+    elseif fam == QA.UNFamily
+        # two n-level systems, S_ab = |a⟩⟨b| ⊗ 1 + 1 ⊗ |a⟩⟨b| (for n = _UN_N)
+        a, b = QA.un_generator(O)
+        Id = Matrix{ComplexF64}(I,_UN_N,_UN_N)
+        kron(_E(_UN_N,a,b), Id) + kron(Id, _E(_UN_N,a,b))
     elseif fam == QA.FermionFamily
         t == QA.FermionCreate_ ? _E(2,2,1) : _E(2,1,2)
     else
@@ -218,6 +225,28 @@ end
                 @test samematrix(normal_form(fsub(Xn)), fsub(X))
             end
             A, B = (prod(rand([sopool(:i); sopool(:j)], rand(1:2))) for _=1:2)
+            @test normal_form(normal_form(A*B)*X) == normal_form(A*normal_form(B*X))
+        end
+    end
+
+    # u(n) only uses the commutation relations, so it can be checked in any representation
+    @testset "u(n) (on two 3-level systems)" begin
+        # (only one name, since each site of a generator is represented by 9 states)
+        @un 3 S[:]
+        unpool(s) = QuExpr[[S(a,b)[s] for a=1:3 for b=1:3]; f(s)]
+        for _ = 1:200
+            X = prod(rand(unpool(1), rand(1:5)))
+            @test samematrix(normal_form(X), X)
+        end
+        substs = [(:i=>1, :j=>2), (:i=>1, :j=>1)]
+        for _ = 1:200
+            X = prod(rand([unpool(:i); unpool(:j)], rand(2:4)))
+            Xn = normal_form(X)
+            for sub in substs
+                fsub = QA.replace_inds((QA.QuIndex(k) => QA.QuIndex(v) for (k,v) in sub)...)
+                @test samematrix(normal_form(fsub(Xn)), fsub(X))
+            end
+            A, B = (prod(rand([unpool(:i); unpool(:j)], rand(1:2))) for _=1:2)
             @test normal_form(normal_form(A*B)*X) == normal_form(A*normal_form(B*X))
         end
     end

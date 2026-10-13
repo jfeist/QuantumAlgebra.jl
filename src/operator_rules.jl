@@ -40,7 +40,7 @@
 """
     OpFamily
 
-The family of an operator (bosons, fermions, two-level systems, qudits, spins or so(n) generators, see
+The family of an operator (bosons, fermions, two-level systems, qudits, spins, or generators of so(n) or u(n), see
 [`opfamily`](@ref)). Operators of different families always commute, and the algebra within a family
 `F` is defined by methods of [`exchange!`](@ref), [`contract!`](@ref) and [`commutes`](@ref) with the
 first argument `::Val{F}` (see the comments at the beginning of `src/operator_rules.jl`), together
@@ -48,12 +48,12 @@ with [`ladder`](@ref), [`vacuum_eigenvalue_right`](@ref), [`op_adjoint`](@ref), 
 [`lookahead_contraction`](@ref), [`lookahead_meet`](@ref) and [`lookahead_exchange`](@ref), which have
 default methods.
 """
-@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily SpinFamily SOFamily
+@enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily SpinFamily SOFamily UNFamily
 
 const ComplexInt = Complex{Int}
 
-#                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_   TLSx_      TLSy_      TLSz_      SpinMinus_  SpinZ_      SOGen_    QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
-const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, SpinFamily, TLSFamily, TLSFamily, TLSFamily, SpinFamily, SpinFamily, SOFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
+#                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_   TLSx_      TLSy_      TLSz_      SpinMinus_  SpinZ_      SOGen_    UNGen_    QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
+const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, SpinFamily, TLSFamily, TLSFamily, TLSFamily, SpinFamily, SpinFamily, SOFamily, UNFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
 
 "`opfamily(A)`: the [`OpFamily`](@ref) of the operator `A` (or of the operator type `A::BaseOpType`)."
 opfamily(t::BaseOpType) = @inbounds BaseOpType_family[Int(t)]
@@ -73,6 +73,8 @@ opfamily(A::BaseOperator) = opfamily(optype(A))
         f(Val(SpinFamily), args...)
     elseif fam == SOFamily
         f(Val(SOFamily), args...)
+    elseif fam == UNFamily
+        f(Val(UNFamily), args...)
     else
         error("unknown operator family $fam")
     end
@@ -570,3 +572,57 @@ function _so_no_vacuum(A::BaseOperator)
 end
 vacuum_eigenvalue_right(::Val{SOFamily}, A::BaseOperator) = _so_no_vacuum(A)
 vacuum_eigenvalue_left(::Val{SOFamily}, A::BaseOperator) = _so_no_vacuum(A)
+
+#################################################################
+## u(n): generators S_ab, e.g., of collective n-level systems   ##
+#################################################################
+# Generators S_ab (a,b = 1…n) with S_ab† = S_ba and
+#   [S_ab, S_cd] = δ_bc S_ad - δ_ad S_cb,
+# e.g., S_ab = ∑_k |a⟩_k⟨b|_k for an ensemble of n-level systems. As for so(n), only the commutation
+# relations are used, so the normal-ordered products on one site are the products of generators in a
+# fixed order (Poincaré-Birkhoff-Witt theorem): the "raising" generators S_ab with a > b, then the
+# "lowering" generators with a < b, and then the diagonal ones (as J₊, J₋, J_z for spins), each sorted
+# by (a,b). The extra information is class:8 | a:8 | b:8, with class 0, 1, 2 for raising, lowering and
+# diagonal generators, which gives this order. (The relations do not depend on n, so n is not stored.)
+
+_un_extra(a::Integer, b::Integer) = ((a > b ? 0 : a < b ? 1 : 2) << 16) | (a << 8) | b
+"`un_generator(A)`: (a,b) for the generator A = S_ab of u(n)"
+un_generator(A::BaseOperator) = (x = opextra(A); (Int((x >> 8) & 0xff), Int(x & 0xff)))
+
+"`un_op(name, a, b, inds)`: the generator S_ab of u(n)"
+function un_op(name::QuOpName, a::Integer, b::Integer, inds::AbstractVector{QuIndex})
+    (1 ≤ a ≤ 255 && 1 ≤ b ≤ 255) || throw(ArgumentError("u(n) generators S_ab need 1 ≤ a,b ≤ 255, got ($a,$b)"))
+    BaseOperator(UNGen_, name, inds, _un_extra(a,b))
+end
+
+function exchange!(::Val{UNFamily}, emit, B, A)
+    opextra(A) == opextra(B) && return 1
+    maybe_same_site(A,B) || return 1
+    # B A = A B + [S_ab, S_cd], with B = S_ab and A = S_cd
+    a, b = un_generator(B)
+    c, d = un_generator(A)
+    dd = site_deltas(A,B)
+    b == c && emit(1, dd, un_op(opname(A), a, d, inds(A)))
+    a == d && emit(-1, dd, un_op(opname(A), c, b, inds(A)))
+    return 1
+end
+
+# products of generators do not simplify (without fixing a representation)
+contract!(::Val{UNFamily}, emit, A, B) = nothing
+
+function commutes(::Val{UNFamily}, A, B)
+    (opextra(A) == opextra(B) || !maybe_same_site(A,B)) && return true
+    a, b = un_generator(A)
+    c, d = un_generator(B)
+    b != c && a != d
+end
+
+ladder(::Val{UNFamily}, A::BaseOperator) = ((a, b) = un_generator(A); a > b ? 1 : a < b ? -1 : 0)
+op_adjoint(::Val{UNFamily}, A::BaseOperator) = ((a, b) = un_generator(A); un_op(opname(A), b, a, inds(A)))
+opsymbol(::Val{UNFamily}, A::BaseOperator, style::Symbol) = ((a, b) = un_generator(A); _qudit_symbol(a, b, style))
+
+function _un_no_vacuum(A::BaseOperator)
+    throw(ArgumentError("vacuum expectation values are not defined for u(n) generators, got $A"))
+end
+vacuum_eigenvalue_right(::Val{UNFamily}, A::BaseOperator) = _un_no_vacuum(A)
+vacuum_eigenvalue_left(::Val{UNFamily}, A::BaseOperator) = _un_no_vacuum(A)

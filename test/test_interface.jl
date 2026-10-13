@@ -71,6 +71,8 @@
     @test q2(2,3)[:i] == qudit(:q2, 3; ndims=1)(2,3)[:i]
     @so 4 L1 L2[:]
     @test string(L1) == "L1 (so(4) generators)" && L2(1,2)[:i] == so(:L2, 4; ndims=1)(1,2)[:i]
+    @un 3 U1 U2[:]
+    @test string(U1) == "U1 (u(3) generators)" && U2(2,1)[:i] == un(:U2, 3; ndims=1)(2,1)[:i]
     @spin J1 J2[:]
     @test (J1p, J2z[1]) == (spin(:J1)[1], spin(:J2; ndims=1)[3][1])
     @spin 1//2 S1 S2[:]
@@ -136,6 +138,8 @@ end
     @test string(q(2,3)) == "q̃²³()"
     @so 3 L[:] = "𝓛"
     @test L(1,2)[:i] == so("𝓛", 3; ndims=1)(1,2)[:i]
+    @un 3 S = "𝒮"
+    @test string(S(1,2)) == "𝒮¹²()"
     # for @spin, `j = …` is the spin j, except with a string, which is the name of the spin `j`
     @spin j = "𝒥"
     @test string(jz) == "𝒥ᶻ()"

@@ -9,7 +9,7 @@
 
 This package does quantum operator algebra (i.e., algebra with non-commuting
 operators) in Julia, supporting bosonic, fermionic, and two-level system
-operators, qudits (d-level systems), spins and so(n) generators, with arbitrary
+operators, qudits (d-level systems), spins and generators of so(n) and u(n), with arbitrary
 names and indices, as well as sums over any of the indices. It defines an opinionated canonical form (normal ordering plus some
 additional rules) to automatically simplify expressions. It is recommended to
 use an interface that can display LaTeX formulas (e.g., Jupyter notebooks) for
@@ -59,8 +59,8 @@ Operators are defined with macros, which create variables for them:
 - `@tlsxyz σ` defines the Pauli matrices `σx`, `σy`, `σz` of a two-level
   system (TLS), and `@tls σ` defines `σ` as the deexcitation operator $σ^{-}$
   of a TLS, with `σ'` the excitation operator $σ^{+}$.
-- `@qudit d q`, `@spin J`/`@spin j J` and `@so n L` define qudits ($d$-level
-  systems), spins, and generators of so(n), see below.
+- `@qudit d q`, `@spin J`/`@spin j J`, `@so n L` and `@un n S` define qudits
+  ($d$-level systems), spins, and generators of so(n) and u(n), see below.
 - `@qparam g` defines a real parameter `g`, and `@qparam α::Complex` a complex
   parameter `α` (with `α'` its complex conjugate).
 
@@ -156,11 +156,11 @@ Julia versions before 1.12, this is only possible if the default operator has
 not been used yet; the default operators can be disabled with the preference
 `"define_default_ops"` (see [Preferences](#preferences)).
 
-### Qudits, spins and so(n)
+### Qudits, spins, so(n) and u(n)
 
-These kinds of operators are new in version 1.7 and still experimental: the rules
-that are used for them (and therefore the form of results) can change in future
-releases.
+These kinds of operators are new (since version 1.7) and still experimental: the
+rules that are used for them (and therefore the form of results) can change in
+future releases.
 
 - `@qudit d q` (or `q = qudit(:q, d)`) defines the operators of a `d`-level
   system (qudit), where `q(i,j)` is the transition operator $|i⟩⟨j|$
@@ -244,6 +244,25 @@ releases.
 
   julia> normal_form(comm(L(1,2), L(2,3)))
   -1i L¹³()
+  ```
+
+- `@un n S` (or `S = un(:S, n)`) defines the generators $S_{ab}$ of the Lie
+  algebra u(n), given as `S(a,b)` (or `S(a,b)[k]` with `@un n S[:]`), with
+  $S_{ab}^† = S_{ba}$ and commutation relations
+  $[S_{ab}, S_{cd}] = δ_{bc} S_{ad} - δ_{ad} S_{cb}$, e.g., the collective
+  operators $S_{ab} = \sum_k |a⟩_k⟨b|_k$ of an ensemble of $n$-level systems.
+  As for spins without fixed `j` (which are the case $n = 2$), only these
+  relations are used, so that results hold for any number of $n$-level systems
+  (for a single one, use a qudit). The sum $\sum_a S_{aa}$ commutes with all
+  generators.
+  ```julia
+  julia> @un 3 S;
+
+  julia> normal_form(comm(S(1,2), S(2,3)))
+  S¹³()
+
+  julia> normal_form(S(1,2)*S(2,1))
+  S¹¹() - S²²() + S²¹() S¹²()
   ```
 
 ### Working with expressions

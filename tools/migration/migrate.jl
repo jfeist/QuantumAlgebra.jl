@@ -169,7 +169,7 @@ const QA_EXPORTS = Set{Symbol}([:Avac, :Corr, :ExpVal, :QuExpr, :QuantumAlgebra,
     :boson, :boson_ops, :comm, :corr, :corr_as_expvals, :dropcorr, :droplen, :expval, :expval_as_corrs, :f, :fdag,
     :fermion, :fermion_ops, :gellmann, :heisenberg_eom, :heisenberg_eom_system, :julia_expression, :latex,
     :map_scalar_function, :normal_form, :param, :qindex, :qparam, :qudit, :so, :spin, :tls, :tlspm_ops, :tlsxyz,
-    :tlsxyz_ops, :vacA, :vacExpVal, :σm, :σp, :σx, :σy, :σz, :∑])
+    :tlsxyz_ops, :un, :vacA, :vacExpVal, :σm, :σp, :σx, :σy, :σz, :∑])
 const RESERVED = union(QA_EXPORTS, names(Base), names(Core))
 
 dimsstring(n) = n == 0 ? "" : "[" * join(fill(":", n), ",") * "]"
