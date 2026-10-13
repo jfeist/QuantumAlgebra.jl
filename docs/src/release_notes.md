@@ -1,6 +1,11 @@
 # Release notes
 
-## (unreleased)
+## v1.7.1 (2026-10-13)
+A patch release that makes normal forms unique in two more cases (Pauli
+matrices with symbolic indices, and spins with a fixed numerical `j`) and speeds
+up the handling of coefficients. Results for such Pauli matrices and spins can
+change form, since they are now simplified further.
+
 - Faster handling of the coefficients of terms: calculating equations of motion,
   correlators and vacuum expectation values is up to 30% faster.
 - The normal form of products of Pauli matrices (``σ^{x,y,z}``) with symbolic
