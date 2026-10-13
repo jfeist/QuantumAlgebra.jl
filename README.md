@@ -148,6 +148,10 @@ not been used yet; the default operators can be disabled with the preference
 
 ### Qudits, spins and so(n)
 
+These kinds of operators are new in version 1.7 and still experimental: the rules
+that are used for them (and therefore the form of results) can change in future
+releases.
+
 - `@qudit d q` (or `q = qudit(:q, d)`) defines the operators of a `d`-level
   system (qudit), where `q(i,j)` is the transition operator $|i⟩⟨j|$
   and level 1 is the ground state (the vacuum). With `@qudit d q[:]` (with any

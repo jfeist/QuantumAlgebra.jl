@@ -16,6 +16,9 @@
   operator was used, so that equal operators could have different normal forms,
   and powers of ``J_z`` were not reduced. For a symbolic `j`, only the Casimir
   operator is used, as before.
+- Qudits, spins and so(n) generators (new in version 1.7) are now marked as
+  experimental in the documentation: the rules that are used for them (and
+  therefore the form of results) can still change.
 
 ## v1.7.0 (2026-10-12)
 This is a minor release because it has no breaking changes (existing code keeps
