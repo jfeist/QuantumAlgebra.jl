@@ -6,6 +6,7 @@ DocTestSetup = quote
     using QuantumAlgebra
     QuantumAlgebra.auto_normal_form(false)
     QuantumAlgebra.use_σxyz()
+    QuantumAlgebra.use_bracket_display(false)
     @static if !QuantumAlgebra._DEFINE_DEFAULT_OPS
         @boson_ops a
         @fermion_ops f

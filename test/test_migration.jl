@@ -3,6 +3,10 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
 
 @testset "migration tool" begin
     QuantumAlgebra.use_σxyz()
+    # a module for running legacy code, which uses the default operators (defined here if the preference
+    # "define_default_ops" is false)
+    legacymodule() = (m = Module(); QuantumAlgebra._DEFINE_DEFAULT_OPS ||
+                      Base.include_string(m, "using QuantumAlgebra; @boson_ops a; @fermion_ops f; @tlsxyz_ops σ; @tlspm_ops σ"); m)
     old = raw"""
     using QuantumAlgebra
     @boson_ops b
@@ -35,7 +39,7 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
     @test all(m -> startswith(m, "migrated"), msgs)
     # both versions give the same results (each group of anticommuting fermions gets a unique internal
     # name, so results with them are compared as strings)
-    mold, mnew = Module(), Module()
+    mold, mnew = legacymodule(), Module()
     Base.include_string(mold, old)
     Base.include_string(mnew, new)
     @test (mold.X, mold.Z) == (mnew.X, mnew.Z)
@@ -98,7 +102,7 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
     Y = makeY()
     Z = a*a'
     """
-    mold, mnew = Module(), Module()
+    mold, mnew = legacymodule(), Module()
     Base.include_string(mold, old)
     Base.include_string(mnew, new)
     @test (mold.X, mold.Y, mold.Z) == (mnew.X, mnew.Y, mnew.Z)
@@ -141,7 +145,7 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
     @test any(m -> occursin("parameter `d`: the new variable `d` would clash", m), msgs)
     @test any(m -> occursin("parameter `f(t)`: `f(t)` is not a valid variable name, declare it with a variable name of your choice, e.g., `@qparam ft=\"f(t)\"`", m), msgs)
     @test any(m -> occursin("migrated parameter `\\bar{b}` as `b̄`", m), msgs)
-    mold, mnew = Module(), Module()
+    mold, mnew = legacymodule(), Module()
     Base.include_string(mold, old)
     Base.include_string(mnew, new)
     @test mold.W == mnew.W
@@ -169,7 +173,7 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
     V = α*α'*gs(:i)*κ[:k,:l]
     """
     @test all(m -> startswith(m, "migrated"), msgs)
-    mold, mnew = Module(), Module()
+    mold, mnew = legacymodule(), Module()
     Base.include_string(mold, old)
     Base.include_string(mnew, new)
     @test mold.V == mnew.V
@@ -182,8 +186,8 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
         @test read(joinpath(dir, "main_migrated.jl"), String) ==
             "using QuantumAlgebra\n# operators and parameters (migrated from the legacy QuantumAlgebra interface)\n@boson a[:]\ninclude(\"part_migrated.jl\")\nY = X + a[:j]\n"
         @test read(joinpath(dir, "part_migrated.jl"), String) == "X = a[:i]*a'[:i]\n"
-        run(file) = (m = Module(); Core.eval(m, :(include(p) = Base.include($m, p))); Base.include(m, file))
-        @test run(joinpath(dir, "main.jl")) == run(joinpath(dir, "main_migrated.jl"))
+        run(file, m) = (Core.eval(m, :(include(p) = Base.include($m, p))); Base.include(m, file))
+        @test run(joinpath(dir, "main.jl"), legacymodule()) == run(joinpath(dir, "main_migrated.jl"), Module())
         # operators used with different numbers of indices in different files are not migrated
         write(joinpath(dir, "part.jl"), "X = a()*a'(:i)\n")
         msgs = QAMigration.migrate_file(joinpath(dir, "main.jl"); inplace=true)
@@ -191,8 +195,10 @@ isdefined(Main, :QAMigration) || include(joinpath(pkgdir(QuantumAlgebra), "tools
         @test read(joinpath(dir, "main.jl"), String) == "using QuantumAlgebra\ninclude(\"part.jl\")\nY = X + a(:j)\n"
     end
 
-    # new variables must not shadow names exported by QuantumAlgebra
-    @test QAMigration.QA_EXPORTS == Set(filter(n -> !startswith(string(n), "@"), names(QuantumAlgebra)))
+    # new variables must not shadow names exported by QuantumAlgebra (including the default operators, which
+    # are not defined if the preference "define_default_ops" is false)
+    defaultops = Set([:a, :adag, :f, :fdag, :σx, :σy, :σz, :σp, :σm])
+    @test QAMigration.QA_EXPORTS == union(Set(filter(n -> !startswith(string(n), "@"), names(QuantumAlgebra))), defaultops)
 
     # notebooks: the cells are treated as one program
     nb = """

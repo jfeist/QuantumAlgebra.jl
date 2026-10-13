@@ -21,6 +21,9 @@ import SymPyPythonCall
     @tlspm_ops σ
 end
 
+# the tests check the default output (with parentheses), independently of the preference "bracket_display"
+QuantumAlgebra.use_bracket_display(false)
+
 function myδ(i,j)
     iA,iB = QuIndex.((i,j))
     QuExpr(QuTerm([δ(min(iA,iB),max(iA,iB))],BaseOpProduct()))
