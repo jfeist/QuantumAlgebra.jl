@@ -12,11 +12,24 @@ indexpr(ind::QuIndex) = issumindex(ind) ? Symbol(:s̄,subscript(ind.num)) : (isi
 indexpr(A) = indexpr.(indices(A))
 
 """
-    julia_expression(A; varnames=nothing)
+    julia_expression(A, varnames=nothing)
 
-Convert a `QuExpr` (or related quantum objects) into a plain Julia expression constructed from
-numbers and symbolic variables. Optional `varnames` argument restricts allowed expectation value or
-correlator symbols; when provided, conjugates may be rewritten to match available names.
+Return a Julia expression (an `Expr`) that computes the value of `A`, a `QuExpr` without bare
+operators (e.g., with expectation values or correlators). Expectation values and correlators become
+arrays with a name made from their operators, e.g., ``⟨b^†_i b_j⟩`` becomes `bᴴb[i,j]`, parameters
+become arrays with their names (or, for names like `f(t)`, function calls), Kronecker deltas become
+`I[i,j]` (from LinearAlgebra), and summation indices are named `s̄₁`, `s̄₂`, … (but the sums are not
+written explicitly). If the collection of symbols `varnames` is given, expectation values (or
+correlators) whose name is not in it are written as the complex conjugate of their adjoint (using
+``⟨A⟩ = ⟨A^†⟩^*``), e.g., `julia_expression(expval(b[:i]), [:bᴴ])` gives `conj(bᴴ[i])`.
+
+# Examples
+```julia
+julia> @boson b[:]; @qparam g[:];
+
+julia> julia_expression(expval_as_corrs(g[:i]*b'[:i]*b[:j]))
+:(g[i] * bᴴ[i] * b[j] + g[i] * bᴴb[i, j])
+```
 """
 function julia_expression(A::Param,varnames=nothing)
     # the parsing here allows "parameters" that are functions
@@ -45,6 +58,13 @@ function julia_expression(A::Union{ExpVal,Corr},varnames=nothing)
         :( conj($x[$(indexpr.(_display_indices(ops(Ap)))...)]) )
     end
 end
+"""
+    num_expr(x::Number)
+
+The Julia expression for the coefficient `x` in [`julia_expression`](@ref), which is a `Float64` or a
+`ComplexF64` by default. Packages that provide other number types (e.g., symbolic numbers) can add
+methods for them.
+"""
 num_expr(s::Number) = :( $(isreal(s) ? Float64(s) : ComplexF64(s)) )
 function julia_expression(A::QuTerm,varnames=nothing,s=1)
     isempty(A) && return num_expr(s)

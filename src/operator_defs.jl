@@ -18,10 +18,13 @@ const _DEFINE_DEFAULT_OPS = @load_preference("define_default_ops", true)
 """
     set_define_default_ops(t::Bool)
 
-Set the preference for whether to define default operators (`a`, `adag`, `f`, `fdag`, `σx`, `σy`, `σz`, `σp`, `σm`) upon import.
-Default is `true`.
+Set the preference `"define_default_ops"`, which determines whether the default operators of the
+legacy interface (`a`, `adag`, `f`, `fdag`, `σx`, `σy`, `σz`, `σp`, `σm`) are defined when
+QuantumAlgebra is loaded (the default is `true`). The default operators are deprecated and will be
+removed in version 2.0; define operators with the macros instead (e.g., `@boson a[:]`, see
+[`@boson`](@ref)).
 
-Note that changing this preference requires restarting the Julia session to take effect.
+Changing this preference requires restarting the Julia session to take effect.
 """
 function set_define_default_ops(t::Bool)
     @set_preferences!("define_default_ops" => t)
@@ -47,9 +50,12 @@ const _using_σpm = Ref(false)
 """
     use_σpm(t::Bool=true; set_preference=false)
 
-Select whether TLS operators are expressed in the `(σ₊, σ₋)` basis (`true`) or
-in the `(σx, σy, σz)` basis (`false`). If `set_preference` is `true`, the choice
-is persisted via `Preferences.jl` for future sessions.
+Choose how the operators of two-level systems are represented: with the raising and lowering
+operators ``σ^+`` and ``σ^-`` (for `true`), or with the Pauli matrices ``σ^x``, ``σ^y`` and ``σ^z``
+(for `false`, the default). This applies to the operators that are created afterwards, e.g., `σ[i]`
+after `@tls σ[:]` (or `σx` after `@tlsxyz σ`, which is created when it is defined), which are then
+expressed in the chosen basis. If `set_preference` is `true`, the choice is stored with
+`Preferences.jl` (preference `"use_σpm"`) for future sessions.
 """
 function use_σpm(t::Bool=true; set_preference=false)
     _using_σpm[] = t
@@ -59,15 +65,15 @@ end
 """
     use_σxyz(; set_preference=false)
 
-Convenience helper to switch to the `(σx, σy, σz)` basis. Equivalent to
-`use_σpm(false; set_preference)`.
+Represent the operators of two-level systems with the Pauli matrices ``σ^x``, ``σ^y`` and ``σ^z``
+(the default), equivalent to `use_σpm(false; set_preference)` (see [`use_σpm`](@ref)).
 """
 use_σxyz(;set_preference=false) = use_σpm(false;set_preference)
 """
     using_σpm()
 
-Return whether TLS operators are currently configured to use the `(σ₊, σ₋)`
-basis.
+Return whether the operators of two-level systems are represented with ``σ^+`` and ``σ^-`` (see
+[`use_σpm`](@ref)).
 """
 using_σpm() = _using_σpm[]
 
@@ -75,8 +81,10 @@ const _auto_normal_form = Ref(false)
 """
     auto_normal_form(t::Bool=true; set_preference=false)
 
-Enable or disable automatic normal-ordering of expressions on construction.
-When `set_preference` is `true`, the setting is stored with `Preferences.jl`.
+Enable (or disable, with `t = false`) automatic normal ordering, which brings every expression into
+normal form when it is created (e.g., `a*a'` then directly gives `1 + a†() a()`). It is disabled by
+default, so that [`normal_form`](@ref) has to be called explicitly. If `set_preference` is `true`,
+the choice is stored with `Preferences.jl` (preference `"auto_normal_form"`) for future sessions.
 """
 function auto_normal_form(t::Bool=true; set_preference=false)
     _auto_normal_form[] = t
@@ -86,7 +94,7 @@ end
 """
     using_auto_normal_form()
 
-Return whether automatic normal-ordering is currently enabled.
+Return whether automatic normal ordering is enabled (see [`auto_normal_form`](@ref)).
 """
 using_auto_normal_form() = _auto_normal_form[]
 
@@ -124,25 +132,16 @@ const IndexInt = Int32
 end
 
 """
-    QuIndex
+    QuIndex(i)
 
-Represents an index in a quantum operator expression.
+An index of an operator or parameter: an integer (`QuIndex(2)`), a symbolic index, given by a single
+unicode character with an optional integer subindex (`QuIndex(:i)`, or `QuIndex(:j_2)` and
+`QuIndex("j_2")`, printed as `j₂`), or a summation index (see [`sumindex`](@ref)).
 
-A `QuIndex` can be:
-- An integer index (created with `QuIndex(i)` for integer `i`)
-- A symbolic index like `QuIndex(:i)` or `QuIndex("i_2")`
-- A sum index created with `sumindex(n)`
+Indices are usually not created directly: operators and parameters accept integers and symbols as
+indices (e.g., `a[:i,2]`), or index variables defined with [`@qindex`](@ref) (e.g., `a[i,j[2]]`).
 
-# Examples
-```julia
-i = QuIndex(1)              # Integer index 1
-i = QuIndex(:i)             # Symbolic index 'i'
-i = QuIndex("i_2")          # Symbolic index 'i' with subscript 2
-si = sumindex(1)            # Sum index #₁
-```
-
-# See also
-[`sumindex`](@ref), [`issumindex`](@ref), [`isintindex`](@ref)
+See also [`isintindex`](@ref), [`issumindex`](@ref).
 """
 QuIndex
 QuIndex(ii::QuIndex) = ii
@@ -170,8 +169,8 @@ QuIndex(ii::Integer) = QuIndex('\0',ii)
 """
     sumindex(i)
 
-Create a summation index with index `i`. These indices are used internally for
-implicit summation (Einstein summation convention).
+Return the summation index number `i` (printed as `#ᵢ`). Sums (see [`∑`](@ref)) are stored with
+summation indices for the indices that are summed over, so that they cannot clash with other indices.
 """
 sumindex(ii) = QuIndex('#',ii)
 # by convention, these should never be present in the input or output of any function,
@@ -245,6 +244,14 @@ end
     # create from the id of an existing name
     QuOpName(i::IndexInt, ::Val{:id}) = new(i)
 end
+
+"""
+    QuOpName(name::Symbol)
+
+The name of an operator or parameter. Names are stored as integer ids into a global table of names,
+so that they can be compared and hashed quickly, and they are ordered alphabetically.
+"""
+QuOpName
 sym(ind::QuOpName) = _NameTable[].syms[ind.i]
 Base.print(io::IO, ind::QuOpName) = print(io, sym(ind))
 _namestablehash(ind::QuOpName) = @inbounds _NameTable[].stablehash[ind.i]
@@ -257,6 +264,14 @@ const NoName = QuOpName(Symbol())
 # the enum also directly defines a natural ordering,so choose this directly how we later want it
 # start the counting at 1 so we can index into the tuples defined below with Int(BaseOpType)
 # (for qudits and so(n) generators, the symbols are determined from the levels or the indices a,b of L_ab)
+"""
+    BaseOpType
+
+The type of a [`BaseOperator`](@ref), e.g., `BosonCreate_` or `TLSz_`. Operators are ordered by their
+type (in the order of the values of `BaseOpType`), then by name, additional data and indices. Normal
+ordering brings products of operators into this order as far as their algebra allows, so that, e.g.,
+creation operators end up to the left of annihilation operators.
+"""
 @enum BaseOpType        BosonCreate_=1 FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_ TLSx_  TLSy_  TLSz_  SpinMinus_ SpinZ_ SOGen_ QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
 const BaseOpType_adj   = (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_, TLSx_, TLSy_, TLSz_, SpinPlus_, SpinZ_, SOGen_, QuditCreate_, TLSCreate_, FermionCreate_, BosonCreate_)
 const BaseOpType_sym   = ("†", "†", "⁺", "", "⁺", "ˣ", "ʸ", "ᶻ", "⁻", "ᶻ", "", "", "⁻", "", "")
@@ -273,15 +288,13 @@ end
 """
     δ(iA, iB)
 
-Represents a Kronecker delta function δ_{iA,iB} in a quantum expression.
+The Kronecker delta ``δ_{iA,iB}`` of two indices in a term. It is only stored for two different
+indices that can be equal (i.e., not for two different integers). Kronecker deltas appear, e.g., when
+normal ordering, such as in `normal_form(b[:i]*b'[:j])`, which gives `δ(ij) + b†(j) b(i)`.
 
-The delta function is zero if indices are different, and one if they are the same.
-
-# Examples
-```julia
-δ(QuIndex(1), QuIndex(2))    # δ₁₂
-δ(QuIndex(:i), QuIndex(:j))  # δᵢⱼ
-```
+`δ(Ainds, Binds)`, with two vectors of indices, returns the Kronecker deltas for the pairwise
+equality of `Ainds` and `Binds` (only for pairs of different indices), or `nothing` if not all of
+them can be equal.
 """
 δ
 function δ(Ainds::AbstractVector{QuIndex},Binds::AbstractVector{QuIndex})
@@ -306,21 +319,13 @@ include("term_storage.jl")
 """
     BaseOperator
 
-Represents a single quantum operator in an expression.
-
-A `BaseOperator` is one of:
-- Bosonic operators: `BosonCreate`, `BosonDestroy`
-- Fermionic operators: `FermionCreate`, `FermionDestroy`
-- Two-level system (TLS) operators: `TLSCreate`, `TLSDestroy`, `TLSx`, `TLSy`, `TLSz`
-
-Each operator is associated with a name and indices.
-
-# Examples
-```julia
-a = BosonCreate(:a)        # Bosonic creation operator a†
-f = FermionDestroy(:f, 1)  # Fermionic annihilation operator f₁
-σx = TLSx(:σ, :i)          # TLS x operator σ_i
-```
+A single operator in a term, given by its type (see [`BaseOpType`](@ref)), its name, its indices,
+and additional data for some kinds of operators (e.g., the levels of a qudit transition, or the
+value of a spin). Operators are usually not created directly, but with the macros that define
+operators (e.g., [`@boson`](@ref)), which give `QuExpr` objects. For bosons, fermions and two-level
+systems, `BaseOperator`s can also be created with `BosonDestroy(name, inds...)`,
+`BosonCreate(name, inds...)`, `FermionDestroy`, `FermionCreate`, `TLSDestroy`, `TLSCreate`, `TLSx`,
+`TLSy` and `TLSz` (e.g., `BosonCreate(:a, :i)` is ``a_i^†``).
 """
 BaseOperator
 
@@ -343,55 +348,33 @@ end
 """
     ExpVal(ops::BaseOpProduct)
 
-Represents an expectation value ⟨ops⟩ in a quantum expression.
+The expectation value ``⟨ops⟩`` of a product of operators in a term. Expectation values are created
+with [`expval`](@ref), e.g., `expval(a'*a)` gives `⟨a†() a()⟩`. As the first argument of
+[`heisenberg_eom_system`](@ref), `ExpVal` selects equations for expectation values.
 
-Expectation values contain products of quantum operators that should be evaluated as a single unit.
-
-# Examples
-```julia
-ev = ExpVal(BaseOpProduct([a, a_dag]))  # ⟨a† a⟩
-```
-
-# See also
-[`Corr`](@ref), [`expval`](@ref)
+See also [`Corr`](@ref).
 """
 ExpVal
 
 """
     Corr(ops::BaseOpProduct)
 
-Represents a correlator ⟨ops⟩c in a quantum expression.
+The correlator (or cumulant) ``⟨ops⟩_c`` of a product of operators in a term, i.e., the connected
+part of the expectation value ``⟨ops⟩`` (see [`expval_as_corrs`](@ref)). Correlators are created with
+[`corr`](@ref), e.g., `corr(a'*a)` gives `⟨a†() a()⟩c`. As the first argument of
+[`heisenberg_eom_system`](@ref), `Corr` selects equations for correlators.
 
-Correlators (or cumulants) represent connected correlations in the expectation value.
-
-# Examples
-```julia
-corr = Corr(BaseOpProduct([a, a_dag]))  # ⟨a† a⟩c
-```
-
-# See also
-[`ExpVal`](@ref), [`corr`](@ref)
+See also [`ExpVal`](@ref).
 """
 Corr
 
 """
-    Param(name, state, inds)
+    Param
 
-Represents a parameter in a quantum expression.
-
-Parameters are scalar values that can appear in quantum expressions, with optional indices
-and conjugation state.
-
-# Arguments
-- `name`: Symbol identifying the parameter
-- `state`: 'r' for real, 'n' for normal, 'c' for conjugate
-- `inds`: Quantum indices (optional)
-
-# Examples
-```julia
-p = Param(:λ, 'r')        # Real parameter λ
-p = Param(:ω, 'r', 1)     # Real parameter ω₁
-```
+A parameter in a term, given by its name, its state (`'r'` for a real parameter, `'n'` for a complex
+parameter, and `'c'` for the complex conjugate of a complex parameter) and its indices. Parameters
+are defined with [`@qparam`](@ref) or [`qparam`](@ref) (or, in the legacy interface, with
+[`param`](@ref) and the string macros [`@Pr_str`](@ref) and [`@Pc_str`](@ref)).
 """
 Param
 
@@ -399,20 +382,16 @@ Param
 """
     QuExpr
 
-A quantum algebra expression represented as a sum of terms.
+A quantum expression: a sum of terms ([`QuTerm`](@ref)) with numerical coefficients, which are
+stored in the dictionary `A.terms` (from terms to coefficients). The coefficients can be numbers of
+any type, including symbolic numbers (e.g., from Symbolics.jl or SymPy.jl), and numbers of different
+types can appear in the same expression.
 
-A `QuExpr` is a dictionary mapping `QuTerm`s to numeric coefficients stored as `Number`.
-Using `Number` allows heterogeneous numeric types (e.g., `Int`, `Float64`, `Rational`,
-`Complex`) to coexist without forced type conversions.
-
-# Constructors
-
-- The quantum operator constructors generated with `@boson_ops`, `@fermion_ops`, etc., return `QuExpr` objects.
-- `QuExpr()`: Create an empty expression (zero) - `zero(QuExpr)` works as well.
-- `QuExpr(x)`: Create a constant expression from a number `x`. `QuExpr(1)` is equivalent to `one(QuExpr)`.
-
-# See also
-[`QuTerm`](@ref), [`normal_form`](@ref)
+Expressions are built from operators and parameters (see [`@boson`](@ref) and [`@qparam`](@ref)),
+which are `QuExpr`s themselves, with `+`, `-`, `*`, `^`, the adjoint `'`, sums ([`∑`](@ref)), and
+functions such as [`normal_form`](@ref), [`comm`](@ref) or [`expval`](@ref). `QuExpr()` (or
+`zero(QuExpr)`) is the empty expression, i.e., zero, and `QuExpr(x)` is the constant `x` (e.g.,
+`QuExpr(1) == one(QuExpr)`).
 """
 struct QuExpr
     # A QuantumAlgebra Expression is saved as a Dictionary of QuTerms with scalar prefactors
@@ -456,19 +435,15 @@ _map_quexpr_ops(f,A::QuExpr) = QuExpr((f(t),s) for (t,s) in A.terms)
 """
     map_scalar_function(f, A::QuExpr)
 
-Apply a function to all scalar coefficients in a quantum expression.
-
-# Arguments
-- `f`: Function to apply to each coefficient
-- `A`: Quantum expression
-
-# Returns
-A new `QuExpr` with function applied to all coefficients
+Return the expression `A` with the function `f` applied to the coefficient of each term, e.g., to
+round numerical coefficients or to simplify symbolic ones.
 
 # Examples
 ```julia
-A = QuExpr(a) + 2 * QuExpr(a_dag)
-B = map_scalar_function(x -> 2x, A)  # Double all coefficients
+julia> @boson a;
+
+julia> map_scalar_function(x -> round(x, digits=3), a/3 + a'/7)
+0.143 a†() + 0.333 a()
 ```
 """
 map_scalar_function(f,A::QuExpr) = QuExpr((t,f(s)) for (t,s) in A.terms)
@@ -476,10 +451,10 @@ map_scalar_function(f,A::QuExpr) = QuExpr((t,f(s)) for (t,s) in A.terms)
 """
     QuExprConstructor
 
-Helper struct for creating operator expressions with automatic conjugate support.
-
-Used internally by macros like `@boson_ops` and `@fermion_ops` to provide
-both normal and daggered operator constructors.
+A callable object that creates operators (or parameters) as `QuExpr`s, e.g., `a` in `a(:i)` for the
+operators of the legacy interface (see [`boson_ops`](@ref)). Its adjoint `a'` creates the adjoint
+operators. The variables of operators with indices (e.g., `a` after `@boson a[:]`, see
+[`QuExprCstrctArrAlias`](@ref)) call it with the indices.
 """
 struct QuExprConstructor{F,Fdag}
     name::String
@@ -504,25 +479,13 @@ wrapdagdeprecated(f) = (args...) -> (Base.depwarn("`xdag()` constructors are dep
 """
     boson_ops(name::Symbol)
 
-Create constructors for bosonic operators with the given name.
+Return the constructors `(a, adag)` for the bosonic operators with the given name in the legacy
+interface: `a(inds...)` is the annihilation operator with these indices, and `a'(inds...)` the
+creation operator (`adag` is deprecated, use `a'` instead). See also [`@boson_ops`](@ref).
 
-Returns a tuple of `(annihilation, creation)` operators that can be called
-to create quantum expressions containing these operators.
-
-# Arguments
-- `name`: Symbol for the operator name (e.g., `:a`, `:b`)
-
-# Returns
-- Tuple `(a, a†)` of `QuExprConstructor` objects
-
-# Examples
-```julia
-a, a_dag = boson_ops(:a)
-expr = a(1) + a_dag(2)  # a₁ + a₂†
-```
-
-# See also
-[`fermion_ops`](@ref), [`@boson_ops`](@ref)
+!!! note "Legacy interface"
+    This function is part of the legacy interface, which is deprecated and will be removed in
+    version 2.0. Use [`boson`](@ref) or [`@boson`](@ref) instead.
 """
 function boson_ops(name::Symbol)
     op_name = QuOpName(name)
@@ -535,25 +498,13 @@ end
 """
     fermion_ops(name::Symbol)
 
-Create constructors for fermionic operators with the given name.
+Return the constructors `(f, fdag)` for the fermionic operators with the given name in the legacy
+interface: `f(inds...)` is the annihilation operator with these indices, and `f'(inds...)` the
+creation operator (`fdag` is deprecated, use `f'` instead). See also [`@fermion_ops`](@ref).
 
-Returns a tuple of `(annihilation, creation)` operators that can be called
-to create quantum expressions containing these operators.
-
-# Arguments
-- `name`: Symbol for the operator name (e.g., `:f`, `:c`)
-
-# Returns
-- Tuple `(f, f†)` of `QuExprConstructor` objects
-
-# Examples
-```julia
-f, f_dag = fermion_ops(:f)
-expr = f(1) + f_dag(2)  # f₁ + f₂†
-```
-
-# See also
-[`boson_ops`](@ref), [`@fermion_ops`](@ref)
+!!! note "Legacy interface"
+    This function is part of the legacy interface, which is deprecated and will be removed in
+    version 2.0. Use [`fermion`](@ref) or [`@fermion`](@ref) instead.
 """
 function fermion_ops(name::Symbol)
     op_name = QuOpName(name)
@@ -566,10 +517,13 @@ end
 """
     tlspm_ops(name::Symbol)
 
-Return constructors for TLS ladder operators `(σ₋, σ₊)` for the given `name`.
+Return the constructors `(σm, σp)` for the lowering and raising operators ``σ^-`` and ``σ^+`` of the
+two-level system `name` in the legacy interface. Depending on [`use_σpm`](@ref) (when the operators
+are created), they are represented as jump operators or through the Pauli matrices.
 
-The concrete output depends on `use_σpm`: when true, returns annihilation/creation
-expressions; when false, returns linear combinations of `σx` and `σy`.
+!!! note "Legacy interface"
+    This function is part of the legacy interface, which is deprecated and will be removed in
+    version 2.0. Use [`tls`](@ref) or [`@tls`](@ref) instead.
 """
 function tlspm_ops(name::Symbol)
     op_name = QuOpName(name)
@@ -583,10 +537,13 @@ end
 """
     tlsxyz_ops(name::Symbol)
 
-Return constructors for Pauli operators `(σₓ, σ_y, σ_z)` for the given `name`.
+Return the constructors `(σx, σy, σz)` for the Pauli matrices of the two-level system `name` in the
+legacy interface. Depending on [`use_σpm`](@ref) (when the operators are created), they are
+represented as Pauli matrices or through the jump operators ``σ^±``.
 
-The concrete output depends on `use_σpm`: when true, returns combinations of ladder
-operators; when false, returns the direct `σx/σy/σz` operators.
+!!! note "Legacy interface"
+    This function is part of the legacy interface, which is deprecated and will be removed in
+    version 2.0. Use [`tlsxyz`](@ref) or [`@tlsxyz`](@ref) instead.
 """
 function tlsxyz_ops(name::Symbol)
     op_name = QuOpName(name)
@@ -644,17 +601,17 @@ function _sqrt_rational(x::Rational, sqrt)
     d == 1 ? n : n//d
 end
 
-"`@boson_ops name`: define function `\$name` for creating bosonic annihilation operators with name `name` (also defines deprecated `\$(name)dag`, use `\$(name)'` instead) "
+"`@boson_ops name`: define the function `\$name` that creates bosonic annihilation operators with name `name`, e.g., `\$name(:i)` (and the deprecated `\$(name)dag`, use `\$(name)'` instead). Legacy interface (deprecated, will be removed in version 2.0), use [`@boson`](@ref) instead."
 macro boson_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = boson_ops($(Meta.quot(name))) )
 end
 
-"`@fermion_ops name`: define function `\$name` for creating fermionic annihilation operators with name `name` (also defines deprecated `\$(name)dag`, use `\$(name)'` instead)"
+"`@fermion_ops name`: define the function `\$name` that creates fermionic annihilation operators with name `name`, e.g., `\$name(:i)` (and the deprecated `\$(name)dag`, use `\$(name)'` instead). Legacy interface (deprecated, will be removed in version 2.0), use [`@fermion`](@ref) instead."
 macro fermion_ops(name)
     :( ($(esc(name)), $(esc(Symbol(name,:dag)))) = fermion_ops($(Meta.quot(name))) )
 end
 
-"`@anticommuting_fermion_group name1 name2 ...`: define a group of mutually anticommuting fermionic operators"
+"`@anticommuting_fermion_group name1 name2 ...`: define the functions `name1`, `name2`, … that create fermionic annihilation operators that mutually anticommute. Legacy interface (deprecated, will be removed in version 2.0), use [`@anticommuting_fermions`](@ref) instead."
 macro anticommuting_fermion_group(names...)
     # start the groupname (which is the "internal" species name) by concatenating all names,
     # to ensure reasonable sorting relative to other fermionic species
@@ -674,12 +631,12 @@ end
 
 # functions for constructing Pauli operators depending on whether we use (σ+,σ-) or (σx,σy,σz) as the "basic" operators
 
-"`@tlspm_ops name`: define functions `\$(name)m` and `\$(name)p` creating jump operators for a two-level system with name `name`."
+"`@tlspm_ops name`: define the functions `\$(name)m` and `\$(name)p` that create the lowering and raising operators ``σ^-`` and ``σ^+`` of the two-level system `name` (see [`tlspm_ops`](@ref)). Legacy interface (deprecated, will be removed in version 2.0), use [`@tls`](@ref) instead."
 macro tlspm_ops(name)
     :( ($(esc(Symbol(name,:m))), $(esc(Symbol(name,:p)))) = tlspm_ops($(Meta.quot(name))) )
 end
 
-"`@tlsxyz_ops name`: define functions `\$(name)x`, `\$(name)y`, and `\$(name)z` creating Pauli operators for a two-level system with name `name`."
+"`@tlsxyz_ops name`: define the functions `\$(name)x`, `\$(name)y`, and `\$(name)z` that create the Pauli matrices of the two-level system `name` (see [`tlsxyz_ops`](@ref)). Legacy interface (deprecated, will be removed in version 2.0), use [`@tlsxyz`](@ref) instead."
 macro tlsxyz_ops(name)
     :( ($(esc(Symbol(name,:x))), $(esc(Symbol(name,:y))), $(esc(Symbol(name,:z)))) = tlsxyz_ops($(Meta.quot(name))) )
 end
@@ -710,6 +667,14 @@ function (L::SOOps)(a::Integer, b::Integer, inds...)
     a < b ? A : -A
 end
 
+"""
+    QuExprCstrctArrAlias
+
+The variable of an operator or parameter with indices, e.g., `a` after `@boson a[:,:]` (or
+`a = boson(:a; ndims=2)`): indexing it with the declared number of indices gives the operator with
+these indices, `a[i,j]`, and its adjoint `a'` is the variable of the adjoint operator, `a'[i,j]`.
+It is also used for indices with a subindex, e.g., `j` after `@qindex j[:]` (with `j[2]` giving `j₂`).
+"""
 struct QuExprCstrctArrAlias{T}
     constructor::T
     numdims::Int
@@ -1163,8 +1128,14 @@ end
 """
     param(name, [state], inds...)
 
-Construct a parameter as a `QuExpr`. `state` is one of `n` (normal/complex),
-`r` (real), or `c` (conjugate). Indices are optional.
+Return the parameter `name` with the given indices as a `QuExpr`, where `state` is `'r'` for a real
+parameter, `'n'` (the default) for a complex parameter, and `'c'` for its complex conjugate. E.g.,
+`param(:g,'r',:i)` is the real parameter ``g_i``.
+
+!!! note "Legacy interface"
+    This function is part of the legacy interface, which is deprecated and will be removed in
+    version 2.0. Use [`@qparam`](@ref) or [`qparam`](@ref) instead, e.g., `qparam(:g; ndims=1)[:i]`
+    for `param(:g,'r',:i)`, or `qparam(:α, Complex)'` for `param(:α,'c')`.
 """
 param(name::Symbol,args...) = param(QuOpName(name),args...)
 param(name::QuOpName,args...) = param(name,'n',args...)
@@ -1189,10 +1160,32 @@ function parse_paramstr(s)
     par, inds
 end
 
+"""
+    Pc"name_inds"
+
+Return the complex parameter `name` with the indices `inds` (separated by commas, optionally in
+braces), e.g., `Pc"α"` or `Pc"g_i,j_2"` (for ``g_{i j_2}``). See also [`@Pr_str`](@ref).
+
+!!! note "Legacy interface"
+    This string macro is part of the legacy interface, which is deprecated and will be removed in
+    version 2.0. Use parameters defined with [`@qparam`](@ref) instead, e.g., `g[:i,:j_2]` after
+    `@qparam g[:,:]::Complex`.
+"""
 macro Pc_str(s)
     par, inds = parse_paramstr(s)
     param(par,'n',inds)
 end
+"""
+    Pr"name_inds"
+
+Return the real parameter `name` with the indices `inds` (separated by commas, optionally in braces),
+e.g., `Pr"ω"` or `Pr"g_i,j_2"` (for ``g_{i j_2}``). See also [`@Pc_str`](@ref).
+
+!!! note "Legacy interface"
+    This string macro is part of the legacy interface, which is deprecated and will be removed in
+    version 2.0. Use parameters defined with [`@qparam`](@ref) instead, e.g., `g[:i,:j_2]` after
+    `@qparam g[:,:]`.
+"""
 macro Pr_str(s)
     par, inds = parse_paramstr(s)
     param(par,'r',inds)
@@ -1201,8 +1194,11 @@ end
 """
     expval(A)
 
-Wrap bare operators inside `A` into a formal expectation value ⟨A⟩.
-Accepts `QuTerm` or `QuExpr`; numeric inputs are returned as constant expressions.
+Return the expectation value of `A`, i.e., the operators in each term are wrapped in an expectation
+value (the coefficients and parameters stay outside), e.g., `expval(2g[:i]*a)` gives `2 g(i) ⟨a()⟩`.
+`A` can be a `QuExpr`, a `QuTerm` or a number (which is returned as a constant expression).
+
+See also [`corr`](@ref), [`expval_as_corrs`](@ref).
 """
 function expval(A::QuTerm)
     if isempty(bares(A))
@@ -1214,8 +1210,12 @@ end
 """
     corr(A)
 
-Wrap bare operators inside `A` into a formal connected correlator ⟨A⟩₍c₎.
-Accepts `QuTerm` or `QuExpr`; numeric inputs are returned as constant expressions.
+Return the correlator (cumulant) of `A`, i.e., the operators in each term are wrapped in a
+correlator ``⟨…⟩_c`` (the coefficients and parameters stay outside), e.g., `corr(a'*a)` gives
+`⟨a†() a()⟩c`. `A` can be a `QuExpr`, a `QuTerm` or a number (which is returned as a constant
+expression).
+
+See also [`expval`](@ref), [`corr_as_expvals`](@ref).
 """
 function corr(A::QuTerm)
     if isempty(bares(A))
@@ -1231,7 +1231,17 @@ corr(A::QuExpr) = _map_quexpr_ops(corr,A)
 expval(A::Number) = QuExpr(A)
 corr(A::Number) = QuExpr(A)
 
-"`∑(ind,A::QuExpr)`: return (formal) sum of expression A over index ind."
+"""
+    ∑(ind, A)
+    ∑((ind1, ind2, …), A)
+
+Return the sum of the expression `A` over the index `ind` (a symbol such as `:i`, or an index
+variable, see [`@qindex`](@ref)), or over several indices. (`∑` is entered as `\\sum<tab>`.) The
+sum is formal, i.e., the range of the index is not specified. The summed index is replaced by a
+summation index (see [`sumindex`](@ref)), so that `∑(:i, g[:i]*b[:i])` is shown as
+`∑₁ g(#₁) b(#₁)`. When normal ordering, terms with a Kronecker delta of a summation index are summed,
+e.g., `normal_form(∑(:i, b[:i])*b'[:j])` gives `1 + ∑₁ b†(j) b(#₁)`.
+"""
 function ∑(ind::QuIndex,A::QuTerm)
     (issumindex(ind) || isintindex(ind)) && error("Index $ind to be summed over needs to be symbolic!")
     sumind = sumindex(nsuminds(A)+1)
@@ -1248,6 +1258,16 @@ end
 
 const EqDict{T<:Union{ExpVal,Corr}} = OrderedDict{T,QuExpr}
 
+"""
+    QuEqSys
+
+A system of equations of motion for expectation values (`QuEqSys{ExpVal}`) or correlators
+(`QuEqSys{Corr}`), as returned by [`heisenberg_eom_system`](@ref). `EQ.eqs` is an ordered dictionary
+from the expectation values (or correlators) to the right-hand sides of their equations, `EQ[k]` is
+the right-hand side of the `k`-th equation, and `EQ[A]` the one for the operator `A` (e.g., `EQ[a]`
+for ``⟨a⟩``) or the expectation value (or correlator) `A`. The system is printed as the list of
+equations, and can be converted to LaTeX with [`latex`](@ref).
+"""
 struct QuEqSys{T<:Union{ExpVal,Corr}}
     eqs::EqDict{T}
 end
@@ -1263,4 +1283,53 @@ const QuantumObject = Union{QuIndex,QuOpName,BaseOperator,Param,BaseOpProduct,Op
 
     export σx, σy, σz, σp, σm
     export a, adag, f, fdag
+
+    @doc """
+        a(inds...)
+        a'(inds...)
+
+    The default bosonic operator of the legacy interface: `a(inds...)` is the annihilation operator
+    with the given indices (e.g., `a(:i)` for ``a_i`` and `a()` without indices), and `a'(inds...)` the
+    creation operator. The default operators are deprecated and will be removed in version 2.0;
+    define operators with the macros instead, e.g., `@boson a[:]` (see [`@boson`](@ref)).
+    """ a
+    @doc """
+        f(inds...)
+        f'(inds...)
+
+    The default fermionic operator of the legacy interface: `f(inds...)` is the annihilation operator
+    with the given indices, and `f'(inds...)` the creation operator. The default operators are
+    deprecated and will be removed in version 2.0; define operators with the macros instead, e.g.,
+    `@fermion f[:]` (see [`@fermion`](@ref)).
+    """ f
+    @doc """
+        adag(inds...)
+        fdag(inds...)
+
+    Deprecated, use `a'(inds...)` and `f'(inds...)` instead (see [`a`](@ref) and [`f`](@ref)).
+    """ adag
+    @doc (@doc adag) fdag
+    @doc """
+        σx(inds...)
+        σy(inds...)
+        σz(inds...)
+
+    The Pauli matrices of the default two-level system `σ` of the legacy interface, with the given
+    indices. Depending on [`use_σpm`](@ref) (when they are created), they are represented as Pauli
+    matrices or through ``σ^±``. The default operators are deprecated and will be removed in version
+    2.0; define operators with the macros instead, e.g., `@tlsxyz σ[:]` (see [`@tlsxyz`](@ref)).
+    """ σx
+    @doc (@doc σx) σy
+    @doc (@doc σx) σz
+    @doc """
+        σp(inds...)
+        σm(inds...)
+
+    The raising and lowering operators ``σ^+`` and ``σ^-`` of the default two-level system `σ` of the
+    legacy interface, with the given indices. Depending on [`use_σpm`](@ref) (when they are created),
+    they are represented as jump operators or through Pauli matrices. The default operators are
+    deprecated and will be removed in version 2.0; define operators with the macros instead, e.g.,
+    `@tls σ[:]`, with `σ'[i]` for ``σ^+_i`` and `σ[i]` for ``σ^-_i`` (see [`@tls`](@ref)).
+    """ σp
+    @doc (@doc σp) σm
 end

@@ -99,15 +99,18 @@ end
     Avac(A, modes_in_vacuum=nothing)
     vacA(A, modes_in_vacuum=nothing)
 
-Simplify an operator expression by acting on the vacuum from the right (`Avac`)
-or from the left (`vacA`). Returns a new `QuExpr` with terms that annihilate the
-vacuum removed and with any TLS `σz` eigenvalue simplifications applied. Set
-`modes_in_vacuum` to an operator or an iterable of operators to restrict the
-vacuum assumption to these modes; defaults to all modes. The operators are given
-without indices, i.e., as the variables defined by the macros (e.g., `a` after
-`@boson a` or `@boson a[:]`), and stand for all modes of an operator with indices.
+Simplify the expression `A` acting on the vacuum from the right (`Avac`, for ``A|0⟩``) or from the
+left (`vacA`, for ``⟨0|A``): `Avac(A)` returns an expression ``A'`` with ``A'|0⟩ = A|0⟩`` (and
+similarly for `vacA`), where the terms that annihilate the vacuum are removed and operators for which
+the vacuum is an eigenstate (e.g., ``σ^z``) are replaced by their eigenvalues. E.g., `Avac(a*a')`
+gives `1`, and `Avac(a*a'*b[1])` gives `0`.
+
+`modes_in_vacuum` restricts the vacuum to the given modes (the others are left as they are): an
+operator or a collection of operators, given as the variables defined by the macros (e.g., `a` after
+`@boson a`, or `b` after `@boson b[:]`, which stands for all modes of `b`).
 """
 Avac(A::QuTerm,fac,modes_in_vacuum) = _apply_on_vacuum_modes(_Avac, A, fac, modes_in_vacuum)
+@doc (@doc Avac) vacA
 vacA(A::QuTerm,fac,modes_in_vacuum) = _apply_on_vacuum_modes(_vacA, A, fac, modes_in_vacuum)
 
 Avac(A::QuExpr,modes_in_vacuum=nothing) = (mv = _parse_modes_in_vacuum(modes_in_vacuum); QuExpr(Avac(t,s,mv) for (t,s) in normal_form(A).terms))
@@ -154,11 +157,12 @@ function _TLS_to_pm_normal(A::QuExpr,shortcut_vacA_zero)
 end
 
 """
-    vacExpVal(A::QuExpr, S::QuExpr=1, modes_in_vacuum=nothing)
+    vacExpVal(A, S=1, modes_in_vacuum=nothing)
 
-Calculate the vacuum expectation value ``⟨0|S^\\\\dagger A S|0⟩``, i.e. the
-expectation value ``⟨ψ|A|ψ⟩`` for the state ``|ψ⟩ = S|0⟩``. Optionally restrict
-the vacuum assumption to specific modes via `modes_in_vacuum` (see [`Avac`](@ref)).
+Return the vacuum expectation value ``⟨0|S^\\dagger A S|0⟩``, i.e., the expectation value
+``⟨ψ|A|ψ⟩`` in the state ``|ψ⟩ = S|0⟩`` (which is not normalized automatically). E.g.,
+`vacExpVal(a'*a, 1 + a')` gives `1`. With `modes_in_vacuum`, only the given modes are assumed to be
+in the vacuum, and the result can contain operators of the other modes (see [`Avac`](@ref)).
 """
 function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()),modes_in_vacuum=nothing)
     # simplify down as much as possible by applying vacuum from left and right

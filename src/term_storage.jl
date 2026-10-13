@@ -226,6 +226,14 @@ Param(name, state::Char, inds...) = Param(QuOpName(name), state, make_indices(in
 @concrete struct BaseOpProduct
     v::Vector{BaseOperator}
 end
+"""
+    BaseOpProduct(v::Vector{BaseOperator})
+
+A product of operators stored as a vector that can be modified (e.g., while normal ordering). Inside
+the terms of an expression, products of operators are stored compactly together with the rest of the
+term (see [`QuTerm`](@ref)).
+"""
+BaseOpProduct
 BaseOpProduct() = BaseOpProduct(BaseOperator[])
 BaseOpProduct(s::OpSeq) = BaseOpProduct(collect(s))
 

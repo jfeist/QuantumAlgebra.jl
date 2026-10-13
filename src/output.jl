@@ -138,6 +138,12 @@ function print_term_scalar(io::IO,t::QuTerm,s::Number, print_connector::Bool)
     print(io,t)
 end
 
+"""
+    numstring(x::Number)
+
+The string for printing the coefficient `x` of a term. Packages that provide other number types
+(e.g., symbolic numbers) can add methods for them, e.g., to put sums in parentheses.
+"""
 numstring(x::Number) = @sprintf "%g" x
 numstring(x::Rational) = denominator(x)==1 ? string(numerator(x)) : string(x)
 numstring(x::Complex) = ((r,i) = reim(x); iszero(i) ? numstring(r) : (iszero(r) ? numstring(i)*"i" : "($(numstring(r))$((i<0)===true ? '-' : '+')$(numstring(abs(i)))i)"))
@@ -174,6 +180,13 @@ end
 latexname(s::QuOpName) = latexname(string(s))
 
 # this is just to serve as an easily overloaded function to deal with "strange" Number subtypes from, e.g., Symbolics or SymPy
+"""
+    numlatex(x)
+
+The object that is passed to Latexify for the coefficient `x` of a term in LaTeX output (`x` itself
+by default). Packages that provide other number types (e.g., symbolic numbers) can add methods for
+them, e.g., to put sums in parentheses.
+"""
 numlatex(x) = x
 
 function _push_exponents!(ex,itr)
@@ -274,7 +287,9 @@ end
 """
     latex(A)
 
-Render any `QuantumObject` to a raw LaTeX string using `Latexify.jl` recipes.
-Useful for pretty-printing expressions or embedding results in documents.
+Return the LaTeX code for `A` (an expression, a term, an operator, or a system of equations, see
+[`QuEqSys`](@ref)), without surrounding `\$` signs. E.g., `latex(g[:i]*b'[:i])` gives
+`g_{i} {b}_{i}^{\\dagger}` (after `@boson b[:]` and `@qparam g[:]`). Unicode characters in names are
+converted to LaTeX, e.g., `ω` to `\\omega` and `b̄` to `\\bar{b}`.
 """
 latex(A::QuantumObject) = latexify(A,env=:raw).s

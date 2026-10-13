@@ -9,9 +9,24 @@ to_opprod(A::QuTerm) = (@assert nsuminds(A) == 0 && isempty(deltas(A)) && isempt
 _getECs(A::QuTerm,::Type{Corr})   = (@assert isempty(expvals(A)); corrs(A))
 _getECs(A::QuTerm,::Type{ExpVal}) = (@assert isempty(corrs(A)); expvals(A))
 
+"""
+    expheis(A, H, Ls=())
+
+Return the right-hand side of the equation of motion of the expectation value ``⟨A⟩`` (for an
+expectation value `A` or an expression of operators), i.e., the expectation value of the normal form
+of [`heisenberg_eom`](@ref)`(A, H, Ls)`.
+"""
 expheis(A::ExpVal,args...) = expheis(QuExpr(QuTerm(ops(A))),args...)
 expheis(A::QuExpr,H::QuExpr,Ls=()) = expval(normal_form(heisenberg_eom(A,H,Ls)));
 
+"""
+    corrheis(A, H, Ls=())
+
+Return the right-hand side of the equation of motion of the correlator (cumulant) ``⟨A⟩_c`` of a
+product of operators `A` (or for a correlator `A`), expressed through correlators. The results are
+cached, so that the equations of the correlators that appear in the equations of higher-order
+correlators are only calculated once.
+"""
 corrheis(A::Corr,args...) = corrheis(ops(A),args...)
 corrheis(A::QuExpr,args...) = corrheis(to_opprod(A),args...)
 function corrheis(ops::OpProduct,H::QuExpr,Ls=())::QuExpr
@@ -128,34 +143,32 @@ get_opstodo(ops,H) = [canon_inds()(to_opprod(normal_form(A))) for A in ops]
 
 """
     heisenberg_eom_system(H, rhsfilt, Ls=(), ops=nothing)
+    heisenberg_eom_system(T, H, rhsfilt, Ls=(), ops=nothing)
 
-Calculates the system of Heisenberg equations of motion for either the
-expectation values or the cumulants / correlators of operator products, starting
-from a Hamiltonian `H` and a list of Lindblad terms `Ls` describing decoherence.
+Return the system of Heisenberg equations of motion for the expectation values (for `T = ExpVal`,
+the default) or the correlators (cumulants, for `T = Corr`) of operator products, for the
+Hamiltonian `H` and the Lindblad terms `Ls` (see [`heisenberg_eom`](@ref)), as a
+[`QuEqSys`](@ref).
 
-`rhsfilt` is a filter function that is applied to the right-hand side of the
-equations. Typically, these equation systems are not closed without
-approximations as equations for products of n operators involve products of m>n
-operators, so the system has to be truncated. This is achieved with the filter
-function that removes higher-order terms or rewrites them (approximately) in
-terms of lower-order expressions.
-
-`ops` is an optional list of operators for which the equations should be generated.
-If `ops` is `nothing` (default), the function will try to determine the relevant
-operators automatically from the Hamiltonian and Lindblad terms.
-
-The function returns a `QuEqSys` object containing the system of equations.
+Starting from the operators `ops` (an operator, or a tuple of operators or products of operators),
+the equations of all expectation values (or correlators) that appear on the right-hand sides are
+added until the system is closed. If `ops` is `nothing` (the default), the system starts from the
+annihilation operators that appear in `H`. Since the equations of products of ``n`` operators
+usually contain products of more operators, the system is truncated by the filter function
+`rhsfilt`, which is applied to the right-hand side of each equation and removes higher-order terms
+or approximates them by lower-order ones (see [`droplen`](@ref) and [`dropcorr`](@ref)). An integer
+`n` stands for `droplen(n)`.
 
 # Examples
 ```julia
-julia> using QuantumAlgebra
-julia> @boson_ops a;
-julia> H = Pr"ω"*a'()*a() + Pr"χ"*a'()*(a'()+a())*a();
-julia> Ls = ((Pr"γ",a()),);
-julia> EQ = heisenberg_eom_system(H,2,Ls,a())
-dₜ⟨a()⟩ = -1//2 γ ⟨a()⟩  - 1i ω ⟨a()⟩  - 2i χ ⟨a†() a()⟩  - 1i χ ⟨a()²⟩ 
-dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩ 
-dₜ⟨a()²⟩ = -2i χ ⟨a()⟩  - γ ⟨a()²⟩  - 2i ω ⟨a()²⟩ 
+julia> @boson a; @qparam ω χ γ;
+
+julia> H = ω*a'*a + χ*a'*(a'+a)*a;
+
+julia> heisenberg_eom_system(H, 2, ((γ, a),), a)
+dₜ⟨a()⟩ = -1//2 γ ⟨a()⟩ - 1i ω ⟨a()⟩ - 2i χ ⟨a†() a()⟩ - 1i χ ⟨a()²⟩
+dₜ⟨a†() a()⟩ = -γ ⟨a†() a()⟩
+dₜ⟨a()²⟩ = -2i χ ⟨a()⟩ - γ ⟨a()²⟩ - 2i ω ⟨a()²⟩
 ```
 """
 heisenberg_eom_system(H::QuExpr,rhsfilt,Ls=(),ops=nothing) = heisenberg_eom_system(ExpVal,H,rhsfilt,Ls,ops)

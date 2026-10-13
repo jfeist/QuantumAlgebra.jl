@@ -1,3 +1,9 @@
+"""
+    IndexFunction
+
+A function that maps indices to indices (`f(ind::QuIndex)`), which can then be applied to operators,
+parameters, terms and expressions to change their indices (e.g., [`replace_inds`](@ref)).
+"""
 abstract type IndexFunction end
 
 (f::IndexFunction)(A::BaseOperator) = BaseOperator(optype(A),opname(A),QuIndex[f(i) for i in inds(A)],opextra(A))
@@ -42,6 +48,13 @@ struct shift_sumind <: IndexFunction
 end
 (f::shift_sumind)(ind::QuIndex) = issumindex(ind) ? sumindex(ind.num+f.n) : ind
 
+"""
+    replace_inds(old => new, …)
+
+The index function (see [`IndexFunction`](@ref)) that replaces the indices `old` by `new`, which can
+be applied to expressions, e.g., `replace_inds(QuIndex(:i) => QuIndex(:k))(g[:i]*b[:i]*b'[:j])` gives
+`g(k) b(k) b†(j)`.
+"""
 struct replace_inds <: IndexFunction
     replacements::Dict{QuIndex,QuIndex}
     replace_inds(args...) = new(Dict{QuIndex,QuIndex}(args...))
@@ -97,11 +110,23 @@ function (f::popped_out_suminds)(ind::QuIndex)
 end
 adapt_for_new_term!(f::popped_out_suminds) = error("popped_out_suminds should not be applied on QuExpr.")
 
+"""
+    hasind(ind::QuIndex, A)
+
+Return whether the index `ind` appears in `A` (a Kronecker delta, an operator, a parameter, a product
+of operators, an expectation value or a correlator).
+"""
 hasind(ind::QuIndex,d::δ) = ind in (d.iA,d.iB)
 hasind(ind::QuIndex,A::Union{BaseOperator,Param}) = ind in inds(A)
 hasind(ind::QuIndex,ev::Union{ExpVal,Corr}) = hasind(ind,ops(ev))
 hasind(ind::QuIndex,A::OpProduct) = any(O -> hasind(ind,O), A)
 
+"""
+    split_by_ind(ind::QuIndex, v)
+
+Split the collection `v` (e.g., of operators or parameters) into the elements that do not contain
+the index `ind` and those that do (see [`hasind`](@ref)), and return both.
+"""
 split_by_ind(ind::QuIndex,v) = (iwiths = hasind.((ind,),v); (v[.!iwiths], v[iwiths]))
 
 indices(d::δ)::Vector{QuIndex} = [d.iA,d.iB]

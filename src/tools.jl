@@ -16,6 +16,13 @@ macro concrete(expr)
     end
 end
 
+"""
+    simplify_number(x::Number)
+
+Simplify the coefficient `x` of a term when it is stored in a `QuExpr` (by default, floating-point
+numbers with integer values are converted to integers). Packages that provide other number types
+can add methods for them.
+"""
 simplify_number(x::Number) = x
 simplify_number(x::AbstractFloat) = isinteger(x) && typemin(Int) <= x <= typemax(Int) ? Int(x) : x
 simplify_number(x::Rational) = isone(denominator(x)) ? numerator(x) : x

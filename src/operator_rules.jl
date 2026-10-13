@@ -32,6 +32,16 @@
 #   opsymbol(::Val{F}, A, style)
 #       the symbol appended to the operator name when printing (style is :text, :expr or :latex)
 
+"""
+    OpFamily
+
+The family of an operator (bosons, fermions, two-level systems, qudits, spins or so(n) generators, see
+[`opfamily`](@ref)). Operators of different families always commute, and the algebra within a family
+`F` is defined by methods of [`exchange!`](@ref), [`contract!`](@ref) and [`commutes`](@ref) with the
+first argument `::Val{F}` (see the comments at the beginning of `src/operator_rules.jl`), together
+with [`ladder`](@ref), [`vacuum_eigenvalue_right`](@ref), [`op_adjoint`](@ref), [`opsymbol`](@ref),
+[`lookahead_contraction`](@ref) and [`lookahead_meet`](@ref), which have default methods.
+"""
 @enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily SpinFamily SOFamily
 
 const ComplexInt = Complex{Int}
@@ -39,6 +49,7 @@ const ComplexInt = Complex{Int}
 #                         BosonCreate_ FermionCreate_ TLSCreate_ QuditCreate_ SpinPlus_   TLSx_      TLSy_      TLSz_      SpinMinus_  SpinZ_      SOGen_    QuditDestroy_ TLSDestroy_ FermionDestroy_ BosonDestroy_
 const BaseOpType_family = (BosonFamily, FermionFamily, TLSFamily, QuditFamily, SpinFamily, TLSFamily, TLSFamily, TLSFamily, SpinFamily, SpinFamily, SOFamily, QuditFamily,   TLSFamily,  FermionFamily,  BosonFamily)
 
+"`opfamily(A)`: the [`OpFamily`](@ref) of the operator `A` (or of the operator type `A::BaseOpType`)."
 opfamily(t::BaseOpType) = @inbounds BaseOpType_family[Int(t)]
 opfamily(A::BaseOperator) = opfamily(optype(A))
 
@@ -86,13 +97,20 @@ end
     _with_family(commutes, fam, A, B)
 end
 
+"`lookahead_contraction(A)`: whether `A` can contract with an operator that is not next to it in normal order (e.g., σˣ₁ in σˣ₁ σˣ₂ σʸ₁), if the operators in between commute with the later one."
 lookahead_contraction(A::BaseOperator) = _with_family(lookahead_contraction, opfamily(A), A)
+"`lookahead_meet(A)`: whether (for [`lookahead_contraction`](@ref)) the operators in between can also commute with `A` instead, so that the two operators meet in between."
 lookahead_meet(A::BaseOperator) = _with_family(lookahead_meet, opfamily(A), A)
+"`ladder(A)`: `+1` for a creation operator, `-1` for an annihilation operator, and `0` for other operators."
 ladder(A::BaseOperator) = _with_family(ladder, opfamily(A), A)
+"`vacuum_eigenvalue_right(A)`: `λ` if ``A|0⟩ = λ|0⟩`` (including `λ = 0`), and `nothing` otherwise."
 vacuum_eigenvalue_right(A::BaseOperator) = _with_family(vacuum_eigenvalue_right, opfamily(A), A)
+"`vacuum_eigenvalue_left(A)`: `λ` if ``⟨0|A = λ⟨0|`` (including `λ = 0`), and `nothing` otherwise."
 vacuum_eigenvalue_left(A::BaseOperator) = _with_family(vacuum_eigenvalue_left, opfamily(A), A)
 
+"`op_adjoint(A)`: the adjoint of the operator `A`."
 op_adjoint(A::BaseOperator) = _with_family(op_adjoint, opfamily(A), A)
+"`opsymbol(A, style)`: the symbol that is appended to the name of the operator `A` when printing it, for `style` `:text`, `:expr` (in [`julia_expression`](@ref)) or `:latex`."
 opsymbol(A::BaseOperator, style::Symbol) = _with_family(opsymbol, opfamily(A), A, style)
 
 "`annihilates_vacuum_left(A)`: whether ⟨0|A = 0"
@@ -117,7 +135,7 @@ vacuum_eigenvalue_left(F::Val, A::BaseOperator) = ladder(F, A) > 0 ? 0 : nothing
 
 const _NO_DELTAS = δ[]
 
-# whether two operators can act on the same mode (i.e., all their indices can be equal)
+"`maybe_same_site(A, B)`: whether the operators `A` and `B` can act on the same mode, i.e., have the same name and indices that can all be equal."
 function maybe_same_site(A::BaseOperator, B::BaseOperator)
     opname(A) == opname(B) || return false
     Ainds, Binds = inds(A), inds(B)
@@ -130,7 +148,7 @@ function maybe_same_site(A::BaseOperator, B::BaseOperator)
     end
     true
 end
-# the δs that make two operators act on the same mode (only call if maybe_same_site(A,B))
+"`site_deltas(A, B)`: the Kronecker deltas that make the operators `A` and `B` act on the same mode (only for [`maybe_same_site`](@ref)`(A, B)`)."
 site_deltas(A::BaseOperator, B::BaseOperator) = δ(inds(A), inds(B))::Vector{δ}
 
 #################################################################

@@ -29,22 +29,27 @@ term2corr(A::QuTerm,barevec::Vector{BaseOperator},C::OpPartition) =
     QuTerm(nsuminds(A),deltas(A),params(A),expvals(A),_merge_groups(corrs(A),barevec,C),BaseOpProduct())
 
 """
-    expval_as_corrs(expr::QuExpr)
+    expval_as_corrs(A::QuExpr)
 
-Take an expression `expr=A B C + D E...` and write its expectation value in
-terms of correlations ``⟨A⟩_c, ⟨B⟩_c, ⟨AB⟩_c, ⟨ABC⟩_c, \\ldots``. Note that
-``⟨A⟩_c = ⟨A⟩``.
+Return the expectation value of `A` expressed through correlators (cumulants): the operators
+``B C D…`` of each term of `A` are taken as an expectation value ``⟨B C D…⟩``, which is written as
+the sum over all partitions of the operators into products of correlators,
+``⟨B⟩_c ⟨C⟩_c ⟨D⟩_c… + ⟨B C⟩_c ⟨D⟩_c… + … + ⟨B C D…⟩_c`` (note that ``⟨B⟩_c = ⟨B⟩``). Expectation
+values and correlators that are already in `A` are not changed.
 
-E.g., `expval_as_corrs(a'(:n)*a(:n))` returns ``⟨a^\\dagger_n a_n⟩_c +
-⟨a^\\dagger_n⟩_c ⟨a_n⟩_c`` (which is equal to ``⟨a^\\dagger_n a_n⟩``), while
-`expval_as_corrs(a'(:n)*a(:m)*a(:n))` returns ``\\langle a_{n}^\\dagger a_{m}
-a_{n} \\rangle_{c} + \\langle a_{n}^\\dagger \\rangle_{c} \\langle a_{m}
-\\rangle_{c} \\langle a_{n} \\rangle_{c} + \\langle a_{n}^\\dagger \\rangle_{c}
-\\langle a_{m} a_{n} \\rangle_{c} + \\langle a_{m} \\rangle_{c} \\langle
-a_{n}^\\dagger a_{n} \\rangle_{c} + \\langle a_{n} \\rangle_{c} \\langle
-a_{n}^\\dagger a_{m} \\rangle_{c}``.
+# Examples
+```julia
+julia> @boson b[:];
 
-See also: [`expval`](@ref), [`corr`](@ref)"""
+julia> expval_as_corrs(b'[:n]*b[:n])
+⟨b†(n)⟩c ⟨b(n)⟩c + ⟨b†(n) b(n)⟩c
+
+julia> expval_as_corrs(b'[:n]*b[:m]*b[:n])
+⟨b†(n)⟩c ⟨b(m)⟩c ⟨b(n)⟩c + ⟨b†(n)⟩c ⟨b(m) b(n)⟩c + ⟨b(m)⟩c ⟨b†(n) b(n)⟩c + ⟨b(n)⟩c ⟨b†(n) b(m)⟩c + ⟨b†(n) b(m) b(n)⟩c
+```
+
+See also [`corr_as_expvals`](@ref).
+"""
 function expval_as_corrs(A::QuExpr)
     _expand_bare_products(_add_corrs!, A)
 end
@@ -206,7 +211,11 @@ end
 """
     corr_as_expvals(A::QuExpr)
 
-Rewrite connected correlators in `A` into ordinary expectation values.
+Return the correlator (cumulant) of `A` expressed through expectation values, the inverse of
+[`expval_as_corrs`](@ref): the operators of each term of `A` are taken as a correlator, which is
+written as a sum of products of expectation values. E.g., `corr_as_expvals(b'[:n]*b[:m])` gives
+`-⟨b†(n)⟩ ⟨b(m)⟩ + ⟨b†(n) b(m)⟩` (after `@boson b[:]`). Expectation values and correlators that are
+already in `A` are not changed.
 """
 function corr_as_expvals(A::QuExpr)
     _expand_bare_products(_add_expvs!, A)

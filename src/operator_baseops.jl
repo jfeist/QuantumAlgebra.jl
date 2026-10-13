@@ -137,10 +137,10 @@ end
 """
     comm(A, B)
 
-Compute the commutator ``[A,B] = A*B - B*A``, in normal form.
-
-The commutator is computed directly from the commutators of pairs of single operators (with the
-Leibniz rule), so that only the terms that do not cancel are generated.
+Return the commutator ``[A,B] = AB - BA`` in normal form. It is computed directly from the
+commutators of pairs of single operators (with the Leibniz rule), so that the terms of ``AB`` and
+``BA`` that cancel are never generated. E.g., `comm(b[:i], b'[:j]*b[:j])` gives `δ(ij) b(i)` (after
+`@boson b[:]`).
 """
 function comm(A::QuExpr,B::QuExpr)
     An, Bn = _normal_form_if_needed(A), _normal_form_if_needed(B)
@@ -164,6 +164,12 @@ function Base.adjoint(A::QuTerm)
 end
 Base.adjoint(A::QuExpr) = QuExpr((adjoint(t),adjoint(s)) for (t,s) in A.terms)
 
+"""
+    is_normal_form(A)
+
+Return whether `A` (a `QuExpr`, a term, or a product of operators) is in normal form, i.e., whether
+`normal_form(A) == A` (see [`normal_form`](@ref)).
+"""
 is_normal_form(A::Union{ExpVal,Corr}) = is_normal_form(ops(A))
 is_normal_form(ops::BaseOpProduct) = is_normal_form(ops.v)
 # check that the operators are sorted and that no contractions occur
@@ -567,12 +573,18 @@ function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
 end
 
 """
-    normal_form(A::QuExpr; shortcut_vacA_zero=false)
+    normal_form(A::QuExpr, shortcut_vacA_zero=false)
 
-Return an equivalent expression in normal-ordered form (all commutations performed).
+Return the normal form of `A`, an equal expression in which the operators of each term are normal
+ordered (creation operators to the left of annihilation operators, using the algebra of the
+operators, e.g., ``a a^† = 1 + a^† a``), products of operators that simplify are simplified, and the
+terms are in a canonical form (e.g., summation indices are numbered canonically), so that equal
+expressions have the same normal form. E.g., `normal_form(a*a')` gives `1 + a†() a()`.
 
-`shortcut_vacA_zero` can be set to `true` when the expression will be multiplied
-by a vacuum state from the right, allowing early elimination of annihilation terms.
+If the vacuum ``⟨0|`` will be applied from the left (see [`vacA`](@ref)), `shortcut_vacA_zero=true`
+drops the terms that it annihilates during normal ordering already.
+
+See also [`auto_normal_form`](@ref), [`is_normal_form`](@ref).
 """
 function normal_form(A::QuExpr,shortcut_vacA_zero=false)
     An = QuExpr()
