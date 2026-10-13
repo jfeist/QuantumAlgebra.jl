@@ -145,10 +145,9 @@ end
         end
     end
 
-    # the normal form should be unique, i.e., independent of the order in which products are
-    # simplified (this does not hold for Pauli matrices with symbolic indices)
-    @testset "unique normal form" begin
-        pool = oppool((:i,:j,1), false)
+    # the normal form should be unique, i.e., independent of the order in which products are simplified
+    @testset "unique normal form (pauli=$pauli)" for pauli in (false,true)
+        pool = oppool((:i,:j,1), pauli)
         for _ = 1:300
             A, B, C = (prod(rand(pool, rand(1:2))) for _=1:3)
             @test normal_form(normal_form(A*B)*C) == normal_form(A*normal_form(B*C))

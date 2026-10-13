@@ -322,9 +322,10 @@ _opat(s::OpSeq,p) = BaseOperator(s.w,p)
 # For operators where some contractions are not between neighbors in the normal order (e.g., σˣ₁ σˣ₂ σʸ₁),
 # find the first operator A[kp] (after A[k+1]) that contracts with A[k] and can be moved next to it,
 # i.e., that commutes with all operators in between. If lookahead_meet(A[k]), A[k] can also be moved to
-# the right past operators it commutes with, so that the two meet in between. Returns the positions of
-# A[kp] and of the last operator before the meeting point (i.e., the position of A[k] if A[kp] is moved
-# next to it), given the position of A[k], or nothing if there is no such operator.
+# the right past operators it commutes with, so that the two meet in between. If lookahead_exchange(A[k]),
+# A[kp] can be moved past all operators (see _exchange_past!). Returns the positions of A[kp] and of the
+# last operator before the meeting point (i.e., the position of A[k] if A[kp] is moved next to it), given
+# the position of A[k], or nothing if there is no such operator.
 function _contraction_partner(A,pk)
     Ak = _opat(A,pk)
     lookahead_contraction(Ak) || return nothing
@@ -333,6 +334,7 @@ function _contraction_partner(A,pk)
     pk1 = _nextpos(A,pk)
     pk1 < pend || return nothing
     meet = lookahead_meet(Ak)
+    exch = lookahead_exchange(Ak)
     # if they can meet, A[k] can be moved to the right past all following operators it commutes with (up to pr)
     pr = pk
     if meet
@@ -351,10 +353,14 @@ function _contraction_partner(A,pk)
             end
         else
             (opfamily(Akp) == fam && lookahead_contraction(Akp)) || break
-            commutes(_opat(A,pprev),Akp) || break
-            # A[kp] has to commute with all operators it is moved past, not just its neighbor
-            if _commutes_with_all(A,pk1,pprev,Akp) && contract!(_NoEmit(),Ak,Akp) !== nothing
-                return (pkp, pk)
+            if exch
+                contract!(_NoEmit(),Ak,Akp) !== nothing && return (pkp, pk)
+            else
+                commutes(_opat(A,pprev),Akp) || break
+                # A[kp] has to commute with all operators it is moved past, not just its neighbor
+                if _commutes_with_all(A,pk1,pprev,Akp) && contract!(_NoEmit(),Ak,Akp) !== nothing
+                    return (pkp, pk)
+                end
             end
         end
         pprev, pkp = pkp, _nextpos(A,pkp)
@@ -436,6 +442,7 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
             partner = _contraction_partner(A,k)
             if partner !== nothing
                 kp, ins = partner
+                lookahead_exchange(A[k]) && _exchange_past!(A,ins,kp,term_collector,prefactor)
                 res = contract!(_ReplaceEmitter(A,k,kp,ins,term_collector,prefactor),A[k],A[kp])
             end
         end
@@ -469,6 +476,20 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
         prefactor = normal_order!(ops,term_collector,false,prefactor)
     end
     prefactor
+end
+
+# move A[kp] to the left until it is next to A[ins] (for lookahead_exchange): for each operator P in between
+# that A[kp] does not commute with, P A[kp] = A[kp] P - R (where A[kp] P = P A[kp] + R from exchange!), and the
+# terms of -R (times the prefactor) are added to term_collector. A itself is not changed.
+function _exchange_past!(A::Vector{BaseOperator},ins,kp,term_collector,prefactor)
+    Q = A[kp]
+    for p = kp-1:-1:ins+1
+        P = A[p]
+        commutes(P,Q) && continue
+        x = exchange!(_ReplaceEmitter(A,p,kp,p,term_collector,-prefactor),Q,P)
+        isone(x) || error("lookahead_exchange requires that exchange! gives x = 1, got x = $x for $Q $P")
+    end
+    nothing
 end
 
 # normal order (in place) the operator products in v, which are the contents of expectation values

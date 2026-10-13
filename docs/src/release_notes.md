@@ -3,6 +3,12 @@
 ## (unreleased)
 - Faster handling of the coefficients of terms: calculating equations of motion,
   correlators and vacuum expectation values is up to 30% faster.
+- The normal form of products of Pauli matrices (``σ^{x,y,z}``) with symbolic
+  indices is now unique: two Pauli matrices on the same site are now always
+  multiplied, also if there are Pauli matrices between them that might be on the
+  same site, e.g., ``σ^x_i σ^y_j σ^z_i = -i σ^y_i σ^y_j + 2i δ_{ij}``.
+  Previously, such products stayed as they were, so that equal expressions could
+  have different normal forms (and did not cancel).
 
 ## v1.7.0 (2026-10-12)
 This is a minor release because it has no breaking changes (existing code keeps

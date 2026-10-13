@@ -22,6 +22,10 @@
 #   lookahead_meet(::Val{F}, A)
 #       if true, the operators in between can also commute with A instead (so that A and the
 #       other operator meet somewhere in between)
+#   lookahead_exchange(::Val{F}, A)
+#       if true, the later operator is also moved past operators in between that it does not
+#       commute with (with exchange!, which has to return x = 1 for them, and the remainders are
+#       added as further terms), so that operators that can contract are always contracted
 #   ladder(::Val{F}, A)
 #       +1 for creation, -1 for annihilation and 0 for other operators
 #   vacuum_eigenvalue_right(::Val{F}, A) / vacuum_eigenvalue_left(::Val{F}, A)
@@ -40,7 +44,8 @@ The family of an operator (bosons, fermions, two-level systems, qudits, spins or
 `F` is defined by methods of [`exchange!`](@ref), [`contract!`](@ref) and [`commutes`](@ref) with the
 first argument `::Val{F}` (see the comments at the beginning of `src/operator_rules.jl`), together
 with [`ladder`](@ref), [`vacuum_eigenvalue_right`](@ref), [`op_adjoint`](@ref), [`opsymbol`](@ref),
-[`lookahead_contraction`](@ref) and [`lookahead_meet`](@ref), which have default methods.
+[`lookahead_contraction`](@ref), [`lookahead_meet`](@ref) and [`lookahead_exchange`](@ref), which have
+default methods.
 """
 @enum OpFamily::UInt8 BosonFamily FermionFamily TLSFamily QuditFamily SpinFamily SOFamily
 
@@ -101,6 +106,8 @@ end
 lookahead_contraction(A::BaseOperator) = _with_family(lookahead_contraction, opfamily(A), A)
 "`lookahead_meet(A)`: whether (for [`lookahead_contraction`](@ref)) the operators in between can also commute with `A` instead, so that the two operators meet in between."
 lookahead_meet(A::BaseOperator) = _with_family(lookahead_meet, opfamily(A), A)
+"`lookahead_exchange(A)`: whether (for [`lookahead_contraction`](@ref)) the later operator can also be moved past operators in between that it does not commute with (which gives additional terms with their commutators), so that operators that can contract are always contracted."
+lookahead_exchange(A::BaseOperator) = _with_family(lookahead_exchange, opfamily(A), A)
 "`ladder(A)`: `+1` for a creation operator, `-1` for an annihilation operator, and `0` for other operators."
 ladder(A::BaseOperator) = _with_family(ladder, opfamily(A), A)
 "`vacuum_eigenvalue_right(A)`: `λ` if ``A|0⟩ = λ|0⟩`` (including `λ = 0`), and `nothing` otherwise."
@@ -120,6 +127,7 @@ annihilates_vacuum_left(A::BaseOperator) = (λ = vacuum_eigenvalue_left(A); λ i
 # defaults
 lookahead_contraction(::Val, ::BaseOperator) = false
 lookahead_meet(::Val, ::BaseOperator) = false
+lookahead_exchange(::Val, ::BaseOperator) = false
 function ladder(::Val, A::BaseOperator)
     t = optype(A)
     t in (BosonCreate_, FermionCreate_, TLSCreate_, QuditCreate_, SpinPlus_) ? 1 : t in (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_) ? -1 : 0
@@ -260,6 +268,10 @@ end
 commutes(::Val{TLSFamily}, A, B) = optype(A) == optype(B) || !maybe_same_site(A,B)
 
 lookahead_contraction(::Val{TLSFamily}, A::BaseOperator) = ispauli(optype(A))
+# e.g., σˣ(i) σʸ(j) σᶻ(i) = σˣ(i) σᶻ(i) σʸ(j) + σˣ(i) [σʸ(j),σᶻ(i)] = -i σʸ(i) σʸ(j) - 2 δ(ij), so that the normal form
+# of products of Pauli matrices with symbolic indices is unique (Pauli matrices with different indices that do
+# not commute have to be on the same site, so their exchange gives x = 1)
+lookahead_exchange(::Val{TLSFamily}, A::BaseOperator) = ispauli(optype(A))
 
 # σᶻ|0⟩ = -|0⟩, where |0⟩ is the ground state
 vacuum_eigenvalue_right(F::Val{TLSFamily}, A::BaseOperator) = optype(A) == TLSz_ ? -1 : ladder(F, A) < 0 ? 0 : nothing

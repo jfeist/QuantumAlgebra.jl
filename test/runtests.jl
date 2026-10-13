@@ -297,16 +297,12 @@ end
                     @test xsqn == normal_form(xn*xn)
 
                     # do normal_form already on the first partial product, otherwise computation time explodes.
-                    # NOTE: this test is broken for use_σxyz since even though non-adjacent operators are
-                    # contracted, there are ambiguities in sums that lead to different numbers of terms
-                    # (for use_σpm, it used to be broken because terms that only differ in the numbering of
-                    # sum indices were not identified as equal, e.g., ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₁) and
-                    # ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₂))
-                    if auto_norm || QuantumAlgebra.using_σpm()
-                        @test normal_form(xsqn*x) == normal_form(xn*xn*xn)
-                    else
-                        @test_broken normal_form(xsqn*x) == normal_form(xn*xn*xn)
-                    end
+                    # (this used to be broken for use_σpm because terms that only differ in the numbering of sum
+                    # indices were not identified as equal, e.g., ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₁) and
+                    # ∑₁₂ σ⁺(#₁) σ⁺(#₂) σ⁺(β) σ⁻(#₂), and for use_σxyz because Pauli matrices on the same site
+                    # were not contracted if a Pauli matrix that might be on the same site was in between,
+                    # e.g., ∑₁ σˣ(β) σʸ(#₁) σᶻ(β))
+                    @test normal_form(xsqn*x) == normal_form(xn*xn*xn)
                 end
             end
 
