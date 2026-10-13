@@ -584,6 +584,22 @@ function (q::QuditOps)(i::Integer, j::Integer, inds...)
         QuExpr(((ij(i,j),1),))
     end
 end
+# q(M, inds...) = ∑_ij M_ij |i⟩⟨j|, where the diagonal is ∑_i M_ii |i⟩⟨i| = M_11 + ∑_{k≥2} (M_kk - M_11) |k⟩⟨k|
+# (so that every operator only appears once). The entries can be numbers or expressions (e.g., parameters).
+function (q::QuditOps)(M::AbstractMatrix, inds...)
+    Base.require_one_based_indexing(M)
+    size(M) == (q.d, q.d) || throw(DimensionMismatch("expected a $(q.d)×$(q.d) matrix for a $(q.d)-level qudit, got size $(size(M))"))
+    M11 = M[1,1]
+    terms = QuExpr[]
+    iszero(M11) || push!(terms, M11*QuExpr(1))
+    for j = 1:q.d, i = 1:q.d
+        (i,j) == (1,1) && continue
+        c = i == j ? M[i,i] - M11 : M[i,j]
+        iszero(c) || push!(terms, c*q(i,j,inds...))
+    end
+    # (sum adds pairwise, which avoids copying large intermediate sums)
+    isempty(terms) ? QuExpr() : sum(terms)
+end
 
 # constructors for the generalized Gell-Mann matrices of a qudit (see `gellmann`)
 function _gellmann_ops(q::QuditOps, sqrt)
@@ -901,7 +917,8 @@ end
     QuditVariable
 
 A qudit created by [`qudit`](@ref) or [`@qudit`](@ref): `q(i,j)` is the transition operator ``|i⟩⟨j|``
-(for a qudit with indices, an object that is indexed with the indices, `q(i,j)[k]`).
+(for a qudit with indices, an object that is indexed with the indices, `q(i,j)[k]`), and `q(M)` the
+operator with matrix `M`, ``\\sum_{ij} M_{ij} |i⟩⟨j|`` (or `q(M)[k]`).
 """
 struct QuditVariable
     ops::QuditOps
@@ -918,10 +935,12 @@ struct SOVariable
     ndims::Int
 end
 const _PairVariable = Union{QuditVariable,SOVariable}
-function (v::_PairVariable)(a::Integer, b::Integer)
-    iszero(v.ndims) && return v.ops(a,b)
-    name = "$(v.ops.name)($a,$b)"
-    f = (inds...) -> v.ops(a,b,inds...)
+(v::_PairVariable)(a::Integer, b::Integer) = _pairvariable_op(v, "$(v.ops.name)($a,$b)", a, b)
+(q::QuditVariable)(M::AbstractMatrix) = _pairvariable_op(q, "$(q.ops.name)(M)", M)
+# the operator v.ops(args...), or for variables with indices, an object that is indexed with the indices
+function _pairvariable_op(v::_PairVariable, name, args...)
+    iszero(v.ndims) && return v.ops(args...)
+    f = (inds...) -> v.ops(args...,inds...)
     QuExprCstrctArrAlias(QuExprConstructor(name, f, name*"†", (inds...) -> f(inds...)'), v.ndims)
 end
 _dimsstring(v::_PairVariable) = iszero(v.ndims) ? "" : "[$(join(fill(":",v.ndims),","))]"
@@ -943,6 +962,11 @@ Internally, all operators are expressed through the "creation" operators ``|i⟩
 and `q(1,2)` are equivalent to ``σ^{+}`` and ``σ^{-}``. When printing, products ``|i⟩⟨1|1⟩⟨j|``
 acting on the same qudit are shown as ``|i⟩⟨j|`` (written `qⁱʲ`).
 
+With a `d×d` matrix `M`, `q(M)` (or `q(M)[k,…]`) is the operator ``\\sum_{ij} M_{ij} |i⟩⟨j|`` with this
+matrix. The entries of `M` can be numbers or expressions, e.g., parameters. This gives, e.g., the
+Hamiltonian of a `d`-level system, or the generators of a Lie algebra in a `d`-dimensional
+representation (which then satisfy all the relations of this representation).
+
 # Examples
 ```julia
 q = qudit(:q, 3)
@@ -950,6 +974,9 @@ normal_form(q(1,2)*q(2,3)) # |1⟩⟨3|
 q(1,1)                     # 1 - |2⟩⟨2| - |3⟩⟨3|
 r = qudit(:r, 3; ndims=1)
 r(2,3)[:i]                 # |2⟩⟨3| = |2⟩⟨1|1⟩⟨3| acting on qudit i
+# so(3) in the vector representation, (L_k)_ab = -i ϵ_kab, with L² = l(l+1) = 2
+Lx, Ly, Lz = q([0 0 0; 0 0 -im; 0 im 0]), q([0 0 im; 0 0 0; -im 0 0]), q([0 -im 0; im 0 0; 0 0 0])
+normal_form(Lx^2 + Ly^2 + Lz^2)  # 2
 ```
 """
 qudit(name::_Name, d::Integer; ndims::Integer=0) = QuditVariable(_qudit_ops(Symbol(name), d), _checkndims(ndims))

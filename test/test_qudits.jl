@@ -72,6 +72,20 @@
         @test λ[a][1]' == λ[a][1]
     end
     @test normal_form(comm(λ[1][:i], λ[2][:i])) == normal_form(2im*λ[3][:i])
+    # operators with a given matrix, q(M) = ∑_ij M_ij |i⟩⟨j|
+    M = rand(ComplexF64, 3, 3)
+    @test matrep(qi(M)[1], modes) ≈ M
+    @test qi(M)'[:i] == qi(Matrix(M'))[:i]
+    @test q([1 2 3; 4 5 6; 7 8 9]) == normal_form(sum((3(i-1)+j)*q(i,j) for i=1:3 for j=1:3))
+    @test all(a -> qi(λmats[a])[:i] ≈ λ[a][:i], 1:8)
+    @test iszero(q(zeros(Int,3,3))) && q(Matrix(2I,3,3)) == QuExpr(2)
+    @test_throws DimensionMismatch q(zeros(2,2))
+    @qparam ω g
+    @test q([0 g 0; g ω 0; 0 0 0]) == ω*q(2,2) + g*(q(1,2) + q(2,1))
+    # so(3) in the vector representation, (L_k)_ab = -i ϵ_kab, with L² = l(l+1) = 2
+    Lx, Ly, Lz = q([0 0 0; 0 0 -im; 0 im 0]), q([0 0 im; 0 0 0; -im 0 0]), q([0 -im 0; im 0 0; 0 0 0])
+    @test normal_form(Lx^2 + Ly^2 + Lz^2) == QuExpr(2)
+    @test normal_form(comm(Lx, Ly)) == normal_form(im*Lz)
     # with an exact square root: SU(3) structure constant f_458 = √3/2, i.e., [λ₄,λ₅] = 2i (λ₃/2 + √3/2 λ₈)
     Sym = SymPyPythonCall.Sym
     λs = gellmann(qi; sqrt = x -> sqrt(Sym(x)))

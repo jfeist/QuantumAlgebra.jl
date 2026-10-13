@@ -187,6 +187,22 @@ releases.
   julia> r(1,1)
   1 - r²²() - r³³()
   ```
+  With a $d×d$ matrix `M` (whose entries can also be parameters), `q(M)` is the
+  operator $\sum_{ij} M_{ij} |i⟩⟨j|$, e.g., a Hamiltonian, or a generator of a
+  Lie algebra in a $d$-dimensional representation, which then satisfies all the
+  relations of this representation. E.g., for so(3) in the vector representation,
+  $(L_k)_{ab} = -iϵ_{kab}$, with $L^2 = l(l+1) = 2$:
+  ```julia
+  julia> @qudit 3 v;
+
+  julia> Lx, Ly, Lz = v([0 0 0; 0 0 -im; 0 im 0]), v([0 0 im; 0 0 0; -im 0 0]), v([0 -im 0; im 0 0; 0 0 0]);
+
+  julia> Lz
+  1i v²¹() - 1i v¹²()
+
+  julia> normal_form(Lx^2 + Ly^2 + Lz^2)
+  2
+  ```
 
 - `@spin J` (or `Jp, Jm, Jz = spin(:J)`) defines the operators `Jp`, `Jm`, `Jz`,
   i.e., $J_+$, $J_-$, $J_z$, of a spin (the Lie algebra su(2) ≅ so(3)), with

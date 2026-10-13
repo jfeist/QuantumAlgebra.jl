@@ -1,6 +1,10 @@
 # Release notes
 
 ## (unreleased)
+- Operators of qudits with a given matrix: `q(M)` is ``\sum_{ij} M_{ij} |i⟩⟨j|``
+  for a ``d×d`` matrix `M` (with numbers or parameters as entries), e.g., for a
+  Hamiltonian or for the generators of any Lie algebra in a ``d``-dimensional
+  representation.
 - Pauli matrices of a two-level system with an empty name are printed as `X`,
   `Y` and `Z`, as in quantum computing (e.g., `X, Y, Z = tlsxyz(""; ndims=1)`,
   or `@tlsxyz P = ""` for variables `Px`, `Py`, `Pz`).
