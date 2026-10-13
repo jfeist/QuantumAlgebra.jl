@@ -1,11 +1,13 @@
 # Interface
 
-These functions (mostly) form the internal interface of the package, and should
-not be relevant to most users.
+The exported functions, macros and types of QuantumAlgebra. The functions and types that are not
+exported are described in [Internals](@ref).
 
 ```@index
+Pages = ["interface.md"]
 ```
 
 ```@autodocs
 Modules = [QuantumAlgebra]
+Private = false
 ```

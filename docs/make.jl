@@ -17,6 +17,7 @@ makedocs(;
         "Home" => "index.md",
         "Legacy interface and migration" => "legacy.md",
         "Interface" => "interface.md",
+        "Internals" => "internals.md",
         "Release notes" => "release_notes.md",
     ],
 )
