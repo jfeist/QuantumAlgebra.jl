@@ -815,7 +815,8 @@ tls(name::_Name; ndims::Integer=0) = _opvariable(first(tlspm_ops(Symbol(name))),
     tlsxyz(name; ndims=0)
 
 Return the Pauli matrices ``(σ^x, σ^y, σ^z)`` of the two-level system `name` (the function version of
-[`@tlsxyz`](@ref)), see [`boson`](@ref) and [`tls`](@ref).
+[`@tlsxyz`](@ref)), see [`boson`](@ref) and [`tls`](@ref). With an empty name, the Pauli matrices are
+printed as `X`, `Y` and `Z`, as in quantum computing (e.g., `X, Y, Z = tlsxyz(""; ndims=1)`).
 """
 tlsxyz(name::_Name; ndims::Integer=0) = map(c -> _opvariable(c, ndims), tlsxyz_ops(Symbol(name)))
 
@@ -877,7 +878,8 @@ macro tls(exprs...) _opvariable_macro(tls, exprs) end
     @tlsxyz σ[:] τ ...
 
 Define the variables `σx`, `σy` and `σz` for the Pauli matrices of a two-level system (see
-[`tlsxyz`](@ref) and [`@boson`](@ref)), and similarly for each further name.
+[`tlsxyz`](@ref) and [`@boson`](@ref)), and similarly for each further name. With `@tlsxyz σ = ""`,
+the Pauli matrices are printed as `X`, `Y` and `Z`.
 """
 macro tlsxyz(exprs...) _opvariable_macro(tlsxyz, exprs; postfixes=(:x,:y,:z)) end
 

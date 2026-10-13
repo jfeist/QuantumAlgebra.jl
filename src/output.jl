@@ -215,7 +215,9 @@ end
 latexindstr(inds) = isempty(assignedinds(inds)) ? "" : "_{$(latexify.(inds)...)}"
 @latexrecipe function f(A::BaseOperator)
     B = unalias(A)
-    return LaTeXString("{$(latexname(opname(B)))}$(latexindstr(inds(B)))$(opsymbol(B,:latex))")
+    s = opsymbol(B,:latex)
+    # for operators with an empty name (e.g., X, Y, Z for Pauli matrices), the symbol takes the place of the name
+    return LaTeXString(opname(B) == NoName ? "{$s}$(latexindstr(inds(B)))" : "{$(latexname(opname(B)))}$(latexindstr(inds(B)))$s")
 end
 @latexrecipe function f(A::Param)
     return LaTeXString(string("$(latexname(opname(A)))$(latexindstr(inds(A)))", parstate(A)=='c' ? "^{*}" : ""))

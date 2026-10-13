@@ -1,5 +1,10 @@
 # Release notes
 
+## (unreleased)
+- Pauli matrices of a two-level system with an empty name are printed as `X`,
+  `Y` and `Z`, as in quantum computing (e.g., `X, Y, Z = tlsxyz(""; ndims=1)`,
+  or `@tlsxyz P = ""` for variables `Px`, `Py`, `Pz`).
+
 ## v1.7.1 (2026-10-13)
 A patch release that makes normal forms unique in two more cases (Pauli
 matrices with symbolic indices, and spins with a fixed numerical `j`) and speeds

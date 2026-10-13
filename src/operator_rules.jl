@@ -34,7 +34,8 @@
 #   op_adjoint(::Val{F}, A)
 #       the adjoint of the operator A
 #   opsymbol(::Val{F}, A, style)
-#       the symbol appended to the operator name when printing (style is :text, :expr or :latex)
+#       the symbol appended to the operator name when printing (style is :text, :expr or :latex);
+#       for operators with an empty name, LaTeX output puts it in place of the name (before the indices)
 
 """
     OpFamily
@@ -133,10 +134,8 @@ function ladder(::Val, A::BaseOperator)
     t in (BosonCreate_, FermionCreate_, TLSCreate_, QuditCreate_, SpinPlus_) ? 1 : t in (BosonDestroy_, FermionDestroy_, TLSDestroy_, QuditDestroy_, SpinMinus_) ? -1 : 0
 end
 op_adjoint(::Val, A::BaseOperator) = BaseOperator(BaseOpType_adj[Int(optype(A))],opname(A),inds(A),opextra(A))
-function opsymbol(::Val, A::BaseOperator, style::Symbol)
-    t = Int(optype(A))
-    style === :text ? BaseOpType_sym[t] : style === :expr ? BaseOpType_expr[t] : BaseOpType_latex[t]
-end
+_opsymbol(t::BaseOpType, style::Symbol) = (i = Int(t); style === :text ? BaseOpType_sym[i] : style === :expr ? BaseOpType_expr[i] : BaseOpType_latex[i])
+opsymbol(::Val, A::BaseOperator, style::Symbol) = _opsymbol(optype(A), style)
 # for ladder operators, the vacuum is annihilated by the annihilation operators (and their adjoints from the left)
 vacuum_eigenvalue_right(F::Val, A::BaseOperator) = ladder(F, A) < 0 ? 0 : nothing
 vacuum_eigenvalue_left(F::Val, A::BaseOperator) = ladder(F, A) > 0 ? 0 : nothing
@@ -272,6 +271,12 @@ lookahead_contraction(::Val{TLSFamily}, A::BaseOperator) = ispauli(optype(A))
 # of products of Pauli matrices with symbolic indices is unique (Pauli matrices with different indices that do
 # not commute have to be on the same site, so their exchange gives x = 1)
 lookahead_exchange(::Val{TLSFamily}, A::BaseOperator) = ispauli(optype(A))
+
+# Pauli matrices of a two-level system with an empty name are printed as X, Y, Z (as in quantum computing)
+function opsymbol(::Val{TLSFamily}, A::BaseOperator, style::Symbol)
+    t = optype(A)
+    ispauli(t) && opname(A) == NoName ? ("X","Y","Z")[Int(t)-Int(TLSx_)+1] : _opsymbol(t, style)
+end
 
 # σᶻ|0⟩ = -|0⟩, where |0⟩ is the ground state
 vacuum_eigenvalue_right(F::Val{TLSFamily}, A::BaseOperator) = optype(A) == TLSz_ ? -1 : ladder(F, A) < 0 ? 0 : nothing

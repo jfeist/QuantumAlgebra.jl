@@ -126,6 +126,12 @@ end
     @tls t[:] = "τ̃"
     @tlsxyz s = "s̃"
     @test (t[1], sz) == (tls("τ̃"; ndims=1)[1], last(tlsxyz("s̃")))
+    # Pauli matrices without name are printed as X, Y, Z
+    X, Y, Z = tlsxyz(""; ndims=1)
+    @test string(normal_form(comm(X[:i], Y[:j]))) == "2i δ(ij) Z(i)"
+    @test latex(X[:i]*Y[1]) == "{X}_{i} {Y}_{1}"
+    @tlsxyz P = ""
+    @test (Px, Py, Pz) == tlsxyz("")
     @qudit 3 q = "q̃"
     @test string(q(2,3)) == "q̃²³()"
     @so 3 L[:] = "𝓛"

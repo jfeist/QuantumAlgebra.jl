@@ -137,6 +137,16 @@ of assigning them to variables, e.g., `a = boson(:a; ndims=2)` is equivalent to
 useful to create operators programmatically, e.g., with names that are generated
 in code.
 
+The name of a two-level system can also be empty, which prints its Pauli
+matrices in the notation of quantum computing, as `X`, `Y` and `Z` (and as
+``X_i`` etc. in LaTeX):
+```jldoctest
+julia> X, Y, Z = tlsxyz(""; ndims=1);
+
+julia> normal_form(comm(X[:i], Y[:j]))
+2i δ(ij) Z(i)
+```
+
 Expressions are currently printed with parentheses for the indices (e.g.,
 `f(ij₂μ₂)` and `a()` above). Calling `QuantumAlgebra.use_bracket_display(true)`
 prints them in the same syntax as they are entered (e.g., `f[i,j₂,μ₂]` and `a`),
