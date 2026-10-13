@@ -57,38 +57,41 @@ expval_as_corrs(A::Number) = expval_as_corrs(QuExpr(A))
 
 # Rewrite (the expectation value or correlator of) the bare operators in each term of A as a sum of
 # products of correlators (add! = _add_corrs!) or of expectation values (add! = _add_expvs!).
-function _expand_bare_products(add!, A::QuExpr)
+function _expand_bare_products(add!::F, A::QuExpr) where F
     newA = QuExpr()
     for (t,s) in A.terms
-        # first calculate the expansion for the term with the "bare" indices, which means that the sum indices
-        # are assumed to be distinct from the other indices of the term
-        add!(newA,t,s)
-        nsuminds(t)>0 && !isempty(bares(t)) || continue
-        # then, for terms where a sum index is equal to one of the non-summed indices, the operator product can
-        # change (by reordering or simplification). in that case, subtract the "wrong" expansion where index
-        # identity is not taken into account and add the correct one
-        extinds = unique(extindices(bares(t)))
-        for ii in 1:nsuminds(t)
-            sumind = sumindex(ii)
-            for ind in extinds
-                f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:nsuminds(t))...)
-                tb = f(bares(t))
-                is_normal_form(tb) && continue
-                W = _normalize_without_commutation(QuTerm(nsuminds(t)-1,f.(deltas(t)),f.(params(t)),f.(expvals(t)),f.(corrs(t)),tb))
-                # if the δs make the term vanish, both the "right" and "wrong" terms are zero
-                W === nothing && continue
-                twrong = QuTerm(W)
-                # the correct expansion is that of the normal-ordered term (which can consist of several terms)
-                right = QuExpr()
-                _add_with_normal_order!(right,twrong,s)
-                for (tr,sr) in right.terms
-                    add!(newA,tr,sr)
-                end
-                add!(newA,twrong,-s,_add_with_normal_order!)
-            end
-        end
+        _withnum(s -> _expand_bare_products!(add!,newA,t,s), s)
     end
     newA
+end
+function _expand_bare_products!(add!, newA::QuExpr, t::QuTerm, s)
+    # first calculate the expansion for the term with the "bare" indices, which means that the sum indices
+    # are assumed to be distinct from the other indices of the term
+    add!(newA,t,s)
+    nsuminds(t)>0 && !isempty(bares(t)) || return
+    # then, for terms where a sum index is equal to one of the non-summed indices, the operator product can
+    # change (by reordering or simplification). in that case, subtract the "wrong" expansion where index
+    # identity is not taken into account and add the correct one
+    extinds = unique(extindices(bares(t)))
+    for ii in 1:nsuminds(t)
+        sumind = sumindex(ii)
+        for ind in extinds
+            f = replace_inds(sumind=>ind,(sumindex(jj)=>sumindex(jj-1) for jj=ii+1:nsuminds(t))...)
+            tb = f(bares(t))
+            is_normal_form(tb) && continue
+            W = _normalize_without_commutation(QuTerm(nsuminds(t)-1,f.(deltas(t)),f.(params(t)),f.(expvals(t)),f.(corrs(t)),tb))
+            # if the δs make the term vanish, both the "right" and "wrong" terms are zero
+            W === nothing && continue
+            twrong = QuTerm(W)
+            # the correct expansion is that of the normal-ordered term (which can consist of several terms)
+            right = QuExpr()
+            _add_with_normal_order!(right,twrong,s)
+            for (tr,sr) in right.terms
+                add!(newA,tr,sr)
+            end
+            add!(newA,twrong,-s,_add_with_normal_order!)
+        end
+    end
 end
 
 function _add_corrs!(A,t,s,addfun! = _add_sum_term!)

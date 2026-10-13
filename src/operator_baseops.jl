@@ -145,8 +145,12 @@ commutators of pairs of single operators (with the Leibniz rule), so that the te
 function comm(A::QuExpr,B::QuExpr)
     An, Bn = _normal_form_if_needed(A), _normal_form_if_needed(B)
     C = QuExpr()
-    for (tA,sA) in An.terms, (tB,sB) in Bn.terms
-        _add_comm!(C,tA,tB,sA*sB)
+    for (tA,sA) in An.terms
+        _withnum(sA) do sA
+            for (tB,sB) in Bn.terms
+                _withnum(sB -> _add_comm!(C,tA,tB,sA*sB), sB)
+            end
+        end
     end
     C
 end
@@ -496,7 +500,10 @@ termsumiter(t,s,sum::QuExpr) = termsumiter(QuTerm(t),s,sum)
 # empty collector that is used (and never modified) when no new terms can be generated
 const _NO_NEW_TERMS = QuExpr()
 
-function _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false)
+# (inlined into the callers, and calls the implementation with the type of s known, see `_withnum`)
+@inline _add_with_normal_order!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero=false) =
+    _withnum(s -> _add_with_normal_order_impl!(A,t,s,shortcut_vacA_zero), s)
+function _add_with_normal_order_impl!(A::QuExpr,t::QuTerm,s,shortcut_vacA_zero)
     if _is_normal_form_except_suminds(t)
         if nsuminds(t) ≤ 1
             # no need to do anything since everything is in normal order
@@ -716,9 +723,23 @@ end
 
 *(A::Union{QuExpr,QuTerm}) = A
 function *(A::QuExpr,B::QuExpr)
-    QuExpr((tA*tB,sA*sB) for ((tA,sA),(tB,sB)) in Iterators.product(A.terms,B.terms))
+    C = QuExpr()
+    for (tB,sB) in B.terms
+        _withnum(sB) do sB
+            for (tA,sA) in A.terms
+                _withnum(sA -> _add_with_auto_order!(C,tA*tB,simplify_number(sA*sB)), sA)
+            end
+        end
+    end
+    C
 end
-*(A::Number,B::QuExpr) = QuExpr((tB,A*sB) for (tB,sB) in B.terms)
+function *(A::Number,B::QuExpr)
+    C = QuExpr()
+    for (tB,sB) in B.terms
+        _withnum(sB -> _add_with_auto_order!(C,tB,simplify_number(A*sB)), sB)
+    end
+    C
+end
 *(B::QuExpr,A::Number) = A*B
 Base.:/(A::QuExpr,B::Number) = inv(B)*A
 

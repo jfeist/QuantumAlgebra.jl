@@ -31,6 +31,18 @@ simplify_number(x::Complex) = begin
     iszero(i) ? simplify_number(r) : complex(simplify_number(r),simplify_number(i))
 end
 
+# The coefficients of the terms are stored as `Number`, so their type is not known when they are read
+# from `A.terms`. `_withnum(f, x)` calls `f(x)` in separate branches for the most common types, so that
+# for these types, `f` is called directly instead of through dynamic dispatch (which is slower and needs
+# the arguments to be boxed). Other types are still dispatched dynamically (in the last branch).
+@inline function _withnum(f::F, x::Number) where F
+    x isa Int && return f(x)
+    x isa Complex{Int} && return f(x)
+    x isa Rational{Int} && return f(x)
+    x isa Complex{Rational{Int}} && return f(x)
+    f(x)
+end
+
 ## tables that are shared between threads
 
 # A reference that can be read from several threads while it is replaced (by one thread at a time,

@@ -113,8 +113,19 @@ Avac(A::QuTerm,fac,modes_in_vacuum) = _apply_on_vacuum_modes(_Avac, A, fac, mode
 @doc (@doc Avac) vacA
 vacA(A::QuTerm,fac,modes_in_vacuum) = _apply_on_vacuum_modes(_vacA, A, fac, modes_in_vacuum)
 
-Avac(A::QuExpr,modes_in_vacuum=nothing) = (mv = _parse_modes_in_vacuum(modes_in_vacuum); QuExpr(Avac(t,s,mv) for (t,s) in normal_form(A).terms))
-vacA(A::QuExpr,modes_in_vacuum=nothing) = (mv = _parse_modes_in_vacuum(modes_in_vacuum); QuExpr(vacA(t,s,mv) for (t,s) in normal_form(A).terms))
+Avac(A::QuExpr,modes_in_vacuum=nothing) = _apply_on_vacuum(Avac,A,modes_in_vacuum)
+vacA(A::QuExpr,modes_in_vacuum=nothing) = _apply_on_vacuum(vacA,A,modes_in_vacuum)
+function _apply_on_vacuum(func::F,A::QuExpr,modes_in_vacuum) where F
+    mv = _parse_modes_in_vacuum(modes_in_vacuum)
+    An = QuExpr()
+    for (t,s) in normal_form(A).terms
+        _withnum(s) do s
+            tn, sn = func(t,s,mv)
+            _add_with_auto_order!(An,tn,simplify_number(sn))
+        end
+    end
+    An
+end
 Avac(s::Number,modes_in_vacuum=nothing) = QuExpr(s)
 vacA(s::Number,modes_in_vacuum=nothing) = QuExpr(s)
 
@@ -123,37 +134,41 @@ function _TLS_to_pm_normal(A::QuExpr,shortcut_vacA_zero)
     terms_to_clean = collect(A.terms)
     while !isempty(terms_to_clean)
         (t,s) = pop!(terms_to_clean)
-        v = collect(bares(t))
-        iTLS = findfirst(A->optype(A) ∈ (TLSx_,TLSy_,TLSz_), v)
-        if iTLS === nothing
-            _add_with_normal_order!(An,t,s,shortcut_vacA_zero) # last argument is shortcut_vacA_zero
-        else
-            O = v[iTLS]
-            if optype(O) == TLSx_
-                # σˣ = σ⁺ + σ⁻
-                for On in (TLSCreate(opname(O),inds(O)),TLSDestroy(opname(O),inds(O)))
-                    vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
-                    tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
-                    push!(terms_to_clean,tn=>s)
-                end
-            elseif optype(O) == TLSy_
-                # σʸ = -i σ⁺ + i σ⁻
-                for (On,sn) in ((TLSCreate(opname(O),inds(O)),-1im),(TLSDestroy(opname(O),inds(O)),1im))
-                    vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
-                    tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
-                    push!(terms_to_clean,tn=>s*sn)
-                end
-            elseif optype(O) == TLSz_
-                # σᶻ = 2σ⁺σ⁻ - 1
-                for (On,sn) in (([TLSCreate(opname(O),inds(O)),TLSDestroy(opname(O),inds(O))],2),(BaseOperator[],-1))
-                    vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
-                    tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
-                    push!(terms_to_clean,tn=>s*sn)
-                end
+        _withnum(s -> _TLS_to_pm_normal!(An,terms_to_clean,t,s,shortcut_vacA_zero), s)
+    end
+    An
+end
+function _TLS_to_pm_normal!(An::QuExpr,terms_to_clean,t::QuTerm,s,shortcut_vacA_zero)
+    v = collect(bares(t))
+    iTLS = findfirst(A->optype(A) ∈ (TLSx_,TLSy_,TLSz_), v)
+    if iTLS === nothing
+        _add_with_normal_order!(An,t,s,shortcut_vacA_zero) # last argument is shortcut_vacA_zero
+    else
+        O = v[iTLS]
+        if optype(O) == TLSx_
+            # σˣ = σ⁺ + σ⁻
+            for On in (TLSCreate(opname(O),inds(O)),TLSDestroy(opname(O),inds(O)))
+                vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
+                tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
+                push!(terms_to_clean,tn=>s)
+            end
+        elseif optype(O) == TLSy_
+            # σʸ = -i σ⁺ + i σ⁻
+            for (On,sn) in ((TLSCreate(opname(O),inds(O)),-1im),(TLSDestroy(opname(O),inds(O)),1im))
+                vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
+                tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
+                push!(terms_to_clean,tn=>s*sn)
+            end
+        elseif optype(O) == TLSz_
+            # σᶻ = 2σ⁺σ⁻ - 1
+            for (On,sn) in (([TLSCreate(opname(O),inds(O)),TLSDestroy(opname(O),inds(O))],2),(BaseOperator[],-1))
+                vn = [v[1:iTLS-1]; On; v[iTLS+1:end]]
+                tn = QuTerm(nsuminds(t),deltas(t),params(t),expvals(t),corrs(t),BaseOpProduct(vn))
+                push!(terms_to_clean,tn=>s*sn)
             end
         end
     end
-    An
+    nothing
 end
 
 """
@@ -181,9 +196,11 @@ function vacExpVal(A::QuExpr,stateop::QuExpr=QuExpr(QuTerm()),modes_in_vacuum=no
 
     vAv = QuExpr()
     for (t,s) in x.terms
-        tn,sn = Avac(vacA(t,s,mv)...,mv)
-        isnothing(mv) && @assert sn==0 || isempty(bares(tn))
-        _add_sum_term!(vAv,tn,simplify_number(sn))
+        _withnum(s) do s
+            tn,sn = Avac(vacA(t,s,mv)...,mv)
+            isnothing(mv) && @assert sn==0 || isempty(bares(tn))
+            _add_sum_term!(vAv,tn,simplify_number(sn))
+        end
     end
     vAv
 end

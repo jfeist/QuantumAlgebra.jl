@@ -403,7 +403,7 @@ end
 function QuExpr(itr)
     A = QuExpr()
     for (t,s) in itr
-        _add_with_auto_order!(A,t,simplify_number(s))
+        _withnum(s -> _add_with_auto_order!(A,t,simplify_number(s)), s)
     end
     A
 end
@@ -415,20 +415,26 @@ Base.copy(A::QuExpr) = QuExpr(copy(A.terms))
 
 _add_with_auto_order!(A::QuExpr,B::QuTerm,sB) = using_auto_normal_form() ? _add_with_normal_order!(A,B,sB) : _add_sum_term!(A,B,sB)
 
-function _add_sum_term!(A::QuExpr,oB::QuTerm,sB)
+# (inlined into the callers, and calls the implementation with the type of sB known, see `_withnum`)
+@inline _add_sum_term!(A::QuExpr,oB::QuTerm,sB) = _withnum(sB -> _add_sum_term_impl!(A,oB,sB), sB)
+function _add_sum_term_impl!(A::QuExpr,oB::QuTerm,sB)
     iszero(sB) && return A
-    sold = get(A.terms,oB,zero(sB))
-    # function barrier to have concrete types
-    _add_sum_term!(A,oB,sB,sold)
+    sold = get(A.terms,oB,nothing)
+    if sold === nothing
+        A.terms[oB] = simplify_number(sB)
+    else
+        _withnum(sold -> _add_to_term!(A,oB,sB,sold), sold)
+    end
+    A
 end
-function _add_sum_term!(A::QuExpr,oB::QuTerm,sB,sold)
+function _add_to_term!(A::QuExpr,oB::QuTerm,sB,sold)
     snew = sB + sold
     if iszero(snew)
         delete!(A.terms,oB)
     else
         A.terms[oB] = simplify_number(snew)
     end
-    A
+    nothing
 end
 _map_quexpr_ops(f,A::QuExpr) = QuExpr((f(t),s) for (t,s) in A.terms)
 

@@ -1,5 +1,9 @@
 # Release notes
 
+## (unreleased)
+- Faster handling of the coefficients of terms: calculating equations of motion,
+  correlators and vacuum expectation values is up to 30% faster.
+
 ## v1.7.0 (2026-10-12)
 This is a minor release because it has no breaking changes (existing code keeps
 working, although some results are presented differently, see below), but it
