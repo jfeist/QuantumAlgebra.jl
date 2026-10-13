@@ -13,10 +13,9 @@
     @spin 1//2 K[:]
     @so 4 L[:]
     @un 3 S[:]
-    # (Pauli matrices are only used with integer indices, since normal forms with symbolic indices are not unique)
-    pool(s) = QuExpr[a(s), a'(s), f(s), f'(s), g(s), c(s), d'(s), σp(s), σm(s), q(2,1)[s], q(1,3)[s], q(2,3)[s],
+    pool(s) = QuExpr[a(s), a'(s), f(s), f'(s), g(s), c(s), d'(s), σp(s), σm(s), τx(s), τy(s), τz(s), q(2,1)[s], q(1,3)[s], q(2,3)[s],
                      Jp[s], Jm[s], Jz[s], Kp[s], Km[s], Kz[s], L(1,2)[s], L(2,3)[s], L(1,4)[s], S(2,1)[s], S(1,3)[s], S(2,2)[s],
-                     Pr"g"*a(s), expval(a'(s))*f(s), (s isa Integer ? QuExpr[τx(s), τy(s), τz(s)] : QuExpr[])...]
+                     Pr"g"*a(s), expval(a'(s))*f(s)]
     randprod(sites, n) = prod((rand(pool(rand(sites))) for _ in 1:n); init=QuExpr(1))
     randsum(idx) = rand() < 0.3 ? ∑(idx, prod((rand(pool(idx)) for _ in 1:rand(1:2)); init=QuExpr(1))) : QuExpr(0)
     for _ = 1:500
