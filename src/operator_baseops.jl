@@ -188,7 +188,7 @@ function is_normal_form(A::Union{Vector{BaseOperator},OpSeq})
         _contraction_partner(A,p) === nothing || return false
         p = pn
     end
-    return true
+    return !_spins_reducible(A)
 end
 
 is_normal_form(t::QuTerm) = _is_normal_form_except_suminds(t) && _suminds_canonical(t)
@@ -474,8 +474,114 @@ function normal_order!(ops::BaseOpProduct,term_collector,shortcut_vacA_zero=fals
         # the prefactor of the term we were working on needs to be passed to normal_order!
         # to include in the term_collector terms
         prefactor = normal_order!(ops,term_collector,false,prefactor)
+    else
+        prefactor = _reduce_spins!(A,term_collector,prefactor)
     end
     prefactor
+end
+
+## relations of spins with fixed numerical j that involve more than two operators (see operator_rules.jl)
+
+# whether A contains spin operators with fixed j
+function _has_fixed_spins(A)
+    pend = _endpos(A)
+    p = _firstpos(A)
+    while p < pend
+        O = _opat(A,p)
+        opfamily(O) == SpinFamily && opextra(O) != 0 && return true
+        p = _nextpos(A,p)
+    end
+    false
+end
+_spins_reducible(A) = _has_fixed_spins(A) && _find_spin_reduction(A) !== nothing
+
+_samesite(A::BaseOperator,B::BaseOperator) = opname(A) == opname(B) && opextra(A) == opextra(B) && inds(A) == inds(B)
+# the number of operators equal to the one at position p, and the position after them
+function _run(A,p)
+    O = _opat(A,p)
+    pend = _endpos(A)
+    n, q = 1, _nextpos(A,p)
+    while q < pend && _opat(A,q) == O
+        n += 1
+        q = _nextpos(A,q)
+    end
+    n, q
+end
+# whether there is a J± on the same site as O before position pstop
+function _has_ladder(A,pstop,O::BaseOperator)
+    p = _firstpos(A)
+    while p < pstop
+        B = _opat(A,p)
+        opfamily(B) == SpinFamily && optype(B) != SpinZ_ && _samesite(B,O) && return true
+        p = _nextpos(A,p)
+    end
+    false
+end
+# the position of the first J_z on the same site as O, starting at position p (0 if there is none)
+function _find_z(A,p,O::BaseOperator)
+    pend = _endpos(A)
+    while p < pend
+        B = _opat(A,p)
+        opfamily(B) == SpinFamily && optype(B) == SpinZ_ && _samesite(B,O) && return p
+        p = _nextpos(A,p)
+    end
+    0
+end
+
+# Find a site with spin operators (with fixed numerical j) whose product can be reduced, and return
+# (position of the first J±, number a of J±, position of the first J_z, number n of J_z, whether the J±
+# are J₊, dimension 2j+1), or nothing (positions are indices for vectors, see _firstpos). A has to be in
+# normal order (and contracted), so that equal operators are next to each other, the J_z come after
+# the J±, and there are no J₊ and J₋ on the same site.
+function _find_spin_reduction(A)
+    pend = _endpos(A)
+    p = _firstpos(A)
+    while p < pend
+        O = _opat(A,p)
+        n1, pnext = _run(A,p)
+        if opfamily(O) == SpinFamily && opextra(O) != 0 && (d = _spin_dim(O)) !== nothing
+            if optype(O) == SpinZ_
+                # (J_z on a site with J± are handled together with the J±, which come before them)
+                n1 ≥ d && !_has_ladder(A,p,O) && return (0, 0, p, n1, true, d)
+            else
+                pz = _find_z(A,pnext,O)
+                n = pz == 0 ? 0 : first(_run(A,pz))
+                (n1 ≥ d || n ≥ d - n1) && return (p, n1, pz, n, optype(O) == SpinPlus_, d)
+            end
+        end
+        p = pnext
+    end
+    nothing
+end
+
+# Apply J₊ᵃ P(J_z) = 0 or J₋ᵇ Q(J_z) = 0 to the first site in A (in normal order) where they reduce the
+# product. The J_z are moved next to the J± (with the commutators with the operators in between added
+# to term_collector), and J_zⁿ is replaced by its remainder after division by P (or Q). Returns the new
+# prefactor of A, which is zero if a reduction was done (all resulting terms are in term_collector).
+function _reduce_spins!(A::Vector{BaseOperator},term_collector,prefactor)
+    _has_fixed_spins(A) || return prefactor
+    r = _find_spin_reduction(A)
+    r === nothing && return prefactor
+    kpm, a, kz, n, plus, _ = r
+    n == 0 && return zero(prefactor)
+    Z = A[kz]
+    s = kz
+    if a > 0
+        for t = 1:n
+            ins, kp = kpm + a + t - 2, kz + t - 1
+            _exchange_past!(A,ins,kp,term_collector,prefactor)
+            Q = A[kp]
+            deleteat!(A,kp)
+            insert!(A,ins+1,Q)
+        end
+        s = kpm + a
+    end
+    for (k,ck) in enumerate(_spin_remainder(Z, plus, a, n))
+        iszero(ck) && continue
+        v = [A[1:s-1]; fill(Z,k-1); A[s+n:end]]
+        _add_sum_term!(term_collector, QuTerm(BaseOpProduct(v)), ck*prefactor)
+    end
+    zero(prefactor)
 end
 
 # move A[kp] to the left until it is next to A[ins] (for lookahead_exchange): for each operator P in between

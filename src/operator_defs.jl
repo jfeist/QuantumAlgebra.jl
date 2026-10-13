@@ -990,8 +990,11 @@ su(2) ≅ so(3), with ``[J_z,J_±] = ±J_±`` and ``[J_+,J_-] = 2J_z``. If `j` i
 commutation relations are used, which hold in any representation (e.g., for collective spins). If
 the spin `j` is given (any number, e.g., `1//2`, `3`, or a symbolic variable), products ``J_+ J_-``
 acting on the same spin are replaced by ``j(j+1) - J_z^2 + J_z``, and the vacuum is the
-lowest-weight state with ``J_-|0⟩ = 0`` and ``J_z|0⟩ = -j|0⟩``. Note that other relations that hold
-for a specific `j` (e.g., ``J_+^2 = 0`` for `j = 1//2`) are not used.
+lowest-weight state with ``J_-|0⟩ = 0`` and ``J_z|0⟩ = -j|0⟩``. If `j` is a number (and not
+symbolic), all relations of the ``(2j+1)``-dimensional representation are used, i.e., also
+``J_+^a ∏_{m=-j}^{j-a} (J_z - m) = 0`` and ``J_-^b ∏_{m=b-j}^{j} (J_z - m) = 0`` (e.g., ``J_+^2 = 0`` and
+``J_z^2 = 1/4`` for `j = 1//2`), so that the products on one site are ``J_+^a J_z^n`` with
+``n ≤ 2j-a`` and ``J_-^b J_z^n`` with ``n ≤ 2j-b``.
 """
 spin(name::_Name, j=nothing; ndims::Integer=0) = map(c -> _opvariable(c, ndims), _spin_ops(Symbol(name), j))
 

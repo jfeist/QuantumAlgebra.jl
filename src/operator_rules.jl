@@ -371,13 +371,16 @@ end
 # relations of the Lie algebra, they hold in any representation (e.g., for collective spins). If
 # the spin j of the representation is fixed, the Casimir J² = J₊J₋ + J_z² - J_z = j(j+1) is used to
 # eliminate products J₊J₋ (on the same site), so that the normal-ordered products on one site are
-# J₊ᵃ J_zⁿ and J₋ᵇ J_zⁿ. The vacuum is the lowest-weight state, with J₋|0⟩ = 0 and J_z|0⟩ = -j|0⟩.
+# J₊ᵃ J_zⁿ and J₋ᵇ J_zⁿ (if j is a number, also further relations of the finite representation are
+# used, see below). The vacuum is the lowest-weight state, with J₋|0⟩ = 0 and J_z|0⟩ = -j|0⟩.
 # The normal order is J₊ < J₋ < J_z, so that J₊ and J₋ on the same site can always be brought
 # next to each other (by moving them past operators of the same kind).
 # The extra information stored with each operator is the index of j in _SPIN_J (0 if j is not fixed).
 # (The table of values of j is replaced instead of modified, so that it can be read from several threads.)
 
 const _SPIN_J = _AtomicRef(Any[])
+# the dimension 2j+1 of the representation for each entry of _SPIN_J (0 if j is not a fixed number)
+const _SPIN_D = _AtomicRef(Int[])
 const _SPIN_J_LOCK = ReentrantLock()
 _spin_extra(j::Nothing) = 0
 function _spin_extra(j)
@@ -387,6 +390,7 @@ function _spin_extra(j)
         js = _SPIN_J[]
         k = findfirst(isequal(j), js)
         k === nothing || return k
+        _SPIN_D[] = push!(copy(_SPIN_D[]), _spin_dim_of(j))
         _SPIN_J[] = push!(copy(js), j)
         length(js) + 1
     end
@@ -446,6 +450,58 @@ function _spin_vacuum_eigenvalue(A::BaseOperator)
 end
 vacuum_eigenvalue_right(::Val{SpinFamily}, A::BaseOperator) = (t = optype(A); t == SpinMinus_ ? 0 : t == SpinZ_ ? _spin_vacuum_eigenvalue(A) : nothing)
 vacuum_eigenvalue_left(::Val{SpinFamily}, A::BaseOperator) = (t = optype(A); t == SpinPlus_ ? 0 : t == SpinZ_ ? _spin_vacuum_eigenvalue(A) : nothing)
+
+# If j is a number, the operators act on the (2j+1)-dimensional representation (or several copies of
+# it), where J₊ᵃ|m⟩ = 0 for m > j-a and J₋ᵇ|m⟩ = 0 for m < b-j. Therefore
+#   J₊ᵃ P(J_z) = 0 with P(x) = ∏_{m=-j}^{j-a} (x-m)   and   J₋ᵇ Q(J_z) = 0 with Q(x) = ∏_{m=b-j}^{j} (x-m)
+# (including J±^{2j+1} = 0, and P(J_z) = 0 for a = 0), so that J₊ᵃ J_zⁿ can be reduced to J₊ᵃ times a
+# polynomial of degree < 2j+1-a in J_z (and similarly for J₋ᵇ J_zⁿ). The normal-ordered products on one
+# site are then J₊ᵃ J_zⁿ (n ≤ 2j-a) and J₋ᵇ J_zⁿ (n ≤ 2j-b), a basis of the (2j+1)² operators. Since
+# these relations involve more than two operators, they are applied at the end of normal ordering
+# (see _reduce_spins!).
+
+# (symbolic numbers can be subtypes of Real, e.g., Symbolics.Num)
+_spin_dim_of(j) = (j isa Union{Integer,Rational,AbstractFloat} && j ≥ 0 && isinteger(2j)) ? Int(2j) + 1 : 0
+"`_spin_dim(A)`: the dimension 2j+1 of the representation of the spin operator `A`, or `nothing` if j is not a fixed number"
+_spin_dim(A::BaseOperator) = (x = opextra(A); x == 0 ? nothing : (d = @inbounds _SPIN_D[][x]; d == 0 ? nothing : d))
+
+# the roots m of P (plus = true, for J₊ᵃ) or Q (plus = false, for J₋ᵃ), computed exactly unless j is a float
+function _spin_roots(j::Real, plus::Bool, a::Integer)
+    R = j isa AbstractFloat ? typeof(j) : Rational{BigInt}
+    m0 = plus ? -R(j) : a - R(j)
+    R[m0 + k for k in 0:Int(2j)-a]
+end
+
+# the coefficients c (c[k+1] for xᵏ) of the remainder of xⁿ divided by ∏ₘ (x-m) for the given roots
+function _powmod(n::Integer, roots::Vector{R}) where R
+    # P(x) = xᵈ + ∑ₖ p[k+1] xᵏ
+    p = R[one(R)]
+    for m in roots
+        p = [zero(R); p] - [m .* p; zero(R)]
+    end
+    d = length(roots)
+    c = zeros(R, d)
+    d == 0 && return c
+    c[1] = one(R)
+    for _ = 1:n
+        # multiply by x, and replace xᵈ by -∑ₖ p[k+1] xᵏ
+        top = c[d]
+        for k = d:-1:2
+            c[k] = c[k-1] - top*p[k]
+        end
+        c[1] = -top*p[1]
+    end
+    c
+end
+_smallnumber(x::Rational{BigInt}) = simplify_number(typemin(Int) ≤ numerator(x) ≤ typemax(Int) && denominator(x) ≤ typemax(Int) ? Rational{Int}(x) : x)
+_smallnumber(x) = simplify_number(x)
+
+# the coefficients of the remainder of J_zⁿ for J₊ᵃ (plus = true) or J₋ᵃ, cached for each j (given by the
+# extra information of the spin operator Z), plus, a and n
+const _SPIN_REMAINDERS = _COWDict{NTuple{4,Int},Vector{Number}}()
+_spin_remainder(Z::BaseOperator, plus::Bool, a::Int, n::Int) = get!(_SPIN_REMAINDERS, (Int(opextra(Z)), Int(plus), a, n)) do
+    Number[_smallnumber(c) for c in _powmod(n, _spin_roots(spin_j(Z), plus, a))]
+end
 
 #################################################################
 ## so(n): generators of rotations in n dimensions               ##

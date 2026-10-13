@@ -9,6 +9,13 @@
   same site, e.g., ``σ^x_i σ^y_j σ^z_i = -i σ^y_i σ^y_j + 2i δ_{ij}``.
   Previously, such products stayed as they were, so that equal expressions could
   have different normal forms (and did not cancel).
+- Spins with a fixed numerical `j` now use all relations of the ``(2j+1)``-dimensional
+  representation, ``J_+^a ∏_{m=-j}^{j-a} (J_z - m) = 0`` and
+  ``J_-^b ∏_{m=b-j}^{j} (J_z - m) = 0`` (e.g., ``J_+^2 = 0`` and ``J_z^2 = 1/4``
+  for ``j = 1/2``, or ``J_z^3 = J_z`` for ``j = 1``). Previously, only the Casimir
+  operator was used, so that equal operators could have different normal forms,
+  and powers of ``J_z`` were not reduced. For a symbolic `j`, only the Casimir
+  operator is used, as before.
 
 ## v1.7.0 (2026-10-12)
 This is a minor release because it has no breaking changes (existing code keeps

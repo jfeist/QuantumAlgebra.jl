@@ -185,6 +185,8 @@ not been used yet; the default operators can be disabled with the preference
   `@spin j=jval J` for a value given by a variable, which can also be symbolic),
   products ``J_+ J_-`` on the same site are replaced using the Casimir operator,
   ``J_+ J_- = j(j+1) - J_z^2 + J_z``, and the vacuum is the lowest-weight state.
+  If `j` is a number, all relations of the ``(2j+1)``-dimensional representation
+  are used (e.g., ``J_+^2 = 0`` and ``J_z^2 = 1/4`` for ``j = 1/2``).
   ```jldoctest
   julia> @spin J;
 
@@ -194,7 +196,10 @@ not been used yet; the default operators can be disabled with the preference
   julia> @spin 1//2 S;
 
   julia> normal_form(Sp*Sm)
-  3//4 + Sᶻ() - Sᶻ()²
+  1//2 + Sᶻ()
+
+  julia> normal_form(Sp*Sz)
+  -1//2 S⁺()
   ```
 
 - `@so n L` (or `L = so(:L, n)`) defines the generators ``L_{ab} = -L_{ba}``
