@@ -32,6 +32,9 @@ end
 @tls σ[:]
 @tlsxyz τ[:]
 @fermion c[:,:]
+@spin 1//2 S[:]
+@spin 1 K[:]
+@spin 5//2 C
 @qparam ω Ω[:] g[:] J Δ h[:] χ G F t U ωc δ
 q = qudit(:q, 3; ndims=1)
 
@@ -61,6 +64,11 @@ H_FH = -t*sum(c'[i,s]*c[i+1,s] + c'[i+1,s]*c[i,s] for i in 1:Ls-1, s in 1:2) + U
 for n in (4, 6)
     compare("  Fermi-Hubbard chain (L=$Ls), [H,c₁↑], depth $n", nested, H_FH, c[1,1], n)
 end
+H_S = sum(J*(Sp[i]*Sm[i+1] + Sm[i]*Sp[i+1]) + Δ*Sz[i]*Sz[i+1] for i in 1:7) + sum(h[i]*Sz[i] for i in 1:8)
+compare("  spin-1/2 XXZ chain (L=8), [H,Sᶻ₄], depth 6", nested, H_S, Sz[4], 6)
+H_K = sum(J*(Kp[i]*Km[i+1] + Km[i]*Kp[i+1]) + Δ*Kz[i]*Kz[i+1] for i in 1:5) + sum(h[i]*Kz[i] for i in 1:6)
+compare("  spin-1 XXZ chain (L=6), [H,Kᶻ₃], depth 5", nested, H_K, Kz[3], 5)
+compare("  collective spin j=5/2, [χJz²+Ω(J₊+J₋),J₋], depth 12", nested, χ*Cz^2 + Ω[1]*(Cp + Cm), Cm, 12)
 Nq = 3
 H_Λ = ωc*a'*a + sum(Δ*q(3,3)[i] + δ*q(2,2)[i] + g[i]*(a'*q(1,3)[i] + q(3,1)[i]*a) + Ω[i]*(q(3,2)[i] + q(2,3)[i]) for i in 1:Nq)
 for n in (4, 6)
